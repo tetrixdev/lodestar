@@ -18,6 +18,9 @@
                     <x-nav-link :href="route('projects.index')" :active="request()->routeIs('projects.*')">
                         {{ __('Projects') }}
                     </x-nav-link>
+                    <x-nav-link :href="route('settings.index')" :active="request()->routeIs('settings.index')">
+                        {{ __('Settings') }}
+                    </x-nav-link>
                 </div>
             </div>
 
@@ -37,6 +40,14 @@
                     </x-slot>
 
                     <x-slot name="content">
+                        <div class="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                            {{ __('Settings') }}
+                        </div>
+
+                        <x-dropdown-link :href="route('settings.index')">
+                            {{ __('All settings') }}
+                        </x-dropdown-link>
+
                         <x-dropdown-link :href="route('profile.edit')">
                             {{ __('Profile') }}
                         </x-dropdown-link>
@@ -45,13 +56,15 @@
                             {{ __('Connect agent') }}
                         </x-dropdown-link>
 
+                        <x-dropdown-link :href="route('github.index')">
+                            {{ __('GitHub') }}
+                        </x-dropdown-link>
+
                         <x-dropdown-link :href="route('skills.index')">
                             {{ __('Skills') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('github.index')">
-                            {{ __('GitHub') }}
-                        </x-dropdown-link>
+                        <div class="border-t border-gray-100"></div>
 
                         <!-- Authentication -->
                         <form method="POST" action="{{ route('logout') }}">
@@ -85,6 +98,9 @@
             <x-responsive-nav-link :href="route('dashboard')" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+            <x-responsive-nav-link :href="route('projects.index')" :active="request()->routeIs('projects.*')">
+                {{ __('Projects') }}
+            </x-responsive-nav-link>
         </div>
 
         <!-- Responsive Settings Options -->
@@ -95,8 +111,24 @@
             </div>
 
             <div class="mt-3 space-y-1">
+                <x-responsive-nav-link :href="route('settings.index')" :active="request()->routeIs('settings.index')">
+                    {{ __('All settings') }}
+                </x-responsive-nav-link>
+
                 <x-responsive-nav-link :href="route('profile.edit')">
                     {{ __('Profile') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('agent-tokens.index')">
+                    {{ __('Connect agent') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('github.index')">
+                    {{ __('GitHub') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('skills.index')">
+                    {{ __('Skills') }}
                 </x-responsive-nav-link>
 
                 <!-- Authentication -->

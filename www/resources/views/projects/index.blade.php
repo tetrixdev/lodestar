@@ -6,10 +6,17 @@
     <div class="py-10">
         <div class="max-w-5xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
+            @if ($projects->isEmpty())
+                @include('partials.onboarding')
+            @endif
+
             {{-- create --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-6">
-                <h3 class="font-medium text-gray-900 mb-4">New project</h3>
-                <form method="POST" action="{{ route('projects.store') }}" class="flex flex-col sm:flex-row gap-3">
+                <h3 class="font-medium text-gray-900 mb-1">{{ $projects->isEmpty() ? 'Create your first project' : 'New project' }}</h3>
+                @if ($projects->isEmpty())
+                    <p class="text-sm text-gray-500">A project groups the repos and tasks that share a goal. Give it a name to get going.</p>
+                @endif
+                <form method="POST" action="{{ route('projects.store') }}" class="mt-4 flex flex-col sm:flex-row gap-3">
                     @csrf
                     <input name="name" required placeholder="Project name"
                            class="flex-1 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />

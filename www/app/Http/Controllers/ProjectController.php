@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\BuildsOnboarding;
 use App\Models\Project;
 use App\Models\Task;
 use Carbon\Carbon;
@@ -14,6 +15,8 @@ use Illuminate\View\View;
 
 class ProjectController extends Controller
 {
+    use BuildsOnboarding;
+
     /** The current user's projects, each with progress + due-date summaries. */
     public function index(Request $request): View
     {
@@ -54,6 +57,7 @@ class ProjectController extends Controller
             'projects' => $projects,
             'summaries' => $summaries,
             'phases' => Task::PHASES,
+            'onboarding' => $this->onboarding($request->user()),
         ]);
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\BuildsOnboarding;
 use App\Models\Review;
 use App\Models\Task;
 use App\Models\WorkSession;
@@ -12,6 +13,8 @@ use Illuminate\View\View;
 
 class DashboardController extends Controller
 {
+    use BuildsOnboarding;
+
     /** A cross-project home: what needs the human, what AI is doing, what's due. */
     public function index(Request $request): View
     {
@@ -21,6 +24,7 @@ class DashboardController extends Controller
         // Nothing to gather for a user with no projects.
         if ($projectIds->isEmpty()) {
             return view('dashboard', [
+                'onboarding' => $this->onboarding($user),
                 'needsYou' => collect(),
                 'reviews' => collect(),
                 'aiWorking' => collect(),
@@ -71,6 +75,7 @@ class DashboardController extends Controller
             ->get();
 
         return view('dashboard', [
+            'onboarding' => $this->onboarding($user),
             'needsYou' => $needsYou,
             'reviews' => $reviews,
             'aiWorking' => $aiWorking,

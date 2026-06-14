@@ -71,6 +71,16 @@
                 <p class="text-gray-600">{{ $project->primary_goal }}</p>
             @endif
 
+            @if ($byStatus->isEmpty() && $archived->isEmpty())
+                <div class="bg-white shadow-sm sm:rounded-lg p-6 text-center space-y-2">
+                    <h3 class="font-medium text-gray-900">No tasks yet</h3>
+                    <p class="text-sm text-gray-500">
+                        Use <span class="font-medium text-gray-700">+ Add card</span> in any column below to add your first task —
+                        or let a connected agent queue one for you.
+                    </p>
+                </div>
+            @endif
+
             {{-- toolbar: search + category filter + archived toggle + legend --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-4 flex flex-col gap-3">
                 <div class="flex flex-col sm:flex-row sm:items-center gap-3">
