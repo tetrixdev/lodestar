@@ -55,6 +55,10 @@ Route::middleware('auth')->group(function () {
     Route::patch('/settings/skills/{skill}', [SkillController::class, 'update'])->name('skills.update');
     Route::delete('/settings/skills/{skill}', [SkillController::class, 'destroy'])->name('skills.destroy');
 
+    // Skill bindings — choose which skill each loop phase runs (user default).
+    Route::post('/settings/skills/bind', [SkillController::class, 'bind'])->name('skills.bind');
+    Route::delete('/settings/skills/bind/{phase}', [SkillController::class, 'unbind'])->name('skills.unbind');
+
     // Work sessions — a project's running history of what was done.
     Route::get('/projects/{project}/sessions', [WorkSessionController::class, 'index'])->name('work-sessions.index');
     Route::get('/projects/{project}/sessions/create', [WorkSessionController::class, 'create'])->name('work-sessions.create');

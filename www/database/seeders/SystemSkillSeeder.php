@@ -48,6 +48,20 @@ class SystemSkillSeeder extends Seeder
                    if it refuses, the message is the rule, not an error.
                 Then start over with a fresh claim.
 
+                WORKSPACE (do this before working a task):
+                - Each task belongs to a project. Ensure the project's working directory
+                  exists at `~/lodestar-workspaces/<project-slug>/` (create it if missing).
+                - Call list_projects to get the project's linked repositories. For each
+                  repo, ensure it is cloned at
+                  `~/lodestar-workspaces/<project-slug>/<repo-name>/`:
+                  - If absent, clone `https://github.com/<full_name>.git` into it using the
+                    developer's local git auth (their configured credentials/SSH).
+                  - If present, `git fetch` to bring it up to date.
+                  (`<repo-name>` is the part after the slash in `<full_name>`.)
+                - A repo may belong to more than one project; cloning the same repo under
+                  several project folders is fine — keep them independent.
+                - Do all work inside that project's folder.
+
                 ROUTING:
                 - Don't guess a task's phase — claim_task tells you, and get_skill(task_id)
                   hands you the right prompt.
@@ -81,6 +95,12 @@ class SystemSkillSeeder extends Seeder
             'develop' => ['Develop a task', <<<'MD'
                 You are building one approved Lodestar task. Follow the agreed plan and
                 the project's CONVENTIONS.md.
+
+                WORKSPACE: work inside the project's directory at
+                `~/lodestar-workspaces/<project-slug>/<repo-name>/` that the main skill set
+                up (clone/fetch it there if it is missing). Do all work on the task's
+                branch — create it from the up-to-date default branch if it does not exist,
+                otherwise check it out.
 
                 FIRST: if the task has **rework_notes** (a review sent it back), address
                 every point in them before anything else — that is the human's change
