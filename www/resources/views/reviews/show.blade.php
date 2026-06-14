@@ -98,6 +98,11 @@
                 </div>
             @endif
 
+            {{-- changed-file coverage tree (GitHub order); every file must land in a section --}}
+            @if ($review->files->isNotEmpty())
+                @include('reviews.partials.file-tree', ['review' => $review])
+            @endif
+
             {{-- progress --}}
             <div class="sticky top-0 z-10 bg-gray-100/95 backdrop-blur py-3 -mx-1 px-1 rounded">
                 <div class="flex items-center gap-3">

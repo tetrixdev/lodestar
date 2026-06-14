@@ -33,6 +33,7 @@ class SchemaMirrorTest extends TestCase
     /** Mermaid box name => real table name where it isn't just snake-plural. */
     private const TABLE_ALIASES = [
         'REVIEW_TASK' => 'review_task', // the pivot keeps the singular Laravel name
+        'REVIEW_FILE_SECTION' => 'review_file_section', // file<->section pivot, singular
     ];
 
     public function test_data_model_diagram_matches_the_live_schema(): void

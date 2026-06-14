@@ -29,7 +29,10 @@ class ReviewController extends Controller
     {
         abort_unless($review->project->user_id === $request->user()->id, 403);
 
-        $review->load(['sections', 'project', 'assignee', 'tasks' => fn ($q) => $q->orderBy('title')]);
+        $review->load([
+            'sections.files:id,path', 'project', 'assignee', 'files',
+            'tasks' => fn ($q) => $q->orderBy('title'),
+        ]);
 
         return view('reviews.show', ['review' => $review]);
     }

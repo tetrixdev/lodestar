@@ -206,6 +206,23 @@ agent's input crosses into our data writes.
      versioned and treated as reviewable logic (the previous system version stays
      pinnable for rollback).
 
+2. **The GitHub compare API (BUILT).** When a review is created from a comparison
+   (`repo` + `base_ref`…`head_ref`), Lodestar fetches the changed-file list
+   server-side from GitHub's compare endpoint (`App\Services\GitHubComparison`,
+   the `Http` client + a `GITHUB_TOKEN`). This is deliberately the boundary's
+   *authority*: the file set is ground truth from GitHub, **not** the AI's claim,
+   so the agent can only group files it cannot omit. What holds it:
+   - **Coverage guard.** Each `review_files` row must be allocated to ≥1
+     `ReviewSection` (`review_file_section`); `upsert_review_section` rejects any
+     path not in the comparison, and `advance_task → human_review` is refused
+     while any linked review has uncovered files. The human sees a GitHub-ordered
+     **file-tree** at the top of the walkthrough, each file tagged with its
+     covering section(s) and uncovered files flagged — so "I stepped through every
+     section" provably means "every changed file was reviewed".
+   - **Token scope.** v1 uses one server `GITHUB_TOKEN`; a per-user "Connect
+     GitHub" is backlog. Compare returns ≤300 files per response — larger diffs
+     are a known limit to page later, not silently truncated.
+
 **Still backlog (not built):** the thin npx client (`connect` + `run`) and the
 `check_version` self-update handshake — the only pieces that would live on the
 developer's machine. Until they exist, agents are wired to `/mcp` by hand. When

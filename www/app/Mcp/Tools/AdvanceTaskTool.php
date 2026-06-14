@@ -40,6 +40,28 @@ class AdvanceTaskTool extends LodestarTool
             );
         }
 
+        // Coverage gate: a card can only reach a human reviewer once it has at
+        // least one linked review AND every linked review accounts for every
+        // changed file. This is the hard, server-side exhaustiveness guard — the
+        // AI cannot hand off with a missing or gappy review.
+        if ($data['to'] === Task::STATUS_HUMAN_REVIEW) {
+            $reviews = $task->reviews;
+            if ($reviews->isEmpty()) {
+                return Response::error(
+                    'This task has no linked review. Create one (create_review with task_ids) and cover its files before handing off to a human.'
+                );
+            }
+            foreach ($reviews as $review) {
+                $coverage = $review->coverage();
+                if (! $coverage['complete']) {
+                    return Response::error(
+                        "Review #{$review->id} still has uncovered files; allocate them to a section first: "
+                        .implode(', ', $coverage['uncovered']).'.'
+                    );
+                }
+            }
+        }
+
         $task->status = $data['to'];
         // Lands at the bottom of the target status, like the board's lifecycle move.
         $task->position = (int) Task::where('project_id', $task->project_id)
@@ -52,6 +74,13 @@ class AdvanceTaskTool extends LodestarTool
             $task->claimed_at = null;
         }
         $task->save();
+
+        // Freeze linked reviews at hand-off so coverage can't silently re-open
+        // after the gate passed (a draft review is editable; an in_review one is
+        // locked against further AI section/file edits — see upsert_review_section).
+        if ($task->status === Task::STATUS_HUMAN_REVIEW) {
+            $task->reviews()->where('status', 'draft')->update(['status' => 'in_review']);
+        }
 
         return Response::json([
             'id' => $task->id,

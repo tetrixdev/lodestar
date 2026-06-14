@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'github' => [
+        // Token used server-side to read the compare API for review file lists.
+        // v1: one server token; per-user "Connect GitHub" is a later task.
+        'token' => env('GITHUB_TOKEN'),
+    ],
+
 ];

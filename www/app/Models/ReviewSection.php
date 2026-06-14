@@ -6,11 +6,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * One ordered step of a review walkthrough (the data behind the HTML
  * demonstrator). `mode` is the review mode; `status` carries the human's
- * per-section sign-off.
+ * per-section sign-off. A section also declares which changed files it covers
+ * (the coverage guard requires every file land in at least one section).
  */
 class ReviewSection extends Model
 {
@@ -27,5 +29,11 @@ class ReviewSection extends Model
     public function review(): BelongsTo
     {
         return $this->belongsTo(Review::class);
+    }
+
+    /** The changed files this section covers. */
+    public function files(): BelongsToMany
+    {
+        return $this->belongsToMany(ReviewFile::class, 'review_file_section');
     }
 }

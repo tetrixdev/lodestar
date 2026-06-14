@@ -42,6 +42,12 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   they may sign off its sections (the human mirror of an agent claiming a task).
   A review covers many tasks and a task can appear in many reviews (the
   `review_task` pivot).
+- **ReviewFile** — one file the review's comparison changed, as reported by the
+  **GitHub compare API** (`repo` + `base_ref`…`head_ref` on the Review). `path`,
+  `status` (added/modified/removed/renamed), `old_path` for renames, and
+  `position` (GitHub's own ordering, so the UI file-tree matches GitHub). This set
+  is the **ground truth** the coverage guard checks against — the AI never
+  supplies it.
 - **ReviewSection** — one ordered step of a review walkthrough — the data behind
   the HTML walkthrough screen. `position` orders the sections; `mode` is the
   review mode (`skip` / `behavioural` / `direct` / `direct_doc` / `mirror_guard`);
@@ -70,6 +76,10 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
 - **review_task** — the many-to-many link between a Review and the Tasks it
   covers. Unique `(review_id, task_id)`; both sides cascade-delete, so the link
   disappears with either end.
+- **review_file_section** — the many-to-many link between a ReviewFile and the
+  ReviewSections that cover it. A file may be covered by several sections and must
+  be covered by at least one (the coverage guard). Unique
+  `(review_file_id, review_section_id)`; both sides cascade-delete.
 
 (Laravel scaffolding — `sessions`, `cache`, `jobs`, etc. — is standard and
 omitted here, except `users` (the ownership root) and `personal_access_tokens`
@@ -121,6 +131,15 @@ These are the rules the column list alone won't tell you:
   as: a project-specific `SkillBinding` → the user's default binding → the current
   (highest-version) system skill. So editing a system skill updates every unbound
   user's loop on their next call, with no client change.
+- **Every changed file must be covered by a section (the coverage guard).** A
+  review built from a GitHub comparison stores its changed files as `review_files`
+  (fetched server-side from GitHub — never the AI's claim). Each ReviewSection
+  declares which files it covers (`review_file_section`); a file may sit in several
+  sections but must sit in **at least one**. `Review::coverage()` computes the
+  uncovered set, and `advance_task → human_review` is **rejected** while any linked
+  review has uncovered files — so a review can only reach a human once it provably
+  accounts for every changed file. A review with no files (doc-only) is trivially
+  complete.
 - **A review is claimed by a single human at a time.** `assigned_to_user_id` is
   set by a **conditional UPDATE guarded on `WHERE assigned_to_user_id IS NULL`**
   (`Review::claimFor`), making claim a single atomic check-and-set — no
@@ -148,6 +167,8 @@ erDiagram
     PROJECT ||--o{ WORK_SESSION : "work log"
     PROJECT ||--o{ REVIEW : has
     REVIEW ||--o{ REVIEW_SECTION : "walkthrough steps"
+    REVIEW ||--o{ REVIEW_FILE : "changed files (GitHub)"
+    REVIEW_FILE }o--o{ REVIEW_SECTION : "review_file_section (covered by)"
     REVIEW }o--o{ TASK : "review_task (covers)"
     USER ||--o{ REVIEW : "assigned (nullable)"
     USER ||--o{ SKILL : "owns forks (nullable)"
@@ -192,11 +213,27 @@ erDiagram
         bigint id PK
         bigint project_id FK
         string title
+        string repo "nullable, owner/name on GitHub"
         string base_ref "nullable, e.g. main"
         string head_ref "nullable, e.g. feat/x"
         string status "draft|in_review|done"
         bigint assigned_to_user_id FK "nullable, current holder"
         text intro "nullable, preamble"
+    }
+
+    REVIEW_FILE {
+        bigint id PK
+        bigint review_id FK
+        string path
+        string status "added|modified|removed|renamed"
+        string old_path "nullable, for renames"
+        integer position "GitHub ordering"
+    }
+
+    REVIEW_FILE_SECTION {
+        bigint id PK
+        bigint review_file_id FK
+        bigint review_section_id FK
     }
 
     REVIEW_SECTION {

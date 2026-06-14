@@ -32,6 +32,36 @@ class Review extends Model
         return $this->hasMany(ReviewSection::class)->orderBy('position');
     }
 
+    /** The changed files of this review's comparison (GitHub order). */
+    public function files(): HasMany
+    {
+        return $this->hasMany(ReviewFile::class)->orderBy('position');
+    }
+
+    /**
+     * The coverage guard: every changed file must be allocated to at least one
+     * section. Returns the totals + the still-uncovered file paths. A review with
+     * no files (a doc-only review) is trivially complete.
+     */
+    public function coverage(): array
+    {
+        $files = $this->files()->withCount('sections')->get();
+        $uncovered = $files->where('sections_count', 0)->pluck('path')->values()->all();
+
+        return [
+            'total' => $files->count(),
+            'covered' => $files->count() - count($uncovered),
+            'uncovered' => $uncovered,
+            'complete' => $uncovered === [],
+        ];
+    }
+
+    /** Convenience: is every changed file covered by a section? */
+    public function isFullyCovered(): bool
+    {
+        return $this->coverage()['complete'];
+    }
+
     /** The tasks this review covers (openable from either side). */
     public function tasks(): BelongsToMany
     {
