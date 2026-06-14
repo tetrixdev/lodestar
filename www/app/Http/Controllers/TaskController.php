@@ -12,10 +12,52 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\Response;
 
 class TaskController extends Controller
 {
+    /** The per-task detail page: plan, description, reviews, deps, sessions, comments, activity. */
+    public function show(Request $request, Task $task): View
+    {
+        abort_unless($task->project->user_id === $request->user()->id, 403);
+
+        $task->load([
+            'project',
+            'reviews',
+            'workSessions' => fn ($q) => $q->latest(),
+            'comments.user',
+            'events',
+            'dependencies',
+            'dependents',
+        ]);
+
+        return view('tasks.show', ['task' => $task]);
+    }
+
+    /**
+     * Leave an async note on a task. Human comments are stamped with the
+     * author's name and logged to the activity timeline.
+     */
+    public function comment(Request $request, Task $task): RedirectResponse
+    {
+        abort_unless($task->project->user_id === $request->user()->id, 403);
+
+        $data = $request->validate([
+            'body' => ['required', 'string'],
+        ]);
+
+        $task->comments()->create([
+            'user_id' => $request->user()->id,
+            'author' => $request->user()->name,
+            'body' => $data['body'],
+        ]);
+
+        $task->logEvent('commented', $request->user()->name);
+
+        return back();
+    }
+
     /** Add a card to a project (lands at the bottom of its status). */
     public function store(Request $request, Project $project): RedirectResponse
     {

@@ -68,7 +68,9 @@
             @endif
         </div>
 
-        <div class="text-sm text-gray-900 mt-1.5">{{ $task->title }}</div>
+        <div class="text-sm text-gray-900 mt-1.5">
+            <a href="{{ route('tasks.show', $task) }}" class="hover:underline">{{ $task->title }}</a>
+        </div>
 
         @if ($reviewLink)
             <a href="{{ route('reviews.show', $reviewLink) }}"
