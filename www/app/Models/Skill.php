@@ -20,10 +20,15 @@ class Skill extends Model
 
     public const KIND_USER = 'user';
 
-    /** The four loop phases a skill can drive (the binding/skill key set). */
-    public const PHASES = ['plan', 'develop', 'ai_review', 'merge'];
+    /**
+     * The skill keys. The four lifecycle phases plus `main` — the bootstrap
+     * skill an agent loads first (it has no task/working-state; it's fetched
+     * explicitly via get_skill(phase:'main')).
+     */
+    public const PHASES = ['main', 'plan', 'develop', 'ai_review', 'merge'];
 
     public const PHASE_LABELS = [
+        'main' => 'Main (bootstrap)',
         'plan' => 'Plan',
         'develop' => 'Develop',
         'ai_review' => 'AI review',

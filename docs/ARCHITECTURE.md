@@ -63,11 +63,16 @@ holds the tenancy helpers):
   `report` (logs a WorkSession).
 
 **Skills (`app/Models/Skill.php`, `SkillBinding`, `SystemSkillSeeder`)** — the
-four phase prompts ship as `system` skills (seeded/upserted from code) and are
-resolved per user/project through `skill_bindings`; a user may fork one into an
-editable `user` skill. The skill body is delivered at run time via `get_skill`,
-not as a file on the developer's machine — so a skill edit reaches every loop on
-its next call.
+prompts ship as `system` skills (seeded/upserted from code), resolved per
+user/project through `skill_bindings`; a user may fork one into an editable
+`user` skill. Five keys: **`main`** — the bootstrap skill an agent loads first
+(`get_skill(phase:'main')`, no task), carrying the loop + routing + per-project
+main instructions; and the four lifecycle phases **`plan` / `develop` /
+`ai_review` / `merge`**. The **`ai_review`** skill encodes the structure-first
+review method (the 5 modes + the Laravel structure→mode taxonomy + the surface
+register, ported from the vps-setup dev-method). Bodies are delivered at run time
+via `get_skill`, not as files on the developer's machine — so a skill edit
+reaches every loop on its next call.
 
 **Auth & tenancy** — standard Breeze auth for the web; **Sanctum** for MCP.
 Agents authenticate with a per-machine personal-access token minted in the web UI

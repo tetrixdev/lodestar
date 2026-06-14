@@ -126,6 +126,30 @@ class McpLoopToolsTest extends TestCase
         $this->assertSame('Built the thing', $project->workSessions()->sole()->title);
     }
 
+    public function test_get_skill_returns_the_main_bootstrap_skill_without_a_task(): void
+    {
+        $this->seed(SystemSkillSeeder::class);
+        $user = User::factory()->create();
+
+        LodestarServer::actingAs($user)
+            ->tool(GetSkillTool::class, ['phase' => 'main'])
+            ->assertOk()
+            ->assertSee('"kind":"system"')
+            ->assertSee('start here');
+    }
+
+    public function test_every_phase_has_a_seeded_system_skill(): void
+    {
+        $this->seed(SystemSkillSeeder::class);
+
+        foreach (Skill::PHASES as $phase) {
+            $this->assertNotNull(
+                Skill::currentSystem($phase),
+                "no system skill seeded for phase {$phase}",
+            );
+        }
+    }
+
     public function test_get_skill_falls_back_to_system_then_prefers_a_fork(): void
     {
         $this->seed(SystemSkillSeeder::class);

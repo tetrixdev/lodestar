@@ -12,7 +12,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Get the skill (prompt) for a phase. Pass a claimed task_id and the phase is taken from its working state; or pass phase (plan|develop|ai_review|merge) directly. Returns your bound skill if you have one, else the current system skill. Always fetch this fresh — skills update server-side.')]
+#[Description('Get the skill (prompt) for a phase. Pass a claimed task_id and the phase is taken from its working state; or pass phase directly — "main" (the bootstrap skill: load this first), or plan / develop / ai_review / merge. Returns your bound skill if you have one, else the current system skill. Always fetch this fresh — skills update server-side.')]
 #[Name('get_skill')]
 class GetSkillTool extends LodestarTool
 {
