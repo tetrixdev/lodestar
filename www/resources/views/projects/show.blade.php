@@ -1,11 +1,11 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <div class="flex items-center gap-3 min-w-0">
                 <a href="{{ route('projects.index') }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $project->name }}</h2>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight truncate">{{ $project->name }}</h2>
             </div>
-            <div class="flex items-center gap-4">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                 <a href="{{ route('projects.gantt', $project) }}"
                    class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Timeline &rarr;</a>
                 <a href="{{ route('work-sessions.index', $project) }}"
@@ -65,7 +65,7 @@
                 '{{ csrf_token() }}'
             ));
          ">
-        <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             @if ($project->primary_goal)
                 <p class="text-gray-600">{{ $project->primary_goal }}</p>

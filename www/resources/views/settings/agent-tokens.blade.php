@@ -6,7 +6,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             {{-- Just-created token: shown exactly once. --}}
             @if (session('plain_token'))
@@ -37,7 +37,7 @@
                         </p>
                     </header>
 
-                    <form method="POST" action="{{ route('agent-tokens.store') }}" class="mt-6 flex items-end gap-4">
+                    <form method="POST" action="{{ route('agent-tokens.store') }}" class="mt-6 flex flex-col sm:flex-row sm:items-end gap-4">
                         @csrf
                         <div class="flex-1">
                             <x-input-label for="name" :value="__('Machine / agent name')" />
@@ -45,7 +45,7 @@
                                           placeholder="e.g. laptop, ci-runner" required />
                             <x-input-error :messages="$errors->get('name')" class="mt-2" />
                         </div>
-                        <x-primary-button>{{ __('Create') }}</x-primary-button>
+                        <x-primary-button class="justify-center">{{ __('Create') }}</x-primary-button>
                     </form>
                 </div>
             </div>
@@ -59,7 +59,8 @@
                 @if ($tokens->isEmpty())
                     <p class="mt-4 text-sm text-gray-600">No tokens yet.</p>
                 @else
-                    <table class="mt-4 w-full text-sm text-left">
+                    <div class="mt-4 overflow-x-auto">
+                    <table class="w-full text-sm text-left">
                         <thead class="text-gray-500 border-b">
                             <tr>
                                 <th class="py-2">Name</th>
@@ -86,6 +87,7 @@
                             @endforeach
                         </tbody>
                     </table>
+                    </div>
                 @endif
             </div>
         </div>

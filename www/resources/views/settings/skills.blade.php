@@ -6,7 +6,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             @if (session('status') === 'skill-saved')
                 <div class="p-3 bg-green-50 text-green-800 rounded-lg text-sm">Skill saved.</div>
@@ -52,10 +52,10 @@
                                 </div>
 
                                 <div class="flex flex-wrap items-center gap-3">
-                                    <form method="POST" action="{{ route('skills.bind') }}" class="flex items-center gap-2">
+                                    <form method="POST" action="{{ route('skills.bind') }}" class="flex items-center gap-2 min-w-0">
                                         @csrf
                                         <input type="hidden" name="phase" value="{{ $phase }}">
-                                        <select name="skill_id" class="text-sm border-gray-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500">
+                                        <select name="skill_id" class="min-w-0 flex-1 sm:flex-none text-sm border-gray-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500">
                                             @if ($system)
                                                 <option value="{{ $system->id }}" @selected($running && $running->is($system))>System: {{ $system->title }}</option>
                                             @endif
@@ -94,13 +94,13 @@
                         @php $skill = $systemSkills[$phase]; @endphp
                         <div class="border rounded-lg p-4">
                             <div class="flex items-center justify-between gap-3">
-                                <div>
+                                <div class="min-w-0">
                                     <span class="inline-block text-[10px] font-medium uppercase tracking-wide text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5">{{ $phaseLabels[$phase] ?? $phase }}</span>
                                     <span class="ml-2 text-sm font-medium text-gray-900">{{ $skill?->title ?? '— none seeded —' }}</span>
                                     @if ($skill)<span class="ml-1 text-xs text-gray-400">v{{ $skill->version }}</span>@endif
                                 </div>
                                 @if ($skill)
-                                    <form method="POST" action="{{ route('skills.duplicate', $skill) }}">
+                                    <form method="POST" action="{{ route('skills.duplicate', $skill) }}" class="shrink-0">
                                         @csrf
                                         <button class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Duplicate to customize</button>
                                     </form>
@@ -127,11 +127,11 @@
                     <ul class="mt-4 divide-y">
                         @foreach ($forks as $fork)
                             <li class="py-3 flex items-center justify-between gap-3">
-                                <div>
+                                <div class="min-w-0 truncate">
                                     <span class="inline-block text-[10px] font-medium uppercase tracking-wide text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5">{{ $phaseLabels[$fork->key] ?? $fork->key }}</span>
                                     <span class="ml-2 text-sm font-medium text-gray-900">{{ $fork->title }}</span>
                                 </div>
-                                <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-3 shrink-0">
                                     <a href="{{ route('skills.edit', $fork) }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Edit</a>
                                     <form method="POST" action="{{ route('skills.destroy', $fork) }}"
                                           onsubmit="return confirm('Delete this fork?')">

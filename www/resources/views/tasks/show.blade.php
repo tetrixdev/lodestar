@@ -53,7 +53,7 @@
                         <span>Start {{ $task->start_date->toFormattedDateString() }}</span>
                     @endif
                     @if ($task->branch)
-                        <span>Branch <code class="bg-gray-100 px-1 rounded">{{ $task->branch }}</code></span>
+                        <span class="min-w-0 break-all">Branch <code class="bg-gray-100 px-1 rounded">{{ $task->branch }}</code></span>
                     @endif
                 </div>
 

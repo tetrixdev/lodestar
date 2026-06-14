@@ -4,7 +4,7 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             @if (session('status'))
                 <div class="p-3 bg-green-50 text-green-800 rounded-lg text-sm">{{ session('status') }}</div>
@@ -55,11 +55,11 @@
                     <ul class="mt-4 divide-y">
                         @foreach ($connections as $c)
                             <li class="py-3 flex items-center justify-between gap-3 text-sm">
-                                <div>
+                                <div class="min-w-0 truncate">
                                     <span class="font-medium text-gray-900">{{ $c->label }}</span>
                                     <span class="text-gray-500">— {{ '@'.$c->github_login }}</span>
                                 </div>
-                                <form method="POST" action="{{ route('github.destroy', $c->id) }}"
+                                <form method="POST" action="{{ route('github.destroy', $c->id) }}" class="shrink-0"
                                       onsubmit="return confirm('Remove this connection? Repos read through it will stop updating.')">
                                     @csrf @method('DELETE')
                                     <button class="text-red-600 hover:text-red-800">Remove</button>

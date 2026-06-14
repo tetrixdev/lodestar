@@ -15,7 +15,7 @@
     @endphp
 
     <div class="py-10">
-        <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             {{-- legend --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-gray-500">
@@ -51,7 +51,7 @@
                                             @endphp
                                             <div class="flex items-center gap-3">
                                                 {{-- task label --}}
-                                                <div class="w-48 shrink-0 truncate">
+                                                <div class="w-32 sm:w-48 shrink-0 truncate">
                                                     <a href="{{ route('tasks.show', $task) }}" class="text-sm text-gray-800 hover:underline">{{ $task->title }}</a>
                                                     <div class="text-[10px] text-gray-400">{{ $statusLabel }}</div>
                                                 </div>
