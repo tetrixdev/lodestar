@@ -9,7 +9,10 @@ use App\Mcp\Tools\ClaimTaskTool;
 use App\Mcp\Tools\CreateReviewTool;
 use App\Mcp\Tools\GetReviewTool;
 use App\Mcp\Tools\GetSkillTool;
+use App\Mcp\Tools\LinkRepositoryTool;
+use App\Mcp\Tools\ListProjectsTool;
 use App\Mcp\Tools\ReportTool;
+use App\Mcp\Tools\UnlinkRepositoryTool;
 use App\Mcp\Tools\UpsertProjectTool;
 use App\Mcp\Tools\UpsertReviewSectionTool;
 use App\Mcp\Tools\UpsertSessionTool;
@@ -44,9 +47,12 @@ class LodestarServer extends Server
      */
     protected array $tools = [
         // Data tools
+        ListProjectsTool::class,
         UpsertProjectTool::class,
         UpsertTaskTool::class,
         UpsertSessionTool::class,
+        LinkRepositoryTool::class,
+        UnlinkRepositoryTool::class,
         CreateReviewTool::class,
         UpsertReviewSectionTool::class,
         GetReviewTool::class,
