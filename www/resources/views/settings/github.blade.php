@@ -33,6 +33,13 @@
                             <x-input-label for="token" :value="__('Personal access token')" />
                             <x-text-input id="token" name="token" type="password" class="mt-1 block w-full"
                                           placeholder="ghp_…" required />
+                            <p class="mt-1 text-xs text-gray-600">
+                                <a href="https://github.com/settings/tokens/new?description=Lodestar&scopes=repo"
+                                   target="_blank" rel="noopener"
+                                   class="text-indigo-600 hover:underline">Generate one on GitHub &rarr;</a>
+                                — opens the token page with the <code class="bg-gray-100 px-1 rounded">repo</code>
+                                scope pre-selected; copy it back here.
+                            </p>
                             <x-input-error :messages="$errors->get('token')" class="mt-2" />
                         </div>
                         <x-primary-button>{{ __('Connect') }}</x-primary-button>
