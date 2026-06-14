@@ -8,6 +8,8 @@
             <div class="flex items-center gap-4">
                 <a href="{{ route('projects.gantt', $project) }}"
                    class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Timeline &rarr;</a>
+                <a href="{{ route('work-sessions.index', $project) }}"
+                   class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Sessions &rarr;</a>
                 <a href="{{ route('repositories.index', $project) }}"
                    class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Repositories &rarr;</a>
             </div>

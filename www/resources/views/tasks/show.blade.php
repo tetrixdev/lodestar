@@ -199,10 +199,18 @@
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Work sessions</p>
                 @forelse ($task->workSessions as $session)
                     <div x-data="{ open: false }" class="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
-                        <button type="button" @click="open = !open" class="w-full flex items-center justify-between gap-3 text-left">
-                            <span class="text-sm font-medium text-gray-800">{{ $session->title }}</span>
-                            <span class="shrink-0 text-xs text-gray-400">{{ optional($session->occurred_on)->toFormattedDateString() }}</span>
-                        </button>
+                        <div class="flex items-center justify-between gap-3">
+                            <a href="{{ route('work-sessions.show', $session) }}"
+                               class="text-sm font-medium text-indigo-600 hover:underline truncate">{{ $session->title }}</a>
+                            <div class="flex shrink-0 items-center gap-2">
+                                <span class="text-xs text-gray-400">{{ optional($session->occurred_on)->toFormattedDateString() }}</span>
+                                @if ($session->body)
+                                    <button type="button" @click="open = !open" class="text-xs text-gray-400 hover:text-gray-600">
+                                        <span x-text="open ? 'Hide' : 'Preview'"></span>
+                                    </button>
+                                @endif
+                            </div>
+                        </div>
                         @if ($session->body)
                             <div x-show="open" x-cloak class="mt-2">
                                 <x-markdown :content="$session->body" />

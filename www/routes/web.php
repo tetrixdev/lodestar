@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AgentTokenController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GithubConnectionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -8,15 +9,15 @@ use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\WorkSessionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
 
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -53,6 +54,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/skills/{skill}/edit', [SkillController::class, 'edit'])->name('skills.edit');
     Route::patch('/settings/skills/{skill}', [SkillController::class, 'update'])->name('skills.update');
     Route::delete('/settings/skills/{skill}', [SkillController::class, 'destroy'])->name('skills.destroy');
+
+    // Work sessions — a project's running history of what was done.
+    Route::get('/projects/{project}/sessions', [WorkSessionController::class, 'index'])->name('work-sessions.index');
+    Route::get('/projects/{project}/sessions/create', [WorkSessionController::class, 'create'])->name('work-sessions.create');
+    Route::post('/projects/{project}/sessions', [WorkSessionController::class, 'store'])->name('work-sessions.store');
+    Route::get('/sessions/{workSession}', [WorkSessionController::class, 'show'])->name('work-sessions.show');
 
     Route::get('/projects/{project}/reviews', [ReviewController::class, 'index'])->name('reviews.index');
     Route::get('/reviews/{review}', [ReviewController::class, 'show'])->name('reviews.show');
