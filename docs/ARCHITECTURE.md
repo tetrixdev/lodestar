@@ -51,16 +51,18 @@ signed-in user.
 
 **The MCP server (`app/Mcp/`, laravel/mcp)** — the agent-facing surface, mirror
 of the web UI. `LodestarServer` is registered at `POST /mcp` in `routes/ai.php`
-behind `auth:sanctum`, and exposes ten tools (all extend `LodestarTool`, which
+behind `auth:sanctum`, and exposes 14 tools (all extend `LodestarTool`, which
 holds the tenancy helpers):
 
-- **Data tools** — `upsert_project`, `upsert_task`, `upsert_session`,
-  `create_review` (returns the URL a human opens), `upsert_review_section`,
-  `get_review`. These are the agent's read/write access to the board, the exact
-  data the controllers serve to the browser.
-- **Loop tools** — `claim_task` (atomic claim, below), `get_skill` (resolves the
-  phase prompt for a claimed task), `advance_task` (legal-transition-only move),
-  `report` (logs a WorkSession).
+- **Data tools** — `list_projects`, `upsert_project`, `upsert_task`,
+  `upsert_session`, `create_review` (returns the URL a human opens),
+  `upsert_review_section`, `add_finding`, `get_review`. The agent's read/write
+  access to the board, the exact data the controllers serve to the browser.
+- **Repository tools** — `link_repository`, `unlink_repository` (attach a repo to
+  a project through a GitHub connection).
+- **Loop tools** — `claim_task` (atomic claim, by next or by id), `get_skill`
+  (resolves the phase prompt — incl. the `main` bootstrap), `advance_task`
+  (legal-transition-only move), `report` (logs a WorkSession).
 
 **Skills (`app/Models/Skill.php`, `SkillBinding`, `SystemSkillSeeder`)** — the
 prompts ship as `system` skills (seeded/upserted from code), resolved per

@@ -33,8 +33,9 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   a reaper (see Invariants).
 - **WorkSession** — a work-log entry (the running history a project kept).
   `title` + `slug`, a markdown `body`, and `occurred_on` (the date the work
-  happened). Named `work_sessions` so it never collides with Laravel's framework
-  `sessions` table. *(Model + table exist; no UI yet.)*
+  happened), and an optional `task_id` (a session can log against a specific
+  task). Named `work_sessions` so it never collides with Laravel's framework
+  `sessions` table.
 - **Review** — a change reviewed against a base (e.g. a branch vs main). Carries
   `base_ref`/`head_ref` (the intended comparison), a `status` (draft / in_review
   / done), an `intro` preamble, and `assigned_to_user_id` — the human currently
