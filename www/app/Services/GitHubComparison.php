@@ -24,9 +24,11 @@ class GitHubComparison
     /**
      * @return list<array{path:string,status:string,old_path:?string,position:int}>
      */
-    public function files(string $repo, string $base, string $head): array
+    public function files(string $repo, string $base, string $head, ?string $token = null): array
     {
-        $token = config('services.github.token');
+        // Prefer the repository's own connection token; fall back to the server
+        // token (v1 single-tenant) when none is given.
+        $token ??= config('services.github.token');
 
         $response = Http::baseUrl('https://api.github.com')
             ->withHeaders(['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'])

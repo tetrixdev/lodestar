@@ -1,8 +1,12 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center gap-3">
-            <a href="{{ route('projects.index') }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $project->name }}</h2>
+        <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <a href="{{ route('projects.index') }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $project->name }}</h2>
+            </div>
+            <a href="{{ route('repositories.index', $project) }}"
+               class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Repositories &rarr;</a>
         </div>
     </x-slot>
 

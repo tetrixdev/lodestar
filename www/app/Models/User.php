@@ -43,4 +43,10 @@ class User extends Authenticatable
     {
         return $this->hasMany(Skill::class);
     }
+
+    /** The user's linked GitHub accounts/tokens. @return HasMany<GithubConnection, $this> */
+    public function githubConnections(): HasMany
+    {
+        return $this->hasMany(GithubConnection::class);
+    }
 }

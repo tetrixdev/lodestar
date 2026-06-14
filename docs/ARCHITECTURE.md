@@ -219,9 +219,13 @@ agent's input crosses into our data writes.
      **file-tree** at the top of the walkthrough, each file tagged with its
      covering section(s) and uncovered files flagged — so "I stepped through every
      section" provably means "every changed file was reviewed".
-   - **Token scope.** v1 uses one server `GITHUB_TOKEN`; a per-user "Connect
-     GitHub" is backlog. Compare returns ≤300 files per response — larger diffs
-     are a known limit to page later, not silently truncated.
+   - **Token scope.** Repos are first-class: a user links **GitHub connections**
+     (one per account/token, stored encrypted) and attaches **repositories** to a
+     project (many-to-many — a project = a "stack" of repos). Each repo is read
+     through its connection's token, so a review fetches its comparison with the
+     right account's credentials. (A server `GITHUB_TOKEN` remains as a fallback.)
+     Compare returns ≤300 files per response — a diff at that cap throws, not
+     silently truncated.
 
 **Still backlog (not built):** the thin npx client (`connect` + `run`) and the
 `check_version` self-update handshake — the only pieces that would live on the

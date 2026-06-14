@@ -25,13 +25,13 @@ class GetReviewTool extends LodestarTool
             return Response::error('No review with that id belongs to you.');
         }
 
-        $review->load('sections.files:id,path', 'tasks', 'assignee', 'files');
+        $review->load('sections.files:id,path', 'tasks', 'assignee', 'files', 'repository');
 
         return Response::json([
             'id' => $review->id,
             'title' => $review->title,
             'status' => $review->status,
-            'repo' => $review->repo,
+            'repository' => $review->repository?->full_name,
             'base_ref' => $review->base_ref,
             'head_ref' => $review->head_ref,
             'intro' => $review->intro,

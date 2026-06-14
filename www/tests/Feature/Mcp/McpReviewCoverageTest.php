@@ -8,6 +8,7 @@ use App\Mcp\Servers\LodestarServer;
 use App\Mcp\Tools\AdvanceTaskTool;
 use App\Mcp\Tools\CreateReviewTool;
 use App\Mcp\Tools\UpsertReviewSectionTool;
+use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\GitHubComparison;
@@ -28,14 +29,25 @@ class McpReviewCoverageTest extends TestCase
         ]);
     }
 
+    /** Link a repository (through a connection) to a project so create_review can resolve it. */
+    private function linkRepo(Project $project, string $full = 'o/r'): void
+    {
+        $conn = $project->user->githubConnections()->create([
+            'label' => 'test', 'token' => 'tok', 'github_login' => 'tester',
+        ]);
+        $repo = $conn->repositories()->create(['full_name' => $full, 'default_branch' => 'main']);
+        $project->repositories()->attach($repo);
+    }
+
     public function test_create_review_pulls_the_authoritative_file_list_from_github(): void
     {
         $this->fakeCompare(['app/A.php', 'app/B.php', 'docs/C.md']);
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
 
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
-            'project' => 'p', 'title' => 'R', 'repo' => 'owner/repo',
+            'project' => 'p', 'title' => 'R', 'repo' => 'o/r',
             'base_ref' => 'main', 'head_ref' => 'feat/x',
         ])->assertOk()->assertSee('"files":3');
 
@@ -49,6 +61,7 @@ class McpReviewCoverageTest extends TestCase
         $this->fakeCompare(['app/A.php', 'app/B.php']);
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r', 'base_ref' => 'main', 'head_ref' => 'h',
         ]);
@@ -74,6 +87,7 @@ class McpReviewCoverageTest extends TestCase
         $this->fakeCompare(['app/A.php', 'app/B.php']);
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
@@ -105,6 +119,7 @@ class McpReviewCoverageTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
         // ai_review card with NO linked review at all.
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
@@ -119,6 +134,7 @@ class McpReviewCoverageTest extends TestCase
         $this->fakeCompare(['app/A.php']);
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r', 'base_ref' => 'm', 'head_ref' => 'h',
@@ -147,6 +163,7 @@ class McpReviewCoverageTest extends TestCase
         $this->fakeCompare($names);
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
 
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r', 'base_ref' => 'm', 'head_ref' => 'h',
@@ -159,6 +176,7 @@ class McpReviewCoverageTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
         // No base/head → no file fetch, no files.

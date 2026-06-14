@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
+use App\Models\Project;
+use App\Models\Repository;
 use App\Services\GitHubComparison;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +15,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Throwable;
 
-#[Description('Create a review on one of your projects and get back the URL a human opens to walk through it. Provide base_ref + head_ref (and repo, "owner/name") to pull the authoritative changed-file list from GitHub — every changed file must then be covered by a section before the review can reach a human. Add sections with upsert_review_section.')]
+#[Description('Create a review on one of your projects and get back the URL a human opens to walk through it. Provide base_ref + head_ref (and repo "owner/name" if the project has several) to pull the authoritative changed-file list from GitHub via that repo\'s connection — every changed file must then be covered by a section before the review can reach a human. Add sections with upsert_review_section.')]
 #[Name('create_review')]
 class CreateReviewTool extends LodestarTool
 {
@@ -35,25 +37,31 @@ class CreateReviewTool extends LodestarTool
             return Response::error('No project "'.$data['project'].'" belongs to you.');
         }
 
-        // If a comparison was given, fetch the authoritative changed files first —
-        // a review that can't list its files shouldn't be created half-formed.
+        // A comparison review resolves to one of the project's linked repositories
+        // and reads GitHub through that repo's connection token.
         $files = [];
-        $repo = $data['repo'] ?? $this->repoFromProject($project);
+        $repository = null;
         if (! empty($data['base_ref']) && ! empty($data['head_ref'])) {
-            if (! $repo) {
-                return Response::error('Provide repo ("owner/name") — none could be derived from the project.');
+            $repository = $this->resolveRepository($project, $data['repo'] ?? null);
+            if (! $repository) {
+                return Response::error(
+                    'No matching repository is linked to this project. Link one in the project\'s Repositories, '
+                    .'or pass repo="owner/name" of a linked repo.'
+                );
             }
             try {
-                $files = app(GitHubComparison::class)->files($repo, $data['base_ref'], $data['head_ref']);
+                $files = app(GitHubComparison::class)->files(
+                    $repository->full_name, $data['base_ref'], $data['head_ref'], $repository->token()
+                );
             } catch (Throwable $e) {
                 return Response::error('Could not fetch the comparison: '.$e->getMessage());
             }
         }
 
-        $review = DB::transaction(function () use ($project, $data, $repo, $files) {
+        $review = DB::transaction(function () use ($project, $data, $repository, $files) {
             $review = $project->reviews()->create([
                 'title' => $data['title'],
-                'repo' => $repo,
+                'repository_id' => $repository?->id,
                 'base_ref' => $data['base_ref'] ?? null,
                 'head_ref' => $data['head_ref'] ?? null,
                 'intro' => $data['intro'] ?? null,
@@ -75,6 +83,7 @@ class CreateReviewTool extends LodestarTool
         return Response::json([
             'id' => $review->id,
             'url' => route('reviews.show', $review),
+            'repository' => $repository?->full_name,
             'linked_tasks' => $review->tasks()->count(),
             'files' => count($files),
             'next' => $files !== []
@@ -83,17 +92,16 @@ class CreateReviewTool extends LodestarTool
         ]);
     }
 
-    /** Best-effort owner/name from the project's first repo URL (github.com/owner/name). */
-    private function repoFromProject($project): ?string
+    /** A repository linked to the project: named by full_name, or the sole one if unambiguous. */
+    private function resolveRepository(Project $project, ?string $fullName): ?Repository
     {
-        foreach ((array) ($project->repos ?? []) as $repo) {
-            $url = is_array($repo) ? ($repo['url'] ?? '') : '';
-            if (preg_match('#github\.com[:/]([^/]+/[^/]+?)(?:\.git)?/?$#', $url, $m)) {
-                return $m[1];
-            }
+        $repos = $project->repositories();
+
+        if ($fullName) {
+            return $repos->where('full_name', $fullName)->first();
         }
 
-        return null;
+        return $repos->count() === 1 ? $repos->first() : null;
     }
 
     public function schema(JsonSchema $schema): array
@@ -101,7 +109,7 @@ class CreateReviewTool extends LodestarTool
         return [
             'project' => $schema->string()->description('Project id or slug.')->required(),
             'title' => $schema->string()->description('Review title.')->required(),
-            'repo' => $schema->string()->description('GitHub repo "owner/name". Defaults from the project\'s repo URL if set.'),
+            'repo' => $schema->string()->description('Which linked repo ("owner/name") the comparison is in. Optional if the project has exactly one repo.'),
             'base_ref' => $schema->string()->description('Base ref of the comparison, e.g. "main". Required (with head_ref) to pull the file list.'),
             'head_ref' => $schema->string()->description('Head ref under review, e.g. "feat/x".'),
             'intro' => $schema->string()->description('Optional preamble shown at the top of the walkthrough.'),

@@ -34,6 +34,7 @@ class SchemaMirrorTest extends TestCase
     private const TABLE_ALIASES = [
         'REVIEW_TASK' => 'review_task', // the pivot keeps the singular Laravel name
         'REVIEW_FILE_SECTION' => 'review_file_section', // file<->section pivot, singular
+        'PROJECT_REPOSITORY' => 'project_repository', // project<->repo pivot, singular
     ];
 
     public function test_data_model_diagram_matches_the_live_schema(): void
@@ -91,7 +92,7 @@ class SchemaMirrorTest extends TestCase
         if (! is_readable($path)) {
             $this->markTestSkipped(
                 "DATA-MODEL.md not reachable at {$path}. Mount the repo docs/ into the app "
-                ."(map ./docs -> /var/docs in compose) so this drift guard can run."
+                .'(map ./docs -> /var/docs in compose) so this drift guard can run.'
             );
         }
         $doc = (string) file_get_contents($path);

@@ -42,6 +42,12 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   they may sign off its sections (the human mirror of an agent claiming a task).
   A review covers many tasks and a task can appear in many reviews (the
   `review_task` pivot).
+- **GithubConnection** — one GitHub account/token a user has linked. `label`
+  ("work"/"personal"), the resolved `github_login`, and the `token` (stored
+  **encrypted**). A user may have several; each Repository is read through one.
+- **Repository** — a GitHub repo (`full_name` = "owner/name", `default_branch`),
+  read through a `github_connection`. Linked to projects many-to-many via
+  `project_repository`. A Review's comparison is within one Repository.
 - **ReviewFile** — one file the review's comparison changed, as reported by the
   **GitHub compare API** (`repo` + `base_ref`…`head_ref` on the Review). `path`,
   `status` (added/modified/removed/renamed), `old_path` for renames, and
@@ -76,6 +82,9 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
 - **review_task** — the many-to-many link between a Review and the Tasks it
   covers. Unique `(review_id, task_id)`; both sides cascade-delete, so the link
   disappears with either end.
+- **project_repository** — the many-to-many link between a Project and the
+  Repositories it spans (its "stack"). Unique `(project_id, repository_id)`; both
+  sides cascade-delete.
 - **review_file_section** — the many-to-many link between a ReviewFile and the
   ReviewSections that cover it. A file may be covered by several sections and must
   be covered by at least one (the coverage guard). Unique
@@ -176,6 +185,10 @@ erDiagram
     PROJECT ||--o{ SKILL_BINDING : "scopes (nullable)"
     SKILL ||--o{ SKILL_BINDING : "bound as"
     USER ||--o{ PERSONAL_ACCESS_TOKEN : authenticates
+    USER ||--o{ GITHUB_CONNECTION : connects
+    GITHUB_CONNECTION ||--o{ REPOSITORY : reads
+    PROJECT }o--o{ REPOSITORY : "project_repository (stack)"
+    REPOSITORY ||--o{ REVIEW : "compared in"
 
     PROJECT {
         bigint id PK
@@ -213,7 +226,7 @@ erDiagram
         bigint id PK
         bigint project_id FK
         string title
-        string repo "nullable, owner/name on GitHub"
+        bigint repository_id FK "nullable, the compared repo"
         string base_ref "nullable, e.g. main"
         string head_ref "nullable, e.g. feat/x"
         string status "draft|in_review|done"
@@ -292,5 +305,26 @@ erDiagram
         text abilities "nullable"
         timestamp last_used_at "nullable"
         timestamp expires_at "nullable"
+    }
+
+    GITHUB_CONNECTION {
+        bigint id PK
+        bigint user_id FK
+        string label "work|personal"
+        string github_login "nullable, resolved account"
+        text token "encrypted"
+    }
+
+    REPOSITORY {
+        bigint id PK
+        bigint github_connection_id FK
+        string full_name "owner/name"
+        string default_branch "nullable"
+    }
+
+    PROJECT_REPOSITORY {
+        bigint id PK
+        bigint project_id FK
+        bigint repository_id FK
     }
 ```

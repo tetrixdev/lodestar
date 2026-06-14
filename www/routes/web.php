@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\AgentTokenController;
+use App\Http\Controllers\GithubConnectionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\TaskController;
@@ -24,6 +26,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+    Route::get('/projects/{project}/repositories', [RepositoryController::class, 'index'])->name('repositories.index');
+    Route::post('/projects/{project}/repositories', [RepositoryController::class, 'store'])->name('repositories.store');
+    Route::delete('/projects/{project}/repositories/{repository}', [RepositoryController::class, 'destroy'])->name('repositories.destroy');
     Route::post('/projects/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('/tasks/{task}/move', [TaskController::class, 'move'])->name('tasks.move');
@@ -33,6 +38,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/agent-tokens', [AgentTokenController::class, 'index'])->name('agent-tokens.index');
     Route::post('/settings/agent-tokens', [AgentTokenController::class, 'store'])->name('agent-tokens.store');
     Route::delete('/settings/agent-tokens/{token}', [AgentTokenController::class, 'destroy'])->name('agent-tokens.destroy');
+
+    // GitHub connections — link accounts/tokens used to read repos.
+    Route::get('/settings/github', [GithubConnectionController::class, 'index'])->name('github.index');
+    Route::post('/settings/github', [GithubConnectionController::class, 'store'])->name('github.store');
+    Route::delete('/settings/github/{connection}', [GithubConnectionController::class, 'destroy'])->name('github.destroy');
 
     // Skills — view the system prompts, duplicate to a fork, edit the fork.
     Route::get('/settings/skills', [SkillController::class, 'index'])->name('skills.index');

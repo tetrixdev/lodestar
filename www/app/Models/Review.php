@@ -26,6 +26,12 @@ class Review extends Model
         return $this->belongsTo(Project::class);
     }
 
+    /** The repository this review's comparison is within (null = doc-only review). */
+    public function repository(): BelongsTo
+    {
+        return $this->belongsTo(Repository::class);
+    }
+
     /** @return HasMany<ReviewSection, $this> */
     public function sections(): HasMany
     {
