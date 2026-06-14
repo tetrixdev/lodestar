@@ -19,6 +19,10 @@ services:
   php:
     container_name: lodestar-dev-php
     ports: !override []
+    # Mount the repo docs at /var/docs so the schema-drift guard
+    # (tests/Feature/SchemaMirrorTest.php) finds DATA-MODEL.md in-container.
+    volumes:
+      - ./docs:/var/docs:ro
 
   nginx:
     container_name: lodestar-dev-nginx

@@ -17,11 +17,6 @@ class Project extends Model
 {
     protected $guarded = [];
 
-    protected function casts(): array
-    {
-        return ['repos' => 'array'];
-    }
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

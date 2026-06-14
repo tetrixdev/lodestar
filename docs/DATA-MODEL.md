@@ -20,8 +20,8 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
 
 - **Project** — a group of repos with a shared goal, owned by a `user`. The home
   base its tasks, work-sessions and reviews all hang off. `name` + a per-user
-  unique `slug`; an optional `description` and `primary_goal`; `repos` is a JSON
-  list of `{ name, url }` (kept as JSON until a Repo model earns its own table).
+  unique `slug`; an optional `description` and `primary_goal`. Its repositories
+  are first-class (the `repositories` table via the `project_repository` pivot).
 - **Task** — a kanban card. `status` is one of the **13 lifecycle states** (see
   Invariants); `position` orders cards within a single status; `category` is a
   free-text grouping prefix (e.g. `mcp`, `infra`); `body` is the card detail.
@@ -215,7 +215,6 @@ erDiagram
         string slug "unique per user"
         text description "nullable"
         text primary_goal "nullable"
-        jsonb repos "nullable, [{name,url}]"
     }
 
     TASK {
