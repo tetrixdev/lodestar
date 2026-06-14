@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\AddFindingTool;
 use App\Mcp\Tools\AdvanceTaskTool;
 use App\Mcp\Tools\ClaimTaskTool;
 use App\Mcp\Tools\CreateReviewTool;
@@ -55,6 +56,7 @@ class LodestarServer extends Server
         UnlinkRepositoryTool::class,
         CreateReviewTool::class,
         UpsertReviewSectionTool::class,
+        AddFindingTool::class,
         GetReviewTool::class,
         // Loop tools
         ClaimTaskTool::class,

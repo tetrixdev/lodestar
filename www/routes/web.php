@@ -59,6 +59,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/reviews/{review}/assign', [ReviewController::class, 'assign'])->name('reviews.assign');
     Route::post('/reviews/{review}/unassign', [ReviewController::class, 'unassign'])->name('reviews.unassign');
     Route::patch('/reviews/{review}/sections/{section}', [ReviewController::class, 'updateSection'])->name('reviews.sections.update');
+    Route::patch('/reviews/{review}/sections/{section}/findings/{finding}', [ReviewController::class, 'updateFinding'])->name('reviews.findings.update');
+    Route::post('/reviews/{review}/conclude', [ReviewController::class, 'conclude'])->name('reviews.conclude');
 });
 
 require __DIR__.'/auth.php';

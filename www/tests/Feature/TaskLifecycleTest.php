@@ -45,6 +45,7 @@ class TaskLifecycleTest extends TestCase
 
         $this->assertTrue($task->canTransitionTo(Task::STATUS_APPROVED));            // forward
         $this->assertTrue($task->canTransitionTo(Task::STATUS_READY_FOR_AI_REVIEW)); // back
+        $this->assertTrue($task->canTransitionTo(Task::STATUS_READY_FOR_DEV));       // back to dev (rework)
         $this->assertTrue($task->canTransitionTo(Task::STATUS_CANCELLED));           // cancel
         $this->assertFalse($task->canTransitionTo(Task::STATUS_DONE));               // illegal jump
         $this->assertFalse($task->canTransitionTo(Task::STATUS_NEW));                // illegal jump

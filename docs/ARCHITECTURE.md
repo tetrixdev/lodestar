@@ -126,8 +126,11 @@ sequenceDiagram
     else already held
         R-->>H: "already being reviewed by <holder>"
     end
-    H->>R: PATCH section {status, note}  (gated: must hold the review)
-    R-->>H: {signed_off, total}  → progress bar
+    H->>R: PATCH section {status, note, decision}  (gated: must hold the review)
+    H->>R: PATCH finding {status: approved|dismissed|must_fix}  (gated)
+    R-->>H: {signed_off, total, decisions}  → progress bar + outcome readiness
+    H->>R: POST conclude  (all sections decided → apply outcome)
+    R->>T: approve → task ready_for_dev rework, or human_review → approved
 ```
 
 The claim is a **single conditional UPDATE** — no read-then-write race, no
@@ -136,6 +139,16 @@ assigned_to_user_id = :holder`). `updateSection()` re-checks the hold on every
 sign-off, so losing the claim (someone releases / reassigns) locks the screen
 read-only. A review is linked to the Tasks it covers via the `review_task`
 pivot; the walkthrough lists them and each board card links back to its review.
+
+Beyond sign-off, each section also carries a human **decision** (approve /
+request changes), and the AI's concerns are first-class **findings** the human
+triages (approve / dismiss / must_fix). Once every section is decided the human
+**concludes** the review (`reviews.conclude`, gated on the hold): the verdict
+drives the linked task(s) — *approve* → `human_review → approved`; *changes* →
+`human_review → ready_for_dev` with the compiled rework brief (changes_requested
+notes + must_fix findings) written to the task's `rework_notes`. The review's
+`outcome` is recorded and it freezes to `done`. This closes the loop: a human
+review can send work straight back to the developer without leaving the screen.
 
 ### The agent loop (claim → skill → work → advance → report)
 

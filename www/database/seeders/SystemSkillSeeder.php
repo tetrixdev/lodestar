@@ -113,8 +113,13 @@ class SystemSkillSeeder extends Seeder
                    otherwise (that exhaustiveness is the point).
                 4. Read docs/CONVENTIONS.md (the surface register) if present and honour
                    any per-file mode it sets; when a new pattern earns a mode, update it.
-                5. Write real concerns as a section/note describing the realistic
-                   scenario + impact — not line nitpicks.
+                5. Write real concerns as findings: call add_finding for EACH concern
+                   (section_id, a short title, detail = the realistic scenario + impact,
+                   and a severity of info / minor / major / critical). One finding per
+                   concern — not line nitpicks, and not a wall of text in a note. The
+                   human triages each finding (approve / dismiss / must_fix) and any
+                   must_fix becomes part of the rework brief if changes are requested.
+                   Use the section `note` only for section-level commentary.
                 6. Sound? advance_task to `human_review` and hand back the review URL.
                    Needs rework? advance_task back to `ready_for_dev` with the reasons.
 

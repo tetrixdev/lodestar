@@ -159,6 +159,18 @@ These are the rules the column list alone won't tell you:
   are ordered by `position`; the screen rebuilds context as the reviewer
   descends, and the progress bar / "ready" banner are driven by how many
   sections are `signed_off`.
+- **The review outcome drives the task.** Each ReviewSection carries a human
+  `decision` (`approved` / `changes_requested`), distinct from its sign-off. Once
+  **every** section is decided the human applies the outcome (`reviews.conclude`):
+  the verdict is `changes_requested` if any section requests changes, else
+  `approved`. On **approve** the review's `outcome` is set to `approved`, its
+  `status` to `done`, and each linked task at `human_review` is transitioned to
+  `approved`. On **changes** the `outcome` is `changes_requested`, the rework brief
+  (each changes_requested section's note + every `must_fix` finding, as markdown)
+  is written to each linked task's `rework_notes`, and each linked task at
+  `human_review` is transitioned to `ready_for_dev` (a legal transition added for
+  exactly this rework loop). Both the conclude action and per-finding triage are
+  gated on holding the review.
 
 ## Diagram
 
