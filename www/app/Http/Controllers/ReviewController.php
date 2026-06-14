@@ -108,6 +108,14 @@ class ReviewController extends Controller
         abort_unless($review->assigned_to_user_id === $request->user()->id, 403,
             'Assign this review to yourself before concluding it.');
 
+        // Conclude is one-shot: once an outcome is recorded, don't re-drive tasks
+        // (a stale form re-submit, or a task legally moved back to human_review,
+        // could otherwise clobber rework_notes and log duplicate events).
+        if ($review->outcome !== null) {
+            return redirect()->route('reviews.show', $review)
+                ->with('status', 'This review was already concluded.');
+        }
+
         $review->load(['sections.findings', 'tasks']);
         $summary = $review->decisionSummary();
 
@@ -117,8 +125,9 @@ class ReviewController extends Controller
         }
 
         $verdict = $summary['verdict'];
+        $moved = 0;
 
-        DB::transaction(function () use ($review, $verdict) {
+        DB::transaction(function () use ($review, $verdict, &$moved) {
             if ($verdict === 'approved') {
                 $review->update(['outcome' => 'approved', 'status' => 'done']);
                 foreach ($review->tasks as $task) {
@@ -127,6 +136,7 @@ class ReviewController extends Controller
                         $task->update(['status' => Task::STATUS_APPROVED]);
                         $task->logEvent('review_approved', $review->assignee?->name,
                             "Review #{$review->id} approved.");
+                        $moved++;
                     }
                 }
 
@@ -145,14 +155,19 @@ class ReviewController extends Controller
                     ]);
                     $task->logEvent('review_changes_requested', $review->assignee?->name,
                         "Review #{$review->id} requested changes; sent back to dev.");
+                    $moved++;
                 }
             }
         });
 
+        $tasksNote = $moved === 0
+            ? ' (no linked task was at human review, so none moved)'
+            : " — {$moved} task".($moved === 1 ? '' : 's').' moved';
+
         return redirect()->route('reviews.show', $review)
-            ->with('status', $verdict === 'approved'
-                ? 'Review approved — linked tasks moved to Approved.'
-                : 'Changes requested — linked tasks sent back to the developer with rework notes.');
+            ->with('status', ($verdict === 'approved'
+                ? 'Review approved'
+                : 'Changes requested — rework notes written').$tasksNote.'.');
     }
 
     /** Markdown rework brief: each changes_requested section's note + every must_fix finding. */

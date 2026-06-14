@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Review;
 use App\Models\ReviewSection;
 use App\Models\Task;
+use App\Models\TaskEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -236,6 +237,28 @@ class ReviewLogicTest extends TestCase
         $this->assertSame('done', $review->fresh()->status);
         $this->assertSame(Task::STATUS_APPROVED, $task->fresh()->status);
         $this->assertDatabaseHas('task_events', ['task_id' => $task->id, 'type' => 'review_approved']);
+    }
+
+    public function test_conclude_is_one_shot_and_will_not_re_drive_a_task(): void
+    {
+        $owner = User::factory()->create();
+        $review = $this->review($this->project($owner), 'in_review');
+        $this->section($review, 'approved');
+        $task = $review->project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
+        $review->tasks()->attach($task);
+        $review->claimFor($owner->id);
+
+        $this->actingAs($owner)->post(route('reviews.conclude', $review));
+        $this->assertSame(Task::STATUS_APPROVED, $task->fresh()->status);
+        $this->assertSame('approved', $review->fresh()->outcome, 'first conclude should record the outcome');
+
+        // Task legally moved back to human_review; a stale re-conclude must NOT re-drive it.
+        $task->refresh();
+        $task->update(['status' => Task::STATUS_HUMAN_REVIEW]);
+        $this->actingAs($owner)->post(route('reviews.conclude', $review));
+
+        $this->assertSame(Task::STATUS_HUMAN_REVIEW, $task->fresh()->status); // untouched
+        $this->assertSame(1, TaskEvent::where('task_id', $task->id)->where('type', 'review_approved')->count());
     }
 
     public function test_conclude_changes_requested_sends_the_task_back_to_dev_with_rework_notes(): void

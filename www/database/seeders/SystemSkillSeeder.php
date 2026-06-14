@@ -82,6 +82,11 @@ class SystemSkillSeeder extends Seeder
                 You are building one approved Lodestar task. Follow the agreed plan and
                 the project's CONVENTIONS.md.
 
+                FIRST: if the task has **rework_notes** (a review sent it back), address
+                every point in them before anything else — that is the human's change
+                request from the last round. They're on the task (claim_task returns
+                them, and they show on the task page).
+
                 1. Build the change on a branch.
                 2. Write and run automated tests; then actually run the thing to confirm
                    it behaves.
