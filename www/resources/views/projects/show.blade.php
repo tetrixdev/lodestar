@@ -7,9 +7,28 @@
     </x-slot>
 
     @php
-        $labels = ['open' => 'Open', 'doing' => 'Doing', 'done' => 'Done'];
-        $next   = ['open' => 'doing', 'doing' => 'done', 'done' => null];
-        $prev   = ['open' => null, 'doing' => 'open', 'done' => 'doing'];
+        $Task = \App\Models\Task::class;
+
+        // Presentation maps for the actor categories (who a card waits on).
+        $actorChip = [
+            $Task::ACTOR_NEEDS_HUMAN => ['ring-amber-300', 'bg-amber-50', 'text-amber-700'],
+            $Task::ACTOR_QUEUED      => ['ring-blue-200',  'bg-blue-50',  'text-blue-700'],
+            $Task::ACTOR_AI_WORKING  => ['ring-violet-300','bg-violet-50','text-violet-700'],
+            $Task::ACTOR_DONE        => ['ring-emerald-200','bg-emerald-50','text-emerald-700'],
+        ];
+        $accent = [
+            $Task::ACTOR_NEEDS_HUMAN => 'border-l-amber-400',
+            $Task::ACTOR_QUEUED      => 'border-l-blue-400',
+            $Task::ACTOR_AI_WORKING  => 'border-l-violet-400',
+            $Task::ACTOR_DONE        => 'border-l-emerald-400',
+        ];
+        $actorTag = [
+            $Task::ACTOR_NEEDS_HUMAN => 'needs you',
+            $Task::ACTOR_QUEUED      => 'queued for AI',
+            $Task::ACTOR_AI_WORKING  => 'AI working',
+            $Task::ACTOR_DONE        => 'done',
+        ];
+        $cardData = compact('actorChip', 'accent', 'actorTag');
     @endphp
 
     <div class="py-10"
@@ -24,8 +43,7 @@
                 const okText = !q || title.includes(q) || cat.toLowerCase().includes(q);
                 const okCat = !this.category || cat === this.category;
                 return okText && okCat;
-            },
-            cardHidden(el) { return !this.cardMatches(el); }
+            }
          }"
          x-init="
             $nextTick(() => window.initBoard(
@@ -34,84 +52,94 @@
                 '{{ csrf_token() }}'
             ));
          ">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-screen-2xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
             @if ($project->primary_goal)
                 <p class="text-gray-600">{{ $project->primary_goal }}</p>
             @endif
 
-            {{-- toolbar: search + category filter + archived toggle --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div class="relative flex-1">
-                    <input x-model="search" type="search" placeholder="Search cards by title or category…"
-                           class="w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+            {{-- toolbar: search + category filter + archived toggle + legend --}}
+            <div class="bg-white shadow-sm sm:rounded-lg p-4 flex flex-col gap-3">
+                <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div class="relative flex-1">
+                        <input x-model="search" type="search" placeholder="Search cards by title or category…"
+                               class="w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+                    </div>
+                    @if ($categories->isNotEmpty())
+                        <select x-model="category"
+                                class="sm:w-48 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                            <option value="">All categories</option>
+                            @foreach ($categories as $cat)
+                                <option value="{{ $cat }}">{{ $cat }}</option>
+                            @endforeach
+                        </select>
+                    @endif
+                    <button type="button" @click="showArchived = !showArchived"
+                            class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                        <span x-text="showArchived ? 'Hide archived' : 'Show archived'"></span>
+                        <span class="text-gray-400">({{ $archived->count() }})</span>
+                    </button>
                 </div>
-                @if ($categories->isNotEmpty())
-                    <select x-model="category"
-                            class="sm:w-48 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
-                        <option value="">All categories</option>
-                        @foreach ($categories as $cat)
-                            <option value="{{ $cat }}">{{ $cat }}</option>
-                        @endforeach
-                    </select>
-                @endif
-                <button type="button" @click="showArchived = !showArchived"
-                        class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
-                    <span x-text="showArchived ? 'Hide archived' : 'Show archived'"></span>
-                    <span class="text-gray-400">({{ $archived->count() }})</span>
-                </button>
+                {{-- legend: what the colours mean --}}
+                <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-500">
+                    <span class="inline-flex items-center gap-1"><span class="size-2 rounded-full bg-amber-400"></span> needs you</span>
+                    <span class="inline-flex items-center gap-1"><span class="size-2 rounded-full bg-blue-400"></span> queued for AI</span>
+                    <span class="inline-flex items-center gap-1"><span class="size-2 rounded-full bg-violet-400 animate-pulse"></span> AI working</span>
+                    <span class="inline-flex items-center gap-1"><span class="size-2 rounded-full bg-emerald-400"></span> done</span>
+                </div>
             </div>
 
-            {{-- board --}}
-            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach ($columns as $col)
-                    <div class="bg-gray-100 rounded-lg p-3 flex flex-col"
+            {{-- board: 5 phase columns --}}
+            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-start">
+                @foreach ($phases as $phaseKey => $phase)
+                    @php
+                        $phaseStatuses = $phase['statuses'];
+                        $workingStatuses = array_values(array_intersect($phaseStatuses, \App\Models\Task::workingStatuses()));
+                        $restStatuses = array_values(array_diff($phaseStatuses, $workingStatuses));
+
+                        $workingTasks = collect($workingStatuses)
+                            ->flatMap(fn ($s) => $byStatus->get($s, collect()));
+                        $restTasks = collect($restStatuses)
+                            ->flatMap(fn ($s) => $byStatus->get($s, collect()));
+                    @endphp
+
+                    <div class="bg-gray-100 rounded-lg p-3 flex flex-col gap-2"
                          x-data="{ get visibleCount() {
                             return Array.from($el.querySelectorAll('[data-task-id]'))
                                 .filter((el) => cardMatches(el)).length;
                          } }">
-                        <h3 class="font-semibold text-gray-700 text-sm uppercase tracking-wide px-1 mb-3 flex items-center justify-between">
-                            <span>
-                                {{ $labels[$col] }}
-                                <span class="text-gray-400" x-text="'(' + visibleCount + ')'"></span>
-                            </span>
+                        <h3 class="font-semibold text-gray-700 text-sm uppercase tracking-wide px-1 flex items-center justify-between">
+                            <span>{{ $phase['label'] }}</span>
+                            <span class="text-gray-400 normal-case" x-text="'(' + visibleCount + ')'"></span>
                         </h3>
 
-                        {{-- droppable list --}}
-                        <div data-column="{{ $col }}"
-                             class="space-y-2 min-h-[3rem] flex-1">
-                            @foreach ($byStatus->get($col, collect()) as $task)
-                                <div data-task-id="{{ $task->id }}"
-                                     data-title="{{ $task->title }}"
-                                     data-category="{{ $task->category }}"
-                                     x-show="cardMatches($el)"
-                                     class="bg-white rounded-md shadow-sm p-3 cursor-grab active:cursor-grabbing">
-                                    @if ($task->category)
-                                        <span class="inline-block text-[11px] font-medium uppercase tracking-wide text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5 mb-1">{{ $task->category }}</span>
-                                    @endif
-                                    <div class="text-sm text-gray-900">{{ $task->title }}</div>
-                                    <div class="flex items-center gap-1 mt-2">
-                                        @if ($prev[$col])
-                                            <form method="POST" action="{{ route('tasks.update', $task) }}">
-                                                @csrf @method('PATCH')
-                                                <input type="hidden" name="status" value="{{ $prev[$col] }}">
-                                                <button class="text-gray-400 hover:text-gray-700 text-xs px-1" title="Move to {{ $labels[$prev[$col]] }}">&larr;</button>
-                                            </form>
-                                        @endif
-                                        @if ($next[$col])
-                                            <form method="POST" action="{{ route('tasks.update', $task) }}">
-                                                @csrf @method('PATCH')
-                                                <input type="hidden" name="status" value="{{ $next[$col] }}">
-                                                <button class="text-gray-400 hover:text-gray-700 text-xs px-1" title="Move to {{ $labels[$next[$col]] }}">&rarr;</button>
-                                            </form>
-                                        @endif
-                                        <form method="POST" action="{{ route('tasks.update', $task) }}" class="ml-auto">
-                                            @csrf @method('PATCH')
-                                            <input type="hidden" name="status" value="cancelled">
-                                            <button class="text-gray-300 hover:text-red-500 text-xs px-1" title="Archive">&times;</button>
-                                        </form>
-                                    </div>
+                        {{-- AI-working drawer (collapsed by default) --}}
+                        @if ($workingTasks->isNotEmpty())
+                            <div x-data="{ open: false }"
+                                 class="rounded-md border border-violet-200 bg-violet-50/60">
+                                <button type="button" @click="open = !open"
+                                        class="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-violet-700">
+                                    <span class="relative flex size-2">
+                                        <span class="absolute inline-flex size-2 rounded-full bg-violet-400 opacity-75 animate-ping"></span>
+                                        <span class="relative inline-flex size-2 rounded-full bg-violet-500"></span>
+                                    </span>
+                                    <span>AI working ({{ $workingTasks->count() }})</span>
+                                    <svg class="size-3.5 ml-auto transition-transform" :class="open && 'rotate-90'"
+                                         viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+                                </button>
+                                <div x-show="open" x-cloak class="px-1.5 pb-1.5 space-y-1.5">
+                                    @foreach ($workingTasks as $task)
+                                        @include('projects.partials.card', array_merge($cardData, ['task' => $task, 'compact' => true]))
+                                    @endforeach
                                 </div>
+                            </div>
+                        @endif
+
+                        {{-- droppable list of full cards (needs-human + queued + done) --}}
+                        <div data-phase="{{ $phaseKey }}"
+                             class="space-y-2 min-h-[3rem] flex-1">
+                            @foreach ($restTasks as $task)
+                                @include('projects.partials.card', array_merge($cardData, ['task' => $task, 'compact' => false]))
                             @endforeach
                         </div>
 
@@ -121,11 +149,11 @@
                             No cards here.
                         </p>
 
-                        {{-- inline add card for this column --}}
-                        <form method="POST" action="{{ route('tasks.store', $project) }}" class="mt-2"
+                        {{-- inline add card — lands in the phase's first status --}}
+                        <form method="POST" action="{{ route('tasks.store', $project) }}"
                               x-data="{ open: false }">
                             @csrf
-                            <input type="hidden" name="status" value="{{ $col }}">
+                            <input type="hidden" name="status" value="{{ $phaseStatuses[0] }}">
                             <button type="button" x-show="!open" @click="open = true; $nextTick(() => $refs.title.focus())"
                                     class="w-full text-left text-xs text-gray-400 hover:text-gray-600 px-1 py-1.5">
                                 + Add card
@@ -145,6 +173,7 @@
                 @endforeach
             </div>
             <x-input-error :messages="$errors->get('title')" />
+            <x-input-error :messages="$errors->get('status')" />
 
             {{-- archived (cancelled) drawer --}}
             <div x-show="showArchived" x-cloak
@@ -160,7 +189,7 @@
                         <span class="text-sm text-gray-500 line-through flex-1">{{ $task->title }}</span>
                         <form method="POST" action="{{ route('tasks.update', $task) }}">
                             @csrf @method('PATCH')
-                            <input type="hidden" name="status" value="open">
+                            <input type="hidden" name="status" value="{{ \App\Models\Task::STATUS_NEW }}">
                             <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Restore</button>
                         </form>
                     </div>

@@ -38,19 +38,21 @@ class ProjectController extends Controller
         return redirect()->route('projects.show', $project);
     }
 
-    /** The project board — tasks grouped by column. */
+    /** The project board — live tasks grouped by lifecycle status. */
     public function show(Request $request, Project $project): View
     {
         abort_unless($project->user_id === $request->user()->id, 403);
 
+        // Live (non-archived) cards, keyed by their precise status so the view
+        // can place each into its phase column.
         $byStatus = $project->tasks()
-            ->whereIn('status', Task::COLUMNS)
+            ->whereIn('status', Task::STATUSES)
             ->orderBy('position')
             ->get()
             ->groupBy('status');
 
         $archived = $project->tasks()
-            ->where('status', 'cancelled')
+            ->where('status', Task::STATUS_CANCELLED)
             ->latest('updated_at')
             ->get();
 
@@ -63,7 +65,7 @@ class ProjectController extends Controller
 
         return view('projects.show', [
             'project' => $project,
-            'columns' => Task::COLUMNS,
+            'phases' => Task::PHASES,
             'byStatus' => $byStatus,
             'archived' => $archived,
             'categories' => $categories,

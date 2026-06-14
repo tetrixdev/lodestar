@@ -10,10 +10,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class TaskController extends Controller
 {
-    /** Add a card to a project (lands at the bottom of the open column). */
+    /** Add a card to a project (lands at the bottom of its status). */
     public function store(Request $request, Project $project): RedirectResponse
     {
         abort_unless($project->user_id === $request->user()->id, 403);
@@ -21,10 +24,10 @@ class TaskController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'max:60'],
-            'status' => ['nullable', 'in:open,doing,done'],
+            'status' => ['nullable', Rule::in(Task::STATUSES)],
         ]);
 
-        $status = $data['status'] ?? 'open';
+        $status = $data['status'] ?? Task::STATUS_NEW;
 
         $project->tasks()->create([
             'title' => $data['title'],
@@ -36,18 +39,40 @@ class TaskController extends Controller
         return back();
     }
 
-    /** Move/edit a card (the ←/→ buttons and the cancel/restore flows use this). */
-    public function update(Request $request, Task $task): RedirectResponse
+    /**
+     * Move a card along the lifecycle (the per-card transition controls and the
+     * archive/restore flows use this). Status changes are LEGAL-ONLY: a move to
+     * a status that isn't in the card's allowed-transition set is rejected (422).
+     * `status_changed_at` is stamped automatically by the model on status change.
+     */
+    public function update(Request $request, Task $task): Response
     {
         abort_unless($task->project->user_id === $request->user()->id, 403);
 
         $data = $request->validate([
-            'status' => ['nullable', 'in:open,doing,done,cancelled'],
+            'status' => ['nullable', Rule::in([...Task::STATUSES, Task::STATUS_CANCELLED])],
             'title' => ['nullable', 'string', 'max:200'],
         ]);
 
         if (isset($data['status']) && $data['status'] !== $task->status) {
-            $data['position'] = (int) $task->project->tasks()->where('status', $data['status'])->max('position') + 1;
+            if (! $task->canTransitionTo($data['status'])) {
+                $message = "Illegal transition: {$task->status} → {$data['status']}.";
+
+                // This app only auto-renders JSON for api/* (see bootstrap/app.php),
+                // so reject explicitly: 422 JSON for programmatic callers, a
+                // redirect-with-errors for the HTML board (shown via $errors).
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'message' => $message,
+                        'errors' => ['status' => [$message]],
+                    ], 422);
+                }
+
+                throw ValidationException::withMessages(['status' => [$message]]);
+            }
+
+            $data['position'] = (int) $task->project->tasks()
+                ->where('status', $data['status'])->max('position') + 1;
         }
 
         $task->update(array_filter($data, fn ($v) => $v !== null));
@@ -56,10 +81,11 @@ class TaskController extends Controller
     }
 
     /**
-     * Drag-and-drop persistence. Receives the destination column and the full,
-     * ordered list of task ids now in that column. Updates the moved card's
-     * status and rewrites position for every card in the destination column so
-     * their relative order matches the client. Ownership is checked on every id.
+     * Intra-column reordering (drag within a single status). Receives the status
+     * the cards sit in and the full, ordered list of task ids now in that status,
+     * and rewrites `position` to match. This endpoint does NOT change status —
+     * lifecycle moves go through update() so only legal transitions are allowed.
+     * Ownership is checked on every id.
      */
     public function move(Request $request, Task $task): JsonResponse
     {
@@ -67,30 +93,29 @@ class TaskController extends Controller
         abort_unless($project->user_id === $request->user()->id, 403);
 
         $data = $request->validate([
-            'status' => ['required', 'in:open,doing,done'],
+            'status' => ['required', Rule::in(Task::STATUSES)],
             'order' => ['required', 'array'],
             'order.*' => ['integer'],
         ]);
 
-        // Only act on ids that belong to this project (defends against spoofed ids).
+        // Reordering only — the dragged card must already be in the target status.
+        abort_unless($task->status === $data['status'], 422);
+
+        // Only act on ids that belong to this project AND already sit in this
+        // status (defends against spoofed ids and cross-status injection).
         $ownedIds = $project->tasks()
+            ->where('status', $data['status'])
             ->whereIn('id', $data['order'])
             ->pluck('id')
             ->all();
         $owned = array_flip($ownedIds);
         $ordered = array_values(array_filter($data['order'], fn ($id) => isset($owned[$id])));
 
-        // The moved card must be part of the destination column it claims.
         abort_unless(in_array($task->id, $ordered, true), 422);
 
-        DB::transaction(function () use ($project, $task, $data, $ordered): void {
-            $task->update(['status' => $data['status']]);
-
+        DB::transaction(function () use ($project, $data, $ordered): void {
             foreach ($ordered as $index => $id) {
-                $project->tasks()->where('id', $id)->update([
-                    'status' => $data['status'],
-                    'position' => $index,
-                ]);
+                $project->tasks()->where('id', $id)->update(['position' => $index]);
             }
         });
 
