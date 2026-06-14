@@ -1,0 +1,104 @@
+# =============================================================================
+# PRODUCTION COMPOSE
+# slim-docker-laravel-setup v0.1.0
+#
+# Usage:
+#   1. Set environment variables or create .env file
+#   2. docker compose -f deploy/compose.yml up -d
+# =============================================================================
+
+services:
+  php:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/${COMPOSE_PROJECT_NAME}-php:${IMAGE_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME}-php
+    restart: always
+    volumes:
+      - ./.env:/var/www/.env:ro
+    environment:
+      - APP_ENV=production
+      - REDIS_HOST=redis
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  nginx:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/${COMPOSE_PROJECT_NAME}-nginx:${IMAGE_TAG:-latest}
+    container_name: ${COMPOSE_PROJECT_NAME}-nginx
+    restart: always
+    # No ports exposed - traffic comes through proxy-nginx on main-network
+    networks:
+      - app-network
+      - main-network
+    depends_on:
+      php:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # Database not exposed by default. To access from host, add to compose.override.yml:
+    # services:
+    #   postgres:
+    #     ports:
+    #       - "127.0.0.1:5433:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${COMPOSE_PROJECT_NAME}-redis
+    restart: always
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  app-network:
+    name: ${COMPOSE_PROJECT_NAME}-network
+    driver: bridge
+  main-network:
+    # Shared network for proxy-nginx routing. Create with:
+    # docker network create main-network
+    external: true
+
+volumes:
+  postgres-data:
+    name: ${COMPOSE_PROJECT_NAME}-postgres
+  redis-data:
+    name: ${COMPOSE_PROJECT_NAME}-redis

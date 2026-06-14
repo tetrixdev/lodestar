@@ -1,0 +1,99 @@
+name: Laravel Docker Build
+
+on:
+  release:
+    types: [prereleased, released]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        name: Checkout the files
+
+      # Pre-build: Install dependencies in runner for better caching
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+        working-directory: www
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: www/package-lock.json
+
+      - name: Install npm dependencies and build
+        run: |
+          npm ci
+          npm run build
+          rm -rf node_modules
+        working-directory: www
+
+      # Docker build
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        run: docker login ghcr.io --username=${{ github.actor }} --password=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push PHP image
+        run: |
+          TAGS="--tag ghcr.io/${{ github.repository_owner }}/lodestar-php:${{ github.event.release.tag_name }}"
+          # Only update :latest for full releases, not prereleases
+          if [ "${{ github.event.release.prerelease }}" != "true" ]; then
+            TAGS="$TAGS --tag ghcr.io/${{ github.repository_owner }}/lodestar-php:latest"
+          fi
+          docker buildx build \
+            --file docker-laravel/production/php/Dockerfile \
+            --progress plain \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --cache-from=type=registry,ref=ghcr.io/${{ github.repository_owner }}/lodestar-php:cache \
+            --cache-to=type=registry,ref=ghcr.io/${{ github.repository_owner }}/lodestar-php:cache,mode=max \
+            $TAGS \
+            --push \
+            .
+
+      - name: Build and push Nginx image
+        run: |
+          TAGS="--tag ghcr.io/${{ github.repository_owner }}/lodestar-nginx:${{ github.event.release.tag_name }}"
+          if [ "${{ github.event.release.prerelease }}" != "true" ]; then
+            TAGS="$TAGS --tag ghcr.io/${{ github.repository_owner }}/lodestar-nginx:latest"
+          fi
+          docker buildx build \
+            --file docker-laravel/production/nginx/Dockerfile \
+            --progress plain \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --cache-from=type=registry,ref=ghcr.io/${{ github.repository_owner }}/lodestar-nginx:cache \
+            --cache-to=type=registry,ref=ghcr.io/${{ github.repository_owner }}/lodestar-nginx:cache,mode=max \
+            $TAGS \
+            --push \
+            .
+
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images pushed:" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository_owner }}/lodestar-php:${{ github.event.release.tag_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- \`ghcr.io/${{ github.repository_owner }}/lodestar-nginx:${{ github.event.release.tag_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            echo ":warning: **Prerelease**: \`:latest\` tag NOT updated" >> $GITHUB_STEP_SUMMARY
+          else
+            echo ":white_check_mark: \`:latest\` tag updated" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deploy:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "cd deploy && docker compose up -d" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

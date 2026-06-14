@@ -1,0 +1,119 @@
+# =============================================================================
+# LOCAL DEVELOPMENT COMPOSE
+# slim-docker-laravel-setup v0.1.0
+#
+# Naming convention:
+#   - Service keys (php, nginx, postgres, redis) are short and stable so the
+#     shared nginx config can `fastcgi_pass php:9000;` without project-specific
+#     substitution. Service-name auto-aliases on each container guarantee that
+#     `php`, `postgres`, etc. resolve to the project's own containers — never
+#     across compose projects, even on a shared host.
+#   - container_name keeps the `lodestar-*` prefix so externally-visible
+#     identifiers (in `docker ps`, the host's `main-network`, proxy-nginx
+#     upstreams) stay namespaced per project.
+#
+# Implication: service keys MUST NOT join a shared external network — internal
+# aliases there would collide with sibling projects. App-internal services
+# (php, postgres, redis) belong on the project's own network only.
+# =============================================================================
+
+services:
+  php:
+    build:
+      context: .
+      dockerfile: docker-laravel/local/php/Dockerfile
+    container_name: lodestar-php
+    restart: unless-stopped
+    working_dir: /var/www
+    ports:
+      - "${VITE_PORT:-5173}:5173"
+    volumes:
+      - ./www:/var/www
+      - .env:/var/www/.env
+      - ./docker-laravel/shared/php/local.ini:/usr/local/etc/php/conf.d/local.ini:ro
+      - ./docker-laravel/local/php/entrypoint.sh:/entrypoint.sh:ro
+      - ./docker-laravel/shared/supervisor/supervisord.conf:/etc/supervisor/supervisord.conf:ro
+      - ./docker-laravel/local/php/supervisor:/etc/supervisor/conf.d:ro
+    networks:
+      - app-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm -t || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: lodestar-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./www:/var/www:ro
+      - ./docker-laravel/shared/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - app-network
+    depends_on:
+      php:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: lodestar-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lodestar
+      POSTGRES_USER: lodestar
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-laravel}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "${DB_EXTERNAL_PORT:-5433}:5432"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lodestar -d lodestar"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: lodestar-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  app-network:
+    name: lodestar-network
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: lodestar-postgres
+    driver: local
+  redis-data:
+    name: lodestar-redis
+    driver: local

@@ -1,0 +1,49 @@
+# =============================================================================
+# DEV-ON-SERVER OVERRIDE
+# =============================================================================
+# Runs the local-development stack on the shared server without colliding with a
+# future production lodestar:
+#   - container_names   -> lodestar-dev-*
+#   - volumes / network -> lodestar-dev-*
+#   - host ports        -> dropped (traffic comes via proxy-nginx)
+#   - nginx joins main-network so proxy-nginx can route to it; php/postgres/redis
+#     stay off main-network so their short aliases (`php`, `postgres`, …) never
+#     get advertised on the shared network where they could collide.
+#
+# Set COMPOSE_PROJECT_NAME=lodestar-dev (see .env) so this is a distinct compose
+# project. The Vite dev server (php:5173) is reached via dev-nginx using
+# docker-laravel/local/nginx/vite-proxy.conf, so dev-php stays off main-network.
+# =============================================================================
+
+services:
+  php:
+    container_name: lodestar-dev-php
+    ports: !override []
+
+  nginx:
+    container_name: lodestar-dev-nginx
+    ports: !override []
+    volumes:
+      - ./docker-laravel/local/nginx/vite-proxy.conf:/etc/nginx/conf.d/vite-proxy.conf:ro
+    networks: !override
+      app-network: {}
+      main-network: {}
+
+  postgres:
+    container_name: lodestar-dev-postgres
+    ports: !override []
+
+  redis:
+    container_name: lodestar-dev-redis
+
+networks:
+  app-network:
+    name: lodestar-dev-network
+  main-network:
+    external: true
+
+volumes:
+  postgres-data:
+    name: lodestar-dev-postgres
+  redis-data:
+    name: lodestar-dev-redis
