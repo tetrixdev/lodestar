@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A kanban card moving through the Lodestar lifecycle.
@@ -25,7 +26,48 @@ class Task extends Model
     protected $casts = [
         'status_changed_at' => 'datetime',
         'claimed_at' => 'datetime',
+        'start_date' => 'date',
+        'due_date' => 'date',
     ];
+
+    // ── Priority ─────────────────────────────────────────────────────────────
+
+    public const PRIORITY_LOW = 'low';
+
+    public const PRIORITY_NORMAL = 'normal';
+
+    public const PRIORITY_HIGH = 'high';
+
+    public const PRIORITY_URGENT = 'urgent';
+
+    /** Priorities, low→urgent. */
+    public const PRIORITIES = [
+        self::PRIORITY_LOW,
+        self::PRIORITY_NORMAL,
+        self::PRIORITY_HIGH,
+        self::PRIORITY_URGENT,
+    ];
+
+    /** Sort rank (higher = more urgent) so a column can order urgent-first. */
+    public const PRIORITY_RANK = [
+        self::PRIORITY_LOW => 0,
+        self::PRIORITY_NORMAL => 1,
+        self::PRIORITY_HIGH => 2,
+        self::PRIORITY_URGENT => 3,
+    ];
+
+    public function priorityRank(): int
+    {
+        return self::PRIORITY_RANK[$this->priority] ?? 1;
+    }
+
+    /** Overdue = a due date in the past and not yet done/cancelled. */
+    public function isOverdue(): bool
+    {
+        return $this->due_date !== null
+            && $this->due_date->isPast()
+            && ! in_array($this->status, [self::STATUS_DONE, self::STATUS_CANCELLED], true);
+    }
 
     // ── The 13 statuses ──────────────────────────────────────────────────────
 
@@ -247,6 +289,47 @@ class Task extends Model
     public function reviews(): BelongsToMany
     {
         return $this->belongsToMany(Review::class)->withTimestamps();
+    }
+
+    public function workSessions(): HasMany
+    {
+        return $this->hasMany(WorkSession::class);
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(TaskComment::class)->oldest();
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(TaskEvent::class)->latest();
+    }
+
+    /** Tasks this one is blocked by. */
+    public function dependencies(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'task_dependencies', 'task_id', 'depends_on_task_id')->withTimestamps();
+    }
+
+    /** Tasks blocked by this one. */
+    public function dependents(): BelongsToMany
+    {
+        return $this->belongsToMany(self::class, 'task_dependencies', 'depends_on_task_id', 'task_id')->withTimestamps();
+    }
+
+    /** Blocked = has an unfinished dependency. */
+    public function isBlocked(): bool
+    {
+        return $this->dependencies()
+            ->whereNotIn('status', [self::STATUS_DONE, self::STATUS_CANCELLED])
+            ->exists();
+    }
+
+    /** Append an entry to the activity log. */
+    public function logEvent(string $type, ?string $actor = null, ?string $description = null): void
+    {
+        $this->events()->create(['type' => $type, 'actor' => $actor, 'description' => $description]);
     }
 
     /** The legal target statuses from this card's current status. */

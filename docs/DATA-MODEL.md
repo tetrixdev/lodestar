@@ -189,6 +189,12 @@ erDiagram
     GITHUB_CONNECTION ||--o{ REPOSITORY : reads
     PROJECT }o--o{ REPOSITORY : "project_repository (stack)"
     REPOSITORY ||--o{ REVIEW : "compared in"
+    REVIEW_SECTION ||--o{ REVIEW_FINDING : raises
+    TASK ||--o{ WORK_SESSION : "logged on (nullable)"
+    TASK ||--o{ TASK_COMMENT : has
+    TASK ||--o{ TASK_EVENT : "activity log"
+    TASK }o--o{ TASK : "task_dependencies (blocked by)"
+    USER ||--o{ TASK_COMMENT : "authored (nullable)"
 
     PROJECT {
         bigint id PK
@@ -205,7 +211,13 @@ erDiagram
         bigint project_id FK
         string title
         string category "nullable, grouping prefix"
+        string priority "low|normal|high|urgent"
+        date start_date "nullable, Gantt start"
+        date due_date "nullable, deadline"
+        string branch "nullable, the dev branch"
         text body "nullable, markdown detail"
+        text plan "nullable, planning artifact (markdown)"
+        text rework_notes "nullable, what a review sent back"
         string status "one of 13 lifecycle states"
         timestamp status_changed_at "nullable, entered-current-status time"
         string claimed_by "nullable, agent holding a *-ing card"
@@ -216,6 +228,7 @@ erDiagram
     WORK_SESSION {
         bigint id PK
         bigint project_id FK
+        bigint task_id FK "nullable, the task it logs"
         string title
         string slug
         text body "nullable, markdown summary"
@@ -230,6 +243,7 @@ erDiagram
         string base_ref "nullable, e.g. main"
         string head_ref "nullable, e.g. feat/x"
         string status "draft|in_review|done"
+        string outcome "nullable, approved|changes_requested"
         bigint assigned_to_user_id FK "nullable, current holder"
         text intro "nullable, preamble"
     }
@@ -259,6 +273,7 @@ erDiagram
         string link "nullable, what to open"
         jsonb checks "nullable, [what to confirm]"
         string status "open|signed_off"
+        string decision "nullable, approved|changes_requested"
         text note "nullable, human comment / change request"
     }
 
@@ -280,7 +295,7 @@ erDiagram
     SKILL {
         bigint id PK
         string kind "system|user"
-        string key "plan|develop|ai_review|merge"
+        string key "main|plan|develop|ai_review|merge"
         integer version
         string title
         text body "the prompt"
@@ -326,5 +341,37 @@ erDiagram
         bigint id PK
         bigint project_id FK
         bigint repository_id FK
+    }
+
+    REVIEW_FINDING {
+        bigint id PK
+        bigint review_section_id FK
+        string title
+        text detail "nullable, scenario + impact"
+        string severity "info|minor|major|critical"
+        string status "open|must_fix|approved|dismissed"
+        integer position
+    }
+
+    TASK_COMMENT {
+        bigint id PK
+        bigint task_id FK
+        bigint user_id FK "nullable, human author"
+        string author "display label"
+        text body
+    }
+
+    TASK_DEPENDENCY {
+        bigint id PK
+        bigint task_id FK "the dependent"
+        bigint depends_on_task_id FK "the blocker"
+    }
+
+    TASK_EVENT {
+        bigint id PK
+        bigint task_id FK
+        string type
+        string actor "nullable"
+        text description "nullable"
     }
 ```

@@ -68,6 +68,30 @@ class Review extends Model
         return $this->coverage()['complete'];
     }
 
+    /**
+     * The human's verdict across sections: counts of approved / changes_requested
+     * / undecided, and whether the review is ready to conclude (every section
+     * decided). `verdict` is changes_requested if any section requests changes,
+     * else approved when all are decided, else null.
+     */
+    public function decisionSummary(): array
+    {
+        $sections = $this->relationLoaded('sections') ? $this->sections : $this->sections()->get();
+        $approved = $sections->where('decision', 'approved')->count();
+        $changes = $sections->where('decision', 'changes_requested')->count();
+        $total = $sections->count();
+        $undecided = $total - $approved - $changes;
+
+        return [
+            'approved' => $approved,
+            'changes_requested' => $changes,
+            'undecided' => $undecided,
+            'total' => $total,
+            'all_decided' => $total > 0 && $undecided === 0,
+            'verdict' => $changes > 0 ? 'changes_requested' : (($total > 0 && $undecided === 0) ? 'approved' : null),
+        ];
+    }
+
     /** The tasks this review covers (openable from either side). */
     public function tasks(): BelongsToMany
     {

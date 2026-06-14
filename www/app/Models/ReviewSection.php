@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * One ordered step of a review walkthrough (the data behind the HTML
@@ -35,5 +36,11 @@ class ReviewSection extends Model
     public function files(): BelongsToMany
     {
         return $this->belongsToMany(ReviewFile::class, 'review_file_section');
+    }
+
+    /** AI-raised findings within this section. */
+    public function findings(): HasMany
+    {
+        return $this->hasMany(ReviewFinding::class)->orderBy('position');
     }
 }

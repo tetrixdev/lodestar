@@ -25,4 +25,9 @@ class WorkSession extends Model
     {
         return $this->belongsTo(Project::class);
     }
+
+    public function task(): BelongsTo
+    {
+        return $this->belongsTo(Task::class);
+    }
 }
