@@ -26,6 +26,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
+    Route::get('/projects/{project}/gantt', [ProjectController::class, 'gantt'])->name('projects.gantt');
     Route::get('/projects/{project}/repositories', [RepositoryController::class, 'index'])->name('repositories.index');
     Route::post('/projects/{project}/repositories', [RepositoryController::class, 'store'])->name('repositories.store');
     Route::delete('/projects/{project}/repositories/{repository}', [RepositoryController::class, 'destroy'])->name('repositories.destroy');

@@ -21,20 +21,58 @@
             </div>
 
             {{-- list --}}
-            <div class="bg-white shadow-sm sm:rounded-lg divide-y">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 @forelse ($projects as $project)
+                    @php
+                        $s = $summaries[$project->id] ?? ['live' => 0, 'done' => 0, 'phaseCounts' => [], 'overdue' => 0, 'nextDue' => null];
+                        $live = $s['live'];
+                        $done = $s['done'];
+                        $progress = $live > 0 ? (int) round(($done / $live) * 100) : 0;
+                    @endphp
                     <a href="{{ route('projects.show', $project) }}"
-                       class="flex items-center justify-between p-5 hover:bg-gray-50 transition">
-                        <div>
-                            <div class="font-medium text-gray-900">{{ $project->name }}</div>
-                            @if ($project->primary_goal)
-                                <div class="text-sm text-gray-500 line-clamp-1">{{ $project->primary_goal }}</div>
+                       class="block bg-white shadow-sm sm:rounded-lg p-5 hover:shadow transition space-y-3">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="font-medium text-gray-900 truncate">{{ $project->name }}</div>
+                                @if ($project->primary_goal)
+                                    <div class="text-sm text-gray-500 line-clamp-1">{{ $project->primary_goal }}</div>
+                                @endif
+                            </div>
+                            @if ($s['overdue'] > 0)
+                                <span class="shrink-0 text-[11px] font-medium rounded px-2 py-0.5 bg-red-100 text-red-700">{{ $s['overdue'] }} overdue</span>
                             @endif
                         </div>
-                        <span class="text-sm text-gray-400">{{ $project->tasks_count }} tasks</span>
+
+                        {{-- progress: done vs live --}}
+                        <div class="space-y-1">
+                            <div class="flex items-center justify-between text-[11px] text-gray-500">
+                                <span>{{ $done }} / {{ $live }} done</span>
+                                <span>{{ $progress }}%</span>
+                            </div>
+                            <div class="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
+                                <div class="h-full rounded-full bg-emerald-400" style="width: {{ $progress }}%"></div>
+                            </div>
+                        </div>
+
+                        {{-- per-phase counts --}}
+                        <div class="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
+                            @foreach ($phases as $key => $phase)
+                                <span class="inline-flex items-center gap-1">
+                                    <span class="font-medium text-gray-700">{{ $s['phaseCounts'][$key] ?? 0 }}</span>
+                                    {{ $phase['label'] }}
+                                </span>
+                            @endforeach
+                        </div>
+
+                        <div class="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-50">
+                            <span>{{ $project->tasks_count }} total</span>
+                            @if ($s['nextDue'])
+                                <span>Next due {{ $s['nextDue']->toFormattedDateString() }}</span>
+                            @endif
+                        </div>
                     </a>
                 @empty
-                    <p class="p-5 text-gray-500">No projects yet — create one above.</p>
+                    <p class="sm:col-span-2 p-5 text-gray-500 bg-white shadow-sm sm:rounded-lg">No projects yet — create one above.</p>
                 @endforelse
             </div>
 

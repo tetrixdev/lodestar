@@ -67,6 +67,8 @@ class TaskController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'max:60'],
             'status' => ['nullable', Rule::in(Task::STATUSES)],
+            'priority' => ['nullable', Rule::in(Task::PRIORITIES)],
+            'due_date' => ['nullable', 'date'],
         ]);
 
         $status = $data['status'] ?? Task::STATUS_NEW;
@@ -75,6 +77,8 @@ class TaskController extends Controller
             'title' => $data['title'],
             'category' => $data['category'] ?? null,
             'status' => $status,
+            'priority' => $data['priority'] ?? Task::PRIORITY_NORMAL,
+            'due_date' => $data['due_date'] ?? null,
             'position' => (int) $project->tasks()->where('status', $status)->max('position') + 1,
         ]);
 
@@ -94,6 +98,13 @@ class TaskController extends Controller
         $data = $request->validate([
             'status' => ['nullable', Rule::in([...Task::STATUSES, Task::STATUS_CANCELLED])],
             'title' => ['nullable', 'string', 'max:200'],
+            'category' => ['nullable', 'string', 'max:60'],
+            'priority' => ['nullable', Rule::in(Task::PRIORITIES)],
+            'branch' => ['nullable', 'string', 'max:200'],
+            'body' => ['nullable', 'string'],
+            'plan' => ['nullable', 'string'],
+            'start_date' => ['nullable', 'date'],
+            'due_date' => ['nullable', 'date'],
         ]);
 
         if (isset($data['status']) && $data['status'] !== $task->status) {
@@ -117,7 +128,26 @@ class TaskController extends Controller
                 ->where('status', $data['status'])->max('position') + 1;
         }
 
-        $task->update(array_filter($data, fn ($v) => $v !== null));
+        // Status/position are only applied when actually changing status; the
+        // content fields below are freely editable (and nullable, so an empty
+        // date/branch clears it — only fields the request actually sent are touched).
+        $contentFields = ['title', 'category', 'priority', 'branch', 'body', 'plan', 'start_date', 'due_date'];
+        $update = [];
+
+        if (isset($data['status']) && $data['status'] !== $task->status) {
+            $update['status'] = $data['status'];
+            $update['position'] = $data['position'];
+        }
+
+        foreach ($contentFields as $field) {
+            if ($request->has($field)) {
+                $update[$field] = $data[$field] ?? null;
+            }
+        }
+
+        if ($update !== []) {
+            $task->update($update);
+        }
 
         return back();
     }

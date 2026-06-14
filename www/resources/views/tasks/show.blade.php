@@ -25,7 +25,8 @@
         <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             {{-- header / meta --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
+            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3" x-data="{ editing: false }">
+                <div class="flex items-start justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="inline-block text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ $statusLabel }}</span>
                     <span class="inline-block text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 {{ $priorityChip[$priority] ?? $priorityChip[$T::PRIORITY_NORMAL] }}">{{ ucfirst($priority) }}</span>
@@ -36,8 +37,13 @@
                         <span class="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-red-100 text-red-700">Blocked</span>
                     @endif
                 </div>
+                    <button type="button" @click="editing = !editing"
+                            class="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                        <span x-text="editing ? 'Cancel' : 'Edit task'"></span>
+                    </button>
+                </div>
 
-                <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-gray-600">
+                <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-gray-600" x-show="!editing">
                     @if ($task->due_date)
                         <span class="{{ $overdue ? 'text-red-600 font-medium' : '' }}">
                             Due {{ $task->due_date->toFormattedDateString() }}{{ $overdue ? ' (overdue)' : '' }}
@@ -50,6 +56,71 @@
                         <span>Branch <code class="bg-gray-100 px-1 rounded">{{ $task->branch }}</code></span>
                     @endif
                 </div>
+
+                {{-- edit panel: freely-editable content fields (status moves stay in Lifecycle) --}}
+                <form x-show="editing" x-cloak method="POST" action="{{ route('tasks.update', $task) }}" class="space-y-4 pt-1">
+                    @csrf @method('PATCH')
+
+                    <div>
+                        <x-input-label for="edit-title" value="Title" />
+                        <x-text-input id="edit-title" name="title" type="text" class="mt-1 block w-full"
+                                      :value="old('title', $task->title)" />
+                        <x-input-error :messages="$errors->get('title')" class="mt-1" />
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <x-input-label for="edit-priority" value="Priority" />
+                            <select id="edit-priority" name="priority"
+                                    class="mt-1 block w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                                @foreach ($T::PRIORITIES as $p)
+                                    <option value="{{ $p }}" @selected(old('priority', $priority) === $p)>{{ ucfirst($p) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <x-input-label for="edit-category" value="Category" />
+                            <x-text-input id="edit-category" name="category" type="text" class="mt-1 block w-full"
+                                          :value="old('category', $task->category)" />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <x-input-label for="edit-start" value="Start date" />
+                            <x-text-input id="edit-start" name="start_date" type="date" class="mt-1 block w-full"
+                                          :value="old('start_date', optional($task->start_date)->format('Y-m-d'))" />
+                        </div>
+                        <div>
+                            <x-input-label for="edit-due" value="Due date" />
+                            <x-text-input id="edit-due" name="due_date" type="date" class="mt-1 block w-full"
+                                          :value="old('due_date', optional($task->due_date)->format('Y-m-d'))" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <x-input-label for="edit-branch" value="Branch" />
+                        <x-text-input id="edit-branch" name="branch" type="text" class="mt-1 block w-full"
+                                      :value="old('branch', $task->branch)" />
+                    </div>
+
+                    <div>
+                        <x-input-label for="edit-body" value="Description" />
+                        <textarea id="edit-body" name="body" rows="4"
+                                  class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $task->body) }}</textarea>
+                    </div>
+
+                    <div>
+                        <x-input-label for="edit-plan" value="Plan" />
+                        <textarea id="edit-plan" name="plan" rows="6"
+                                  class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('plan', $task->plan) }}</textarea>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <x-primary-button>Save changes</x-primary-button>
+                        <button type="button" @click="editing = false" class="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+                    </div>
+                </form>
             </div>
 
             {{-- lifecycle controls --}}

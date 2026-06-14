@@ -19,12 +19,23 @@
     $targets = $task->allowedTransitions();
     // The first review covering this card (if any) — a small "Review" link.
     $reviewLink = $task->relationLoaded('reviews') ? $task->reviews->first() : $task->reviews()->first();
+
+    $priority = $task->priority ?? $T::PRIORITY_NORMAL;
+    $priorityChip = [
+        $T::PRIORITY_LOW    => 'bg-gray-100 text-gray-600',
+        $T::PRIORITY_NORMAL => 'bg-slate-100 text-slate-700',
+        $T::PRIORITY_HIGH   => 'bg-amber-100 text-amber-800',
+        $T::PRIORITY_URGENT => 'bg-red-100 text-red-700',
+    ];
+    $overdue = $task->isOverdue();
+    $blocked = $task->isBlocked();
 @endphp
 
 <div data-task-id="{{ $task->id }}"
      data-status="{{ $task->status }}"
      data-title="{{ $task->title }}"
      data-category="{{ $task->category }}"
+     data-priority="{{ $priority }}"
      x-show="cardMatches($el)"
      class="group bg-white rounded-md shadow-sm border-l-4 {{ $accentBar }} {{ $compact ? 'px-2.5 py-1.5' : 'p-3' }}">
 
@@ -66,6 +77,10 @@
             @if ($task->category)
                 <span class="inline-block text-[10px] font-medium uppercase tracking-wide text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5">{{ $task->category }}</span>
             @endif
+            <span class="inline-block text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 {{ $priorityChip[$priority] ?? $priorityChip[$T::PRIORITY_NORMAL] }}">{{ $priority }}</span>
+            @if ($blocked)
+                <span class="inline-block text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-red-100 text-red-700">blocked</span>
+            @endif
         </div>
 
         <div class="text-sm text-gray-900 mt-1.5">
@@ -86,6 +101,12 @@
                 <span class="text-[11px] text-gray-400" title="time in this status">{{ $since }} in status</span>
             @endif
         </div>
+
+        @if ($task->due_date)
+            <div class="mt-1 text-[11px] {{ $overdue ? 'text-red-600 font-medium' : 'text-gray-400' }}">
+                Due {{ $task->due_date->toFormattedDateString() }}{{ $overdue ? ' · overdue' : '' }}
+            </div>
+        @endif
 
         <div class="mt-2 flex items-center gap-1">
             @include('projects.partials.transitions', ['task' => $task, 'targets' => $targets, 'compact' => false])

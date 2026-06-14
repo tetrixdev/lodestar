@@ -5,8 +5,12 @@
                 <a href="{{ route('projects.index') }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $project->name }}</h2>
             </div>
-            <a href="{{ route('repositories.index', $project) }}"
-               class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Repositories &rarr;</a>
+            <div class="flex items-center gap-4">
+                <a href="{{ route('projects.gantt', $project) }}"
+                   class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Timeline &rarr;</a>
+                <a href="{{ route('repositories.index', $project) }}"
+                   class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Repositories &rarr;</a>
+            </div>
         </div>
     </x-slot>
 
@@ -39,14 +43,17 @@
          x-data="{
             search: '',
             category: '',
+            priorities: [],
             showArchived: false,
             cardMatches(el) {
                 const title = (el.dataset.title || '').toLowerCase();
                 const cat = (el.dataset.category || '');
+                const prio = (el.dataset.priority || '');
                 const q = this.search.trim().toLowerCase();
                 const okText = !q || title.includes(q) || cat.toLowerCase().includes(q);
                 const okCat = !this.category || cat === this.category;
-                return okText && okCat;
+                const okPrio = this.priorities.length === 0 || this.priorities.includes(prio);
+                return okText && okCat && okPrio;
             }
          }"
          x-init="
@@ -78,6 +85,24 @@
                             @endforeach
                         </select>
                     @endif
+                    <div x-data="{ open: false }" class="relative">
+                        <button type="button" @click="open = !open" @click.outside="open = false"
+                                class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                            <span>Priority</span>
+                            <span class="text-gray-400" x-show="priorities.length" x-text="'(' + priorities.length + ')'"></span>
+                            <svg class="size-3.5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd"/></svg>
+                        </button>
+                        <div x-show="open" x-cloak
+                             class="absolute right-0 z-10 mt-1 w-40 rounded-md border border-gray-200 bg-white shadow-lg p-2 space-y-1">
+                            @foreach (\App\Models\Task::PRIORITIES as $p)
+                                <label class="flex items-center gap-2 text-sm text-gray-700 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
+                                    <input type="checkbox" value="{{ $p }}" x-model="priorities"
+                                           class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                    <span class="capitalize">{{ $p }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
                     <button type="button" @click="showArchived = !showArchived"
                             class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
                         <span x-text="showArchived ? 'Hide archived' : 'Show archived'"></span>
@@ -167,6 +192,16 @@
                                        class="w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
                                 <input name="category" placeholder="Category (optional)"
                                        class="w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+                                <div class="flex items-center gap-2">
+                                    <select name="priority"
+                                            class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                                        @foreach (\App\Models\Task::PRIORITIES as $p)
+                                            <option value="{{ $p }}" @selected($p === \App\Models\Task::PRIORITY_NORMAL)>{{ ucfirst($p) }}</option>
+                                        @endforeach
+                                    </select>
+                                    <input type="date" name="due_date" title="Due date (optional)"
+                                           class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+                                </div>
                                 <div class="flex items-center gap-2">
                                     <x-primary-button class="!py-1.5 !text-xs">Add</x-primary-button>
                                     <button type="button" @click="open = false" class="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
