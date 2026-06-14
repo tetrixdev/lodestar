@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Trust the reverse proxy (proxy-nginx) so Laravel detects HTTPS from
+        // X-Forwarded-Proto. Without this, asset/@vite URLs are generated as
+        // http:// behind the proxy and blocked by the browser as mixed content.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
