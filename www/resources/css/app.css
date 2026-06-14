@@ -8,3 +8,8 @@
 @theme {
     --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Hide Alpine-cloaked elements until Alpine initialises them. */
+[x-cloak] {
+    display: none !important;
+}

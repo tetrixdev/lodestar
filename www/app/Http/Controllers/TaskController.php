@@ -6,8 +6,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Task;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TaskController extends Controller
 {
@@ -19,19 +21,22 @@ class TaskController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'max:60'],
+            'status' => ['nullable', 'in:open,doing,done'],
         ]);
+
+        $status = $data['status'] ?? 'open';
 
         $project->tasks()->create([
             'title' => $data['title'],
             'category' => $data['category'] ?? null,
-            'status' => 'open',
-            'position' => (int) $project->tasks()->where('status', 'open')->max('position') + 1,
+            'status' => $status,
+            'position' => (int) $project->tasks()->where('status', $status)->max('position') + 1,
         ]);
 
         return back();
     }
 
-    /** Move/edit a card (the board uses this to shift a card between columns). */
+    /** Move/edit a card (the ←/→ buttons and the cancel/restore flows use this). */
     public function update(Request $request, Task $task): RedirectResponse
     {
         abort_unless($task->project->user_id === $request->user()->id, 403);
@@ -48,5 +53,47 @@ class TaskController extends Controller
         $task->update(array_filter($data, fn ($v) => $v !== null));
 
         return back();
+    }
+
+    /**
+     * Drag-and-drop persistence. Receives the destination column and the full,
+     * ordered list of task ids now in that column. Updates the moved card's
+     * status and rewrites position for every card in the destination column so
+     * their relative order matches the client. Ownership is checked on every id.
+     */
+    public function move(Request $request, Task $task): JsonResponse
+    {
+        $project = $task->project;
+        abort_unless($project->user_id === $request->user()->id, 403);
+
+        $data = $request->validate([
+            'status' => ['required', 'in:open,doing,done'],
+            'order' => ['required', 'array'],
+            'order.*' => ['integer'],
+        ]);
+
+        // Only act on ids that belong to this project (defends against spoofed ids).
+        $ownedIds = $project->tasks()
+            ->whereIn('id', $data['order'])
+            ->pluck('id')
+            ->all();
+        $owned = array_flip($ownedIds);
+        $ordered = array_values(array_filter($data['order'], fn ($id) => isset($owned[$id])));
+
+        // The moved card must be part of the destination column it claims.
+        abort_unless(in_array($task->id, $ordered, true), 422);
+
+        DB::transaction(function () use ($project, $task, $data, $ordered): void {
+            $task->update(['status' => $data['status']]);
+
+            foreach ($ordered as $index => $id) {
+                $project->tasks()->where('id', $id)->update([
+                    'status' => $data['status'],
+                    'position' => $index,
+                ]);
+            }
+        });
+
+        return response()->json(['ok' => true]);
     }
 }

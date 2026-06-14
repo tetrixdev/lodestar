@@ -49,10 +49,24 @@ class ProjectController extends Controller
             ->get()
             ->groupBy('status');
 
+        $archived = $project->tasks()
+            ->where('status', 'cancelled')
+            ->latest('updated_at')
+            ->get();
+
+        // Distinct categories across live + archived cards, for the filter dropdown.
+        $categories = $project->tasks()
+            ->whereNotNull('category')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category');
+
         return view('projects.show', [
             'project' => $project,
             'columns' => Task::COLUMNS,
             'byStatus' => $byStatus,
+            'archived' => $archived,
+            'categories' => $categories,
         ]);
     }
 }
