@@ -49,6 +49,9 @@
         @if ($isWorking && $task->claimed_by)
             <div class="mt-1 text-[10px] text-gray-400 truncate" title="claimed by">held by {{ $task->claimed_by }}</div>
         @endif
+        <div class="mt-1">
+            @include('projects.partials.copy-prompt', ['task' => $task])
+        </div>
     @else
         {{-- full card --}}
         <div class="flex flex-wrap items-center gap-1.5">
@@ -88,6 +91,11 @@
                 @include('projects.partials.release', ['task' => $task])
             @endif
         </div>
+        @if ($isQueued || $isWorking)
+            <div class="mt-1">
+                @include('projects.partials.copy-prompt', ['task' => $task])
+            </div>
+        @endif
         @if ($isWorking && $task->claimed_by)
             <div class="mt-1 text-[11px] text-gray-400">held by {{ $task->claimed_by }}</div>
         @endif

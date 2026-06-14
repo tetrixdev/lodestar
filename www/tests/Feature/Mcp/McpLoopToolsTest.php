@@ -62,6 +62,34 @@ class McpLoopToolsTest extends TestCase
         LodestarServer::actingAs($user)->tool(ClaimTaskTool::class, [])->assertOk()->assertSee('No task available');
     }
 
+    public function test_claim_by_task_id_takes_that_specific_card(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        // Two queued cards; the first by position is A, but we target B.
+        $a = $project->tasks()->create(['title' => 'A', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 1]);
+        $b = $project->tasks()->create(['title' => 'B', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 2]);
+
+        LodestarServer::actingAs($user)
+            ->tool(ClaimTaskTool::class, ['task_id' => $b->id])
+            ->assertOk()->assertSee('"id":'.$b->id);
+
+        $this->assertSame(Task::STATUS_DEVELOPING, $b->fresh()->status);
+        $this->assertSame(Task::STATUS_READY_FOR_DEV, $a->fresh()->status); // untouched
+    }
+
+    public function test_claim_by_task_id_rejects_a_non_claimable_card(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
+
+        LodestarServer::actingAs($user)
+            ->tool(ClaimTaskTool::class, ['task_id' => $task->id])
+            ->assertHasErrors();
+        $this->assertSame(Task::STATUS_NEW, $task->fresh()->status);
+    }
+
     public function test_phase_filter_only_claims_matching_queue(): void
     {
         $user = User::factory()->create();

@@ -12,13 +12,14 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Atomically claim the next queued (ready_*) task and flip it to its working (*-ing) state. This is the only way to start work on a card. Optionally restrict to one project and/or phase. Returns the claimed task and the phase to load a skill for, or "no task available".')]
+#[Description('Atomically claim a queued (ready_*) task and flip it to its working (*-ing) state — the only way to start work. Claim a SPECIFIC card with task_id, or the next available one (optionally filtered by project and/or phase). Returns the claimed task and the phase to load a skill for, or "no task available".')]
 #[Name('claim_task')]
 class ClaimTaskTool extends LodestarTool
 {
     public function handle(Request $request): Response
     {
         $data = $request->validate([
+            'task_id' => ['nullable', 'integer'],
             'project' => ['nullable', 'string'],
             'phase' => ['nullable', 'string', 'in:'.implode(',', Task::PHASE_FOR_WORKING)],
             'agent_id' => ['nullable', 'string', 'max:255'],
@@ -44,14 +45,32 @@ class ClaimTaskTool extends LodestarTool
             $claimable = [Task::queueStateFor($working)];
         }
 
+        // Targeting a specific card: validate it up front for a clear message.
+        $taskId = $data['task_id'] ?? null;
+        if ($taskId) {
+            $target = Task::query()->whereIn('project_id', $projectIds)->whereKey($taskId)->first();
+            if (! $target) {
+                return Response::error("No task #{$taskId} belongs to you.");
+            }
+            if (! in_array($target->status, Task::claimableStatuses(), true)) {
+                return Response::error(
+                    "Task #{$taskId} is '{$target->status}', which isn't claimable — only a ready_* card can be claimed."
+                    .($target->status === Task::STATUS_NEW || $target->status === Task::STATUS_PLAN_REVIEW
+                        ? ' Move it forward to a ready_* state first.' : '')
+                );
+            }
+            $claimable = [$target->status];
+        }
+
         $agent = $data['agent_id']
             ?? $user->currentAccessToken()?->name
             ?? 'agent';
 
-        $claimed = DB::transaction(function () use ($projectIds, $claimable, $agent) {
+        $claimed = DB::transaction(function () use ($projectIds, $claimable, $agent, $taskId) {
             $query = Task::query()
                 ->whereIn('project_id', $projectIds)
                 ->whereIn('status', $claimable)
+                ->when($taskId, fn ($q) => $q->whereKey($taskId))
                 ->orderBy('position')
                 ->orderBy('id');
 
@@ -104,6 +123,7 @@ class ClaimTaskTool extends LodestarTool
     public function schema(JsonSchema $schema): array
     {
         return [
+            'task_id' => $schema->integer()->description('Claim this specific card (must be in a ready_* state). Omit to claim the next available.'),
             'project' => $schema->string()->description('Optional project id or slug to claim from. Omit to claim across all your projects.'),
             'phase' => $schema->string()->enum(array_values(Task::PHASE_FOR_WORKING))->description('Optional phase to restrict to: plan, develop, ai_review, merge.'),
             'agent_id' => $schema->string()->description('Identifier recorded as the holder. Defaults to your token name.'),
