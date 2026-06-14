@@ -1,0 +1,80 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Mcp\Tools;
+
+use App\Models\ReviewSection;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Attributes\Name;
+
+#[Description('Add or update one section (step) of a review walkthrough. Omit id to append a section; pass id to update one. mode is one of: skip, behavioural, direct, direct_doc, mirror_guard.')]
+#[Name('upsert_review_section')]
+class UpsertReviewSectionTool extends LodestarTool
+{
+    public function handle(Request $request): Response
+    {
+        $data = $request->validate([
+            'review_id' => ['required', 'integer'],
+            'id' => ['nullable', 'integer'],
+            'title' => ['required_without:id', 'string', 'max:255'],
+            'mode' => ['required_without:id', 'string', 'in:'.implode(',', ReviewSection::MODES)],
+            'position' => ['nullable', 'integer'],
+            'context' => ['nullable', 'string'],
+            'link' => ['nullable', 'string', 'max:255'],
+            'checks' => ['nullable', 'array'],
+            'status' => ['nullable', 'string', 'in:open,signed_off'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        $review = $this->ownedReview($request, (int) $data['review_id']);
+        if (! $review) {
+            return Response::error('No review with that id belongs to you.');
+        }
+
+        if (! empty($data['id'])) {
+            $section = $review->sections()->whereKey((int) $data['id'])->first();
+            if (! $section) {
+                return Response::error('No section with that id in this review.');
+            }
+        } else {
+            $section = $review->sections()->make([
+                'status' => 'open',
+                'position' => (int) $review->sections()->max('position') + 1,
+            ]);
+        }
+
+        foreach (['title', 'mode', 'position', 'context', 'link', 'checks', 'status', 'note'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $section->{$field} = $data[$field];
+            }
+        }
+        $section->save();
+
+        return Response::json([
+            'id' => $section->id,
+            'review_id' => $review->id,
+            'position' => $section->position,
+            'created' => $section->wasRecentlyCreated,
+        ]);
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'review_id' => $schema->integer()->description('The review to add the section to.')->required(),
+            'id' => $schema->integer()->description('Existing section id to update. Omit to append.'),
+            'title' => $schema->string()->description('Section title (required when creating).'),
+            'mode' => $schema->string()->enum(ReviewSection::MODES)->description('Review mode (required when creating).'),
+            'position' => $schema->integer()->description('Order in the walkthrough. Defaults to the end.'),
+            'context' => $schema->string()->description('Prose that rebuilds the reviewer\'s context for this step.'),
+            'link' => $schema->string()->description('What to open — a doc, file path, or route.'),
+            'checks' => $schema->array()->description('List of "what to confirm" strings.'),
+            'status' => $schema->string()->enum(['open', 'signed_off'])->description('Sign-off state (humans set this in the UI; usually leave as open).'),
+            'note' => $schema->string()->description('Optional note / change request.'),
+        ];
+    }
+}

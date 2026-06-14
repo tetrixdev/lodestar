@@ -81,6 +81,29 @@ class TaskController extends Controller
     }
 
     /**
+     * Manually release a stuck working (*-ing) card back to its queue (ready_*)
+     * state, clearing the claim. This is the human escape hatch we chose instead
+     * of an automatic lease/reaper: the happy flow is expected, and if an agent
+     * crashed mid-task a person presses "release" and the loop re-picks it.
+     */
+    public function release(Request $request, Task $task): RedirectResponse
+    {
+        abort_unless($task->project->user_id === $request->user()->id, 403);
+
+        $queue = Task::queueStateFor($task->status);
+        abort_unless($queue !== null, 422); // only *-ing tasks can be released
+
+        $task->status = $queue;
+        $task->claimed_by = null;
+        $task->claimed_at = null;
+        $task->position = (int) $task->project->tasks()
+            ->where('status', $queue)->max('position') + 1;
+        $task->save();
+
+        return back();
+    }
+
+    /**
      * Intra-column reordering (drag within a single status). Receives the status
      * the cards sit in and the full, ordered list of task ids now in that status,
      * and rewrites `position` to match. This endpoint does NOT change status —
@@ -113,7 +136,7 @@ class TaskController extends Controller
 
         abort_unless(in_array($task->id, $ordered, true), 422);
 
-        DB::transaction(function () use ($project, $data, $ordered): void {
+        DB::transaction(function () use ($project, $ordered): void {
             foreach ($ordered as $index => $id) {
                 $project->tasks()->where('id', $id)->update(['position' => $index]);
             }

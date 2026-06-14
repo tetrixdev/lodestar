@@ -2,10 +2,10 @@
 
 > **How to read:** components (what the pieces are) → flows (how work moves
 > through them) → Boundaries (where data crosses into something we don't fully
-> control — here, the *planned* MCP / agent-loop surface). Business language +
-> diagrams; technical only where it matters. This file mirrors what's **built**
-> today; the not-yet-built design (MCP, the agent loop, skills) is noted as a
-> Boundary and lives in the backlog, not here.
+> control — here, the **MCP / agent-loop surface**, now built). Business language
+> + diagrams; technical only where it matters. This file mirrors what's **built**
+> today. The thin npx client and the self-update handshake are still backlog and
+> noted where they belong, not described as if they exist.
 
 The one sentence to hold onto: **Lodestar is the home base for software work —
 humans drive it through a web UI today; AI agents will drive the same data
@@ -39,16 +39,45 @@ signed-in user.
   - `assign()` / `unassign()` are the **atomic self-assignment** endpoints.
   - `updateSection()` persists a section's sign-off / note (called from the
     walkthrough via `fetch`), **gated** on the caller holding the review.
+- **TaskController** also has **`release()`** — the human escape hatch that
+  returns a stuck working (`*-ing`) card to its `ready_*` queue and clears the
+  claim (we chose this over an automatic lease/reaper).
 - **Models** (`app/Models/`) — thin Eloquent models; the lifecycle rules live as
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
-  `LABELS`, `TRANSITIONS`, `canTransitionTo()`, `transitionKind()`), and the
-  claim/release rules live as guarded conditional-UPDATE helpers on **`Review`**
-  (`claimFor()`, `releaseFor()`).
+  `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
+  `queueStateFor()`), the claim/release rules live as guarded conditional-UPDATE
+  helpers on **`Review`** (`claimFor()`, `releaseFor()`), and skill resolution
+  lives on **`Skill`** (`resolve()`, `currentSystem()`).
 
-**Auth & tenancy** — standard Breeze auth. Every project-scoped controller
-method asserts `project->user_id === request->user()->id` (or the review's
-project owner) and `abort(403)` otherwise. There is no row-level `user_id` below
-Project; ownership is always reached through the Project.
+**The MCP server (`app/Mcp/`, laravel/mcp)** — the agent-facing surface, mirror
+of the web UI. `LodestarServer` is registered at `POST /mcp` in `routes/ai.php`
+behind `auth:sanctum`, and exposes ten tools (all extend `LodestarTool`, which
+holds the tenancy helpers):
+
+- **Data tools** — `upsert_project`, `upsert_task`, `upsert_session`,
+  `create_review` (returns the URL a human opens), `upsert_review_section`,
+  `get_review`. These are the agent's read/write access to the board, the exact
+  data the controllers serve to the browser.
+- **Loop tools** — `claim_task` (atomic claim, below), `get_skill` (resolves the
+  phase prompt for a claimed task), `advance_task` (legal-transition-only move),
+  `report` (logs a WorkSession).
+
+**Skills (`app/Models/Skill.php`, `SkillBinding`, `SystemSkillSeeder`)** — the
+four phase prompts ship as `system` skills (seeded/upserted from code) and are
+resolved per user/project through `skill_bindings`; a user may fork one into an
+editable `user` skill. The skill body is delivered at run time via `get_skill`,
+not as a file on the developer's machine — so a skill edit reaches every loop on
+its next call.
+
+**Auth & tenancy** — standard Breeze auth for the web; **Sanctum** for MCP.
+Agents authenticate with a per-machine personal-access token minted in the web UI
+(**AgentTokenController**, "Connect a coding agent" — create / list / revoke,
+plaintext shown once). Every project-scoped web controller method asserts
+`project->user_id === request->user()->id` (or the review's project owner) and
+`abort(403)`; every MCP tool resolves its tenant from the token's user and only
+ever queries that user's projects (the `ownedProject/Task/Review/Session`
+helpers). There is no row-level `user_id` below Project; ownership is always
+reached through the Project.
 
 ## Flows
 
@@ -103,6 +132,43 @@ sign-off, so losing the claim (someone releases / reassigns) locks the screen
 read-only. A review is linked to the Tasks it covers via the `review_task`
 pivot; the walkthrough lists them and each board card links back to its review.
 
+### The agent loop (claim → skill → work → advance → report)
+
+Agents drive the *same* lifecycle the board does, through MCP. The intended
+runner (backlog) is a **main agent that polls the queue and spawns one sub-agent
+per claimable task** — each sub-agent gets a one-line instruction ("load the
+`<phase>` skill for task N"), does the work, and exits. Because every task is one
+claim and each sub-agent is a fresh run, the dev and the AI-review of a task are
+naturally different runs — no agent-identity enforcement is needed.
+
+```mermaid
+sequenceDiagram
+    participant A as Agent (sub-agent)
+    participant M as MCP server
+    participant DB as DB (tasks/skills)
+    A->>M: claim_task(phase?)
+    M->>DB: UPDATE ... WHERE status = ready_* (FOR UPDATE SKIP LOCKED)
+    alt a queued card existed
+        DB-->>A: task (now *-ing, claimed_by set)
+        A->>M: get_skill(task_id)
+        M-->>A: resolved phase prompt
+        A->>A: do the work
+        A->>M: advance_task(task_id, to)  (legal edges only)
+        A->>M: report(task_id, summary)   (WorkSession)
+    else queue empty
+        DB-->>A: {claimed:false}
+    end
+```
+
+- **`claim_task`** is the only way to start work: it atomically flips the next
+  `ready_* → *-ing` (guarded conditional UPDATE; `SKIP LOCKED` on Postgres) and
+  stamps `claimed_by`. The human-only gates (`plan_review`, `human_review`) are
+  not in `CLAIM_MAP`, so the loop literally cannot claim them.
+- **`advance_task`** rejects any move that isn't in `Task::TRANSITIONS` — the same
+  guard the board uses — and clears the claim when the card leaves its working
+  state. There is no auto-reaper: a stuck `*-ing` card is freed by a human via
+  the board's **Release** action (`TaskController::release`).
+
 ### Multi-tenancy by ownership
 
 Every project-scoped read and write checks the chain `row → project → user`
@@ -114,23 +180,33 @@ or cross-project ids rather than trusting the request).
 ## Boundaries
 
 A Boundary is a place where data crosses into a subsystem we don't fully
-control. Lodestar has **no live external boundary today** — there is no LLM
-call, no third-party API, no generated query in the built app. The one Boundary
-that matters is **planned, not built**, and is called out here so it isn't
-forgotten when it lands:
+control. Lodestar's live boundary is **the MCP server** — where an external AI
+agent's input crosses into our data writes.
 
-1. **The MCP / agent-loop surface (PLANNED — not built).** The intended design is
-   that AI agents drive the *same* Project / Task / Review data through an MCP
-   server (HTTP/SSE, token-authed, scoped to the token's user), and an agent loop
-   claims `ready_*` cards, advances them, and prepares Reviews. When that lands it
-   becomes the real boundary: agent input crosses into our data writes, and the
-   atomic primitives already built here (the legal-transition guard, the
-   `WHERE NULL` claim) are exactly the server-side checks that must hold against
-   an agent the same way they hold against a browser. Until then this is a
-   **gap**, tracked as backlog cards (`mcp`, `loop`, `skills`), not a mirror
-   entry — this section is the placeholder, not a description of running code.
+1. **The MCP / agent-loop surface (BUILT).** AI agents drive the *same* Project /
+   Task / Review / Session data as the web UI, over `POST /mcp` (laravel/mcp),
+   authenticated by a per-machine Sanctum token. What holds the boundary:
+   - **Tenancy.** The token resolves to one User; every tool queries only that
+     user's projects via the `owned*` helpers. An agent cannot name or reach
+     another user's data — the same ownership rule the web enforces, applied at
+     the tool layer rather than per controller method.
+   - **Lifecycle integrity.** Agent writes go through the *same* invariants as the
+     browser: `advance_task` only allows `Task::TRANSITIONS` edges; `claim_task`
+     is the guarded conditional UPDATE (`SKIP LOCKED` on Postgres) so concurrent
+     agents can't double-claim; `upsert_task` can only *create* cards at a backlog
+     state (`new` / `ready_for_planning`) and never moves an existing card's status
+     — every lifecycle move goes through `advance_task`. A buggy or hostile client
+     cannot put the board in an illegal state.
+   - **Input validation.** Every tool validates its arguments with Laravel
+     validation (modes constrained to `ReviewSection::MODES`, statuses to
+     `Task::STATUSES`, phases to `Skill::PHASES`) before any write.
+   - **Skill delivery.** `get_skill` returns prompt *text* the agent then runs;
+     the resolution (fork vs system) is decided server-side. A malformed system
+     skill is the one thing that could mislead every loop at once, so skills are
+     versioned and treated as reviewable logic (the previous system version stays
+     pinnable for rollback).
 
-When the MCP surface is built, this section graduates to a full Boundaries
-treatment (what the agent can write, how the token scopes tenancy, how claim /
-advance map to the lifecycle) — and likely to its own doc once it outgrows a
-screen.
+**Still backlog (not built):** the thin npx client (`connect` + `run`) and the
+`check_version` self-update handshake — the only pieces that would live on the
+developer's machine. Until they exist, agents are wired to `/mcp` by hand. When
+the loop surface grows past a screen it likely graduates to its own doc.

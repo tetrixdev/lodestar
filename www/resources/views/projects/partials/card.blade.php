@@ -42,7 +42,13 @@
         </div>
         <div class="mt-1 flex items-center gap-1">
             @include('projects.partials.transitions', ['task' => $task, 'targets' => $targets, 'compact' => true])
+            @if ($isWorking)
+                @include('projects.partials.release', ['task' => $task])
+            @endif
         </div>
+        @if ($isWorking && $task->claimed_by)
+            <div class="mt-1 text-[10px] text-gray-400 truncate" title="claimed by">held by {{ $task->claimed_by }}</div>
+        @endif
     @else
         {{-- full card --}}
         <div class="flex flex-wrap items-center gap-1.5">
@@ -78,6 +84,12 @@
 
         <div class="mt-2 flex items-center gap-1">
             @include('projects.partials.transitions', ['task' => $task, 'targets' => $targets, 'compact' => false])
+            @if ($isWorking)
+                @include('projects.partials.release', ['task' => $task])
+            @endif
         </div>
+        @if ($isWorking && $task->claimed_by)
+            <div class="mt-1 text-[11px] text-gray-400">held by {{ $task->claimed_by }}</div>
+        @endif
     @endif
 </div>

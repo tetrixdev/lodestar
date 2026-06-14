@@ -15,6 +15,9 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // The system skills ship from code; upsert them on every seed/deploy.
+        $this->call(SystemSkillSeeder::class);
+
         // User::factory(10)->create();
 
         User::factory()->create([

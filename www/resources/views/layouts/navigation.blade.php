@@ -41,6 +41,14 @@
                             {{ __('Profile') }}
                         </x-dropdown-link>
 
+                        <x-dropdown-link :href="route('agent-tokens.index')">
+                            {{ __('Connect agent') }}
+                        </x-dropdown-link>
+
+                        <x-dropdown-link :href="route('skills.index')">
+                            {{ __('Skills') }}
+                        </x-dropdown-link>
+
                         <!-- Authentication -->
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf

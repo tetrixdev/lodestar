@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\AgentTokenController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\SkillController;
 use App\Http\Controllers\TaskController;
 use Illuminate\Support\Facades\Route;
 
@@ -25,6 +27,19 @@ Route::middleware('auth')->group(function () {
     Route::post('/projects/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('/tasks/{task}/move', [TaskController::class, 'move'])->name('tasks.move');
+    Route::patch('/tasks/{task}/release', [TaskController::class, 'release'])->name('tasks.release');
+
+    // "Connect a coding agent" — per-machine MCP tokens.
+    Route::get('/settings/agent-tokens', [AgentTokenController::class, 'index'])->name('agent-tokens.index');
+    Route::post('/settings/agent-tokens', [AgentTokenController::class, 'store'])->name('agent-tokens.store');
+    Route::delete('/settings/agent-tokens/{token}', [AgentTokenController::class, 'destroy'])->name('agent-tokens.destroy');
+
+    // Skills — view the system prompts, duplicate to a fork, edit the fork.
+    Route::get('/settings/skills', [SkillController::class, 'index'])->name('skills.index');
+    Route::post('/settings/skills/{skill}/duplicate', [SkillController::class, 'duplicate'])->name('skills.duplicate');
+    Route::get('/settings/skills/{skill}/edit', [SkillController::class, 'edit'])->name('skills.edit');
+    Route::patch('/settings/skills/{skill}', [SkillController::class, 'update'])->name('skills.update');
+    Route::delete('/settings/skills/{skill}', [SkillController::class, 'destroy'])->name('skills.destroy');
 
     Route::get('/projects/{project}/reviews', [ReviewController::class, 'index'])->name('reviews.index');
     Route::get('/reviews/{review}', [ReviewController::class, 'show'])->name('reviews.show');

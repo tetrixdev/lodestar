@@ -10,8 +10,11 @@
 Lodestar is the home base for software work: **Projects** hold **Tasks** (kanban
 cards that ride a 13-state lifecycle), **WorkSessions** (a work-log), and
 **Reviews** (a change reviewed against a base, walked through as ordered
-**ReviewSections**). Everything is **multi-tenant by ownership** — a Project
-belongs to a User, and everything else reaches its owner through that Project.
+**ReviewSections**). **Skills** are the versioned prompts that drive each loop
+phase, and **SkillBindings** pick which skill a user's loop runs. Everything is
+**multi-tenant by ownership** — a Project belongs to a User, and everything else
+reaches its owner through that Project; AI agents reach the same data through MCP,
+authenticated by a per-machine **PersonalAccessToken** (Sanctum).
 
 ## Tables (the nouns)
 
@@ -24,6 +27,10 @@ belongs to a User, and everything else reaches its owner through that Project.
   free-text grouping prefix (e.g. `mcp`, `infra`); `body` is the card detail.
   `status_changed_at` records when the card last entered its current status (the
   "Nh in status" timer) and is stamped automatically on every status change.
+  `claimed_by` / `claimed_at` record which agent currently holds a working
+  (`*-ing`) card and since when — set by the atomic MCP claim, cleared when the
+  card moves on. There is no lease column: a stuck card is freed by a human, not
+  a reaper (see Invariants).
 - **WorkSession** — a work-log entry (the running history a project kept).
   `title` + `slug`, a markdown `body`, and `occurred_on` (the date the work
   happened). Named `work_sessions` so it never collides with Laravel's framework
@@ -42,14 +49,31 @@ belongs to a User, and everything else reaches its owner through that Project.
   file / route); `checks` is a JSON list of "what to confirm"; `status`
   (`open` / `signed_off`) + `note` carry the human's per-section sign-off.
 
+- **Skill** — a versioned prompt that drives one loop phase. `kind` is `system`
+  (ours, read-only, `user_id` null — shipped from code and upserted on deploy,
+  unique per `key`+`version`) or `user` (a user's editable fork, with
+  `source_version` recording the system version it was cloned from). `key` is the
+  phase (`plan` / `develop` / `ai_review` / `merge`); `title` + `body` (the
+  prompt) are what `get_skill` returns.
+- **SkillBinding** — which Skill a user's loop runs for a phase. `user_id` +
+  `phase` + an optional `project_id` (null = the user's default across projects;
+  a row with a project overrides it there) point at a `skill_id`. No binding row
+  → the loop falls back to the current system skill, so system-skill updates
+  reach unbound users automatically.
+- **PersonalAccessToken** — Sanctum's API token (one per machine/agent). The MCP
+  server authenticates each request from the `Authorization: Bearer` token and
+  resolves the tenant (`tokenable` = the User); `name` is the machine label
+  (also the default `claimed_by`), `abilities` carries the `agent` scope.
+
 **Pivots**
 
 - **review_task** — the many-to-many link between a Review and the Tasks it
   covers. Unique `(review_id, task_id)`; both sides cascade-delete, so the link
   disappears with either end.
 
-(Laravel scaffolding — `users`, `sessions`, `cache`, `jobs`, etc. — is standard
-and omitted here, except `users` which the diagram draws as the ownership root.)
+(Laravel scaffolding — `sessions`, `cache`, `jobs`, etc. — is standard and
+omitted here, except `users` (the ownership root) and `personal_access_tokens`
+(the MCP auth boundary), which the diagram draws.)
 
 ## Invariants
 
@@ -82,6 +106,21 @@ These are the rules the column list alone won't tell you:
   `position` for exactly the cards in that status. Reordering never changes
   status — lifecycle moves go through the transition path so only legal moves
   are allowed.
+- **A task is claimed by a single agent at a time, atomically.** An agent claims
+  the next `ready_*` card over MCP via a **conditional UPDATE guarded on the old
+  status** (`WHERE status = :queue_state`) — the same check-and-set shape as the
+  review claim — so two concurrent agents can never both win a card. On Postgres
+  the claim query also uses `FOR UPDATE SKIP LOCKED` so concurrent claimers skip
+  past each other's rows instead of contending. The claim flips `ready_* → *-ing`
+  and stamps `claimed_by` + `claimed_at`.
+- **No lease, no reaper — a human frees a stuck card.** We deliberately did *not*
+  add a lease / heartbeat / auto-reclaim. The happy flow is expected; if an agent
+  crashes mid-task, a human presses **Release** on the board, which returns the
+  `*-ing` card to its `ready_*` queue and clears the claim so the loop re-picks it.
+- **Skill resolution is server-side.** `get_skill` resolves the skill for a phase
+  as: a project-specific `SkillBinding` → the user's default binding → the current
+  (highest-version) system skill. So editing a system skill updates every unbound
+  user's loop on their next call, with no client change.
 - **A review is claimed by a single human at a time.** `assigned_to_user_id` is
   set by a **conditional UPDATE guarded on `WHERE assigned_to_user_id IS NULL`**
   (`Review::claimFor`), making claim a single atomic check-and-set — no
@@ -111,6 +150,11 @@ erDiagram
     REVIEW ||--o{ REVIEW_SECTION : "walkthrough steps"
     REVIEW }o--o{ TASK : "review_task (covers)"
     USER ||--o{ REVIEW : "assigned (nullable)"
+    USER ||--o{ SKILL : "owns forks (nullable)"
+    USER ||--o{ SKILL_BINDING : binds
+    PROJECT ||--o{ SKILL_BINDING : "scopes (nullable)"
+    SKILL ||--o{ SKILL_BINDING : "bound as"
+    USER ||--o{ PERSONAL_ACCESS_TOKEN : authenticates
 
     PROJECT {
         bigint id PK
@@ -130,6 +174,8 @@ erDiagram
         text body "nullable, markdown detail"
         string status "one of 13 lifecycle states"
         timestamp status_changed_at "nullable, entered-current-status time"
+        string claimed_by "nullable, agent holding a *-ing card"
+        timestamp claimed_at "nullable, when it was claimed"
         integer position "order within status"
     }
 
@@ -179,5 +225,35 @@ erDiagram
         timestamp email_verified_at "nullable"
         string password
         string remember_token "nullable"
+    }
+
+    SKILL {
+        bigint id PK
+        string kind "system|user"
+        string key "plan|develop|ai_review|merge"
+        integer version
+        string title
+        text body "the prompt"
+        bigint user_id FK "nullable, owner of a fork"
+        integer source_version "nullable, system version a fork came from"
+    }
+
+    SKILL_BINDING {
+        bigint id PK
+        bigint user_id FK
+        bigint project_id FK "nullable, null = user default"
+        string phase "plan|develop|ai_review|merge"
+        bigint skill_id FK
+    }
+
+    PERSONAL_ACCESS_TOKEN {
+        bigint id PK
+        string tokenable_type
+        bigint tokenable_id
+        text name "machine/agent label"
+        string token "unique, hashed"
+        text abilities "nullable"
+        timestamp last_used_at "nullable"
+        timestamp expires_at "nullable"
     }
 ```

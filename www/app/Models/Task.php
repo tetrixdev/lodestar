@@ -24,22 +24,35 @@ class Task extends Model
 
     protected $casts = [
         'status_changed_at' => 'datetime',
+        'claimed_at' => 'datetime',
     ];
 
     // ── The 13 statuses ──────────────────────────────────────────────────────
 
     public const STATUS_NEW = 'new';
+
     public const STATUS_READY_FOR_PLANNING = 'ready_for_planning';
+
     public const STATUS_PLANNING = 'planning';
+
     public const STATUS_PLAN_REVIEW = 'plan_review';
+
     public const STATUS_READY_FOR_DEV = 'ready_for_dev';
+
     public const STATUS_DEVELOPING = 'developing';
+
     public const STATUS_READY_FOR_AI_REVIEW = 'ready_for_ai_review';
+
     public const STATUS_AI_REVIEW = 'ai_review';
+
     public const STATUS_HUMAN_REVIEW = 'human_review';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_MERGE_DEPLOY = 'merge_deploy';
+
     public const STATUS_DONE = 'done';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     /** Every lifecycle status, in pipeline order (cancelled excluded — it's the archive). */
@@ -68,9 +81,13 @@ class Task extends Model
     // ── Actor categories (who the card is waiting on) ────────────────────────
 
     public const ACTOR_NEEDS_HUMAN = 'needs-human';
+
     public const ACTOR_QUEUED = 'queued';
+
     public const ACTOR_AI_WORKING = 'ai-working';
+
     public const ACTOR_DONE = 'done';
+
     public const ACTOR_ARCHIVED = 'archived';
 
     /** status => actor category. */
@@ -155,10 +172,58 @@ class Task extends Model
         self::STATUS_CANCELLED => [self::STATUS_NEW],
     ];
 
+    // ── Claim map (the agent loop) ───────────────────────────────────────────
+
+    /**
+     * The atomic claim a loop performs: a `ready_*` queue state flips to the
+     * `*-ing` working state the claiming agent then holds. These are the only
+     * four states an agent may claim — the human-only gates (`plan_review`,
+     * `human_review`) are absent by construction, so the loop literally cannot
+     * grab them.
+     */
+    public const CLAIM_MAP = [
+        self::STATUS_READY_FOR_PLANNING => self::STATUS_PLANNING,
+        self::STATUS_READY_FOR_DEV => self::STATUS_DEVELOPING,
+        self::STATUS_READY_FOR_AI_REVIEW => self::STATUS_AI_REVIEW,
+        self::STATUS_APPROVED => self::STATUS_MERGE_DEPLOY,
+    ];
+
+    /**
+     * The phase key (the skill a working state runs) for each `*-ing` state.
+     * `get_skill` uses this to resolve which skill a claimed task needs.
+     */
+    public const PHASE_FOR_WORKING = [
+        self::STATUS_PLANNING => 'plan',
+        self::STATUS_DEVELOPING => 'develop',
+        self::STATUS_AI_REVIEW => 'ai_review',
+        self::STATUS_MERGE_DEPLOY => 'merge',
+    ];
+
+    /** The `ready_*` states an agent may claim. */
+    public static function claimableStatuses(): array
+    {
+        return array_keys(self::CLAIM_MAP);
+    }
+
+    /** The queue state a `*-ing` task returns to when released (inverse of CLAIM_MAP). */
+    public static function queueStateFor(string $workingStatus): ?string
+    {
+        return array_search($workingStatus, self::CLAIM_MAP, true) ?: null;
+    }
+
+    /** The skill phase key a `*-ing` task needs, or null if it isn't a working state. */
+    public static function phaseFor(string $workingStatus): ?string
+    {
+        return self::PHASE_FOR_WORKING[$workingStatus] ?? null;
+    }
+
     /** Transition kinds, keyed by target, so the UI can label/icon a control. */
     public const KIND_FORWARD = 'forward';
+
     public const KIND_BACK = 'back';
+
     public const KIND_CANCEL = 'cancel';
+
     public const KIND_RESTORE = 'restore';
 
     protected static function booted(): void
