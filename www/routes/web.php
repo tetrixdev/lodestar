@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/projects/{project}/reviews', [ReviewController::class, 'index'])->name('reviews.index');
     Route::get('/reviews/{review}', [ReviewController::class, 'show'])->name('reviews.show');
+    Route::post('/reviews/{review}/assign', [ReviewController::class, 'assign'])->name('reviews.assign');
+    Route::post('/reviews/{review}/unassign', [ReviewController::class, 'unassign'])->name('reviews.unassign');
     Route::patch('/reviews/{review}/sections/{section}', [ReviewController::class, 'updateSection'])->name('reviews.sections.update');
 });
 

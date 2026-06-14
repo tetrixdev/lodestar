@@ -17,6 +17,8 @@
         : null;
 
     $targets = $task->allowedTransitions();
+    // The first review covering this card (if any) — a small "Review" link.
+    $reviewLink = $task->relationLoaded('reviews') ? $task->reviews->first() : $task->reviews()->first();
 @endphp
 
 <div data-task-id="{{ $task->id }}"
@@ -58,6 +60,14 @@
         </div>
 
         <div class="text-sm text-gray-900 mt-1.5">{{ $task->title }}</div>
+
+        @if ($reviewLink)
+            <a href="{{ route('reviews.show', $reviewLink) }}"
+               class="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline">
+                <svg class="size-3" viewBox="0 0 20 20" fill="currentColor"><path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path fill-rule="evenodd" d="M.664 10.59a1.65 1.65 0 0 1 0-1.18 10.003 10.003 0 0 1 18.672 0 1.65 1.65 0 0 1 0 1.18 10.003 10.003 0 0 1-18.672 0ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clip-rule="evenodd"/></svg>
+                Review
+            </a>
+        @endif
 
         <div class="mt-2 flex items-center justify-between gap-2">
             <span class="text-[11px] font-medium text-gray-600">{{ $statusLabel }}</span>

@@ -46,12 +46,14 @@ class ProjectController extends Controller
         // Live (non-archived) cards, keyed by their precise status so the view
         // can place each into its phase column.
         $byStatus = $project->tasks()
+            ->with('reviews:id')
             ->whereIn('status', Task::STATUSES)
             ->orderBy('position')
             ->get()
             ->groupBy('status');
 
         $archived = $project->tasks()
+            ->with('reviews:id')
             ->where('status', Task::STATUS_CANCELLED)
             ->latest('updated_at')
             ->get();

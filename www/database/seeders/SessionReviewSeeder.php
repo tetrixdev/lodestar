@@ -184,6 +184,20 @@ class SessionReviewSeeder extends Seeder
             ]);
         }
 
-        $this->command?->info("Session review #{$review->id} seeded with ".count($sections).' sections.');
+        // Link this review to the four cards currently sitting in human_review.
+        // Idempotent: match by title, then sync() so a re-run replaces the set.
+        $taskIds = $project->tasks()
+            ->where('status', Task::STATUS_HUMAN_REVIEW)
+            ->whereIn('title', [
+                'Scaffold app — Laravel 13 + slim-docker + Breeze (Tailwind v4)',
+                'Data models — Project / Task / WorkSession / Review / ReviewSection',
+                'Kanban board UI',
+                'Review walkthrough page (served demonstrator)',
+            ])
+            ->pluck('id');
+        $review->tasks()->sync($taskIds);
+
+        $this->command?->info("Session review #{$review->id} seeded with ".count($sections)
+            .' sections and '.$taskIds->count().' linked tasks.');
     }
 }

@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * A kanban card moving through the Lodestar lifecycle.
@@ -175,6 +176,12 @@ class Task extends Model
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** The reviews that cover this card (openable from the card). */
+    public function reviews(): BelongsToMany
+    {
+        return $this->belongsToMany(Review::class)->withTimestamps();
     }
 
     /** The legal target statuses from this card's current status. */
