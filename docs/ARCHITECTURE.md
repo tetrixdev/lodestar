@@ -90,18 +90,26 @@ approver makes it `active`, and an AI proposal never goes live (the rule is
 every layer, version history, a two-version diff (`App\Support\LineDiff`), and the
 append/overwrite toggle (approver-only, with a warning).
 
-**The work loop + heartbeat** — a seeded system **`work`** skill (a named, non-phase
-skill) holds the loop's instructions: scan a project's `ready_*` cards, claim each,
-work it (one subagent per task), report + `advance_task`, repeat — autonomously,
-never prompting the user. A human kicks it off with the **loop copy-prompt**
-(`projects/partials/loop-prompt`) — a `/loop` command referencing the `work` skill —
-surfaced on the project page and each task's lifecycle (alongside the single-task
-copy-prompt). The nav **heartbeat** (`<x-agent-heartbeat>`, `Task::agentSnapshot()`)
-is derived, not pinged: it lights up while any reachable card sits in a working
-(`*-ing`) state or was claimed in the last 10 minutes. NOTE: in headless/routine
-runs Claude Code only exposes *locally* configured MCP servers, so the loop setup
-must register Lodestar's MCP locally (`.mcp.json`/`--mcp-config`), not as a
-claude.ai connector.
+**Agent modes + the work loop + heartbeat.** `main` is orientation only and defines
+two **modes**: *interactive* (a human is driving — work in the human's own checkout,
+never `~/ld-agent`) and *background worker* (work ONLY under `~/ld-agent/<slug>/`).
+Mode is set by the entry skill (the `work`/worker prompt declares background and
+overrides the interactive default), not by the token — the same MCP token serves
+both. A background worker isolates its runtime from the human's via
+`COMPOSE_PROJECT_NAME=<slug>-agent` (separate containers/volumes/DB) and bootstraps
+its `.env` from the human's checkout or `.env.example` + `key:generate`, halting and
+reporting if a real secret is genuinely missing (project-managed secrets are task
+#54). The seeded system **`work`** skill holds the **sequential** loop: claim the
+next `ready_*` card (`agent_id:"loop"`), spawn ONE worker subagent for it, finish
+before the next — one runtime, no collisions; parallel workers (separate envs) are a
+deferred option. A human starts it with the **loop copy-prompt**
+(`projects/partials/loop-prompt`) on the project page and each task's lifecycle. The
+nav **heartbeat** (`<x-agent-heartbeat>`, `Task::agentSnapshot()`) is derived, not
+pinged: it shows "Loop running" / "Agent working" while a reachable card is `*-ing`
+(or claimed in the last 10 min), labels the loop by its `claimed_by` of `loop*`, and
+hovers to show agent → project. NOTE: in headless/routine runs Claude Code only
+exposes *locally* configured MCP servers, so the loop setup must register Lodestar's
+MCP locally (`.mcp.json`/`--mcp-config`), not as a claude.ai connector.
 
 **Auth & tenancy** — standard Breeze auth for the web; **Sanctum** for MCP.
 Agents authenticate with a per-machine personal-access token minted in the web UI
