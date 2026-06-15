@@ -176,6 +176,51 @@ class Skill extends Model
         return ['body' => implode("\n\n", $bodies), 'layers' => $layers];
     }
 
+    // ── Authorization (change control) ───────────────────────────────────────
+
+    /**
+     * May $user *propose* a change to this slot? Anyone who can reach the scope:
+     * the personal owner, a team member, a project member. System slots are
+     * seeded, never authored here.
+     */
+    public function canBeAccessedBy(User $user): bool
+    {
+        return match ($this->scope) {
+            self::SCOPE_PERSONAL => (int) $this->owner_id === $user->id,
+            self::SCOPE_TEAM => $user->isInTeam((int) $this->owner_id),
+            self::SCOPE_PROJECT => (bool) $this->owner?->isAccessibleBy($user),
+            default => false,
+        };
+    }
+
+    /**
+     * May $user *approve* (make live) a change to this slot? The personal owner
+     * for their own, an assigned approver for team/project. Approval is always a
+     * human — the MCP never calls this.
+     */
+    public function canBeApprovedBy(User $user): bool
+    {
+        return match ($this->scope) {
+            self::SCOPE_PERSONAL => (int) $this->owner_id === $user->id,
+            self::SCOPE_TEAM, self::SCOPE_PROJECT => (bool) $this->owner?->canApprovePrompts($user),
+            default => false,
+        };
+    }
+
+    /** Find or create the slot for (scope, owner, key); never the system scope. */
+    public static function ensureSlot(string $scope, ?Model $owner, string $key, string $mode, string $title): self
+    {
+        return self::firstOrCreate(
+            [
+                'scope' => $scope,
+                'owner_type' => $owner?->getMorphClass(),
+                'owner_id' => $owner?->getKey(),
+                'key' => $key,
+            ],
+            ['mode' => $mode, 'title' => $title],
+        );
+    }
+
     // ── Versioning ─────────────────────────────────────────────────────────
 
     /** The next version number for this slot (1-based, monotonic). */
@@ -217,6 +262,21 @@ class Skill extends Model
         $this->unsetRelation('activeVersion');
 
         return $version;
+    }
+
+    /**
+     * The change-control rule, in one place: an AI proposal (`$byAi`) NEVER goes
+     * live — even on the author's own slot. A human who can approve the scope
+     * self-approves to `active`; anyone else's change lands `proposed` for an
+     * approver. Used identically by the web form and the MCP tool.
+     */
+    public function submitVersion(string $title, string $body, User $author, bool $byAi, ?string $note = null): SkillVersion
+    {
+        if (! $byAi && $this->canBeApprovedBy($author)) {
+            return $this->publish($title, $body, $author);
+        }
+
+        return $this->propose($title, $body, $author, $byAi, $note);
     }
 
     /**

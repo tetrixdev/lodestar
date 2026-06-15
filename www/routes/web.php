@@ -66,9 +66,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/github', [GithubConnectionController::class, 'store'])->name('github.store');
     Route::delete('/settings/github/{connection}', [GithubConnectionController::class, 'destroy'])->name('github.destroy');
 
-    // Skills — view the composed effective prompt per phase. Authoring
-    // (propose/approve, versioning, named skills) lands in the P4 overview.
+    // Skills — view the composed effective prompt per phase, and change control:
+    // propose a version (anyone in scope), approve/reject (assigned approvers),
+    // toggle a layer's append/overwrite mode (approvers).
     Route::get('/settings/skills', [SkillController::class, 'index'])->name('skills.index');
+    Route::post('/settings/skills/propose', [SkillController::class, 'propose'])->name('skills.propose');
+    Route::post('/settings/skills/versions/{version}/approve', [SkillController::class, 'approve'])->name('skills.versions.approve');
+    Route::post('/settings/skills/versions/{version}/reject', [SkillController::class, 'reject'])->name('skills.versions.reject');
+    Route::patch('/settings/skills/{skill}/mode', [SkillController::class, 'toggleMode'])->name('skills.mode');
 
     // Work sessions — a project's running history of what was done.
     Route::get('/projects/{project}/sessions', [WorkSessionController::class, 'index'])->name('work-sessions.index');
