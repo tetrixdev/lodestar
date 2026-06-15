@@ -302,7 +302,7 @@ class Skill extends Model
      * anyone who can access the scope but cannot approve it, and by every MCP
      * (AI) proposal regardless of who owns it.
      */
-    public function propose(string $title, string $body, ?User $author, bool $byAi, ?string $note = null): SkillVersion
+    public function propose(string $title, string $body, ?User $author, bool $byAi, ?string $note = null, ?int $workSessionId = null): SkillVersion
     {
         return $this->versions()->create([
             'version' => $this->nextVersion(),
@@ -312,6 +312,7 @@ class Skill extends Model
             'author_user_id' => $author?->id,
             'proposed_by_ai' => $byAi,
             'note' => $note,
+            'work_session_id' => $workSessionId,
         ]);
     }
 

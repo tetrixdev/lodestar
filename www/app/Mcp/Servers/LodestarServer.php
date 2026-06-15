@@ -13,6 +13,7 @@ use App\Mcp\Tools\GetSkillTool;
 use App\Mcp\Tools\LinkRepositoryTool;
 use App\Mcp\Tools\ListProjectsTool;
 use App\Mcp\Tools\ProposeSkillChangeTool;
+use App\Mcp\Tools\RememberTool;
 use App\Mcp\Tools\ReportTool;
 use App\Mcp\Tools\UnlinkRepositoryTool;
 use App\Mcp\Tools\UpsertProjectTool;
@@ -68,6 +69,7 @@ class LodestarServer extends Server
         ClaimTaskTool::class,
         GetSkillTool::class,
         ProposeSkillChangeTool::class,
+        RememberTool::class,
         AdvanceTaskTool::class,
         ReportTool::class,
     ];

@@ -48,6 +48,12 @@ class SkillVersion extends Model
         return $this->belongsTo(User::class, 'author_user_id');
     }
 
+    /** The work-session this version was proposed from (provenance), if any. */
+    public function workSession(): BelongsTo
+    {
+        return $this->belongsTo(WorkSession::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === self::STATUS_ACTIVE;

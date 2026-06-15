@@ -51,7 +51,7 @@ signed-in user.
 
 **The MCP server (`app/Mcp/`, laravel/mcp)** — the agent-facing surface, mirror
 of the web UI. `LodestarServer` is registered at `POST /mcp` in `routes/ai.php`
-behind `auth:sanctum`, and exposes 15 tools (all extend `LodestarTool`, which
+behind `auth:sanctum`, and exposes 16 tools (all extend `LodestarTool`, which
 holds the tenancy helpers):
 
 - **Data tools** — `list_projects`, `upsert_project`, `upsert_task`,
@@ -62,7 +62,9 @@ holds the tenancy helpers):
   a project through a GitHub connection).
 - **Loop tools** — `claim_task` (atomic claim, by next or by id), `get_skill`
   (composes the phase prompt — incl. the `main` bootstrap), `propose_skill_change`
-  (proposes a skill version — always `proposed`, never live), `advance_task`
+  (proposes a skill version — always `proposed`, never live), `remember` (captures
+  a durable learning as a proposed skill-layer edit, linked to its work-session),
+  `advance_task`
   (legal-transition-only move), `report` (logs a WorkSession).
 
 **Skills (`app/Models/Skill.php`, `SkillVersion`, `SystemSkillSeeder`)** — skills

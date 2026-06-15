@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Mcp\Servers\LodestarServer;
 use App\Mcp\Tools\ProposeSkillChangeTool;
+use App\Mcp\Tools\RememberTool;
 use App\Models\Skill;
 use App\Models\SkillVersion;
 use App\Models\Team;
@@ -62,6 +63,24 @@ class SkillProposalTest extends TestCase
             ->assertHasErrors();
 
         $this->assertSame(0, SkillVersion::count());
+    }
+
+    public function test_remember_appends_a_learning_as_a_proposal(): void
+    {
+        $user = User::factory()->create();
+
+        LodestarServer::actingAs($user)
+            ->tool(RememberTool::class, ['learning' => 'Always run the linter before pushing.'])
+            ->assertOk()
+            ->assertSee('"status":"proposed"');
+
+        $version = SkillVersion::sole();
+        $this->assertSame(SkillVersion::STATUS_PROPOSED, $version->status);
+        $this->assertTrue($version->proposed_by_ai);
+        $this->assertStringContainsString('Always run the linter before pushing.', $version->body);
+
+        // It's a personal main layer and is NOT live until approved.
+        $this->assertSame('', Skill::compose($user, null, 'main')['body']);
     }
 
     public function test_reserved_key_prefix_is_rejected_on_both_surfaces(): void
