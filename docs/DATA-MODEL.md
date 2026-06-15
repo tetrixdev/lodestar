@@ -146,11 +146,13 @@ These are the rules the column list alone won't tell you:
   crashes mid-task, a human presses **Release** on the board, which returns the
   `*-ing` card to its `ready_*` queue and clears the claim so the loop re-picks it.
 - **Skill composition is server-side.** `get_skill` composes a phase prompt from
-  the active version of each scope's slot, in order system → team → personal →
-  project (append, or an `overwrite` layer wiping everything above it; the
-  personal layer is dropped when the team forbids it). Named (non-phase) keys
-  don't compose — they resolve to the most-specific scope. So editing the system
-  layer updates every loop on its next call, with no client change.
+  the active version of each scope's slot, in order system → team → project →
+  personal (append, or an `overwrite` layer wiping everything above it). Personal
+  is last so a person always has the final say — and can test a change locally —
+  unless the team sets `allow_personal_instructions = false`, which drops the
+  personal layer. Named (non-phase) keys don't compose — they resolve to the
+  most-specific scope. So editing the system layer updates every loop on its next
+  call, with no client change.
 - **Every changed file must be covered by a section (the coverage guard).** A
   review built from a GitHub comparison stores its changed files as `review_files`
   (fetched server-side from GitHub — never the AI's claim). Each ReviewSection

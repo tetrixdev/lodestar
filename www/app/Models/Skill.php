@@ -15,10 +15,12 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * rows — exactly one is `active`, and that's the body composition uses.
  *
  * For a phase key, the effective prompt is COMPOSED across scopes in order
- * system → team → personal → project (see {@see self::compose()}): each layer
+ * system → team → project → personal (see {@see self::compose()}): each layer
  * `append`s by default, or `overwrite`s (discarding everything above it and
- * starting from its own body). Arbitrary named keys do not compose — they
- * resolve to the most-specific scope only (see {@see self::resolveNamed()}).
+ * starting from its own body). Personal is LAST so a person always has the
+ * final say (and can test changes), unless the team locks it out via
+ * `allow_personal_instructions = false`. Arbitrary named keys do not compose —
+ * they resolve to the most-specific scope only (see {@see self::resolveNamed()}).
  */
 class Skill extends Model
 {
@@ -34,8 +36,8 @@ class Skill extends Model
 
     public const SCOPE_PROJECT = 'project';
 
-    /** Scopes in composition order: system base → team → personal → project. */
-    public const SCOPES = [self::SCOPE_SYSTEM, self::SCOPE_TEAM, self::SCOPE_PERSONAL, self::SCOPE_PROJECT];
+    /** Scopes in composition order: system base → team → project → personal. */
+    public const SCOPES = [self::SCOPE_SYSTEM, self::SCOPE_TEAM, self::SCOPE_PROJECT, self::SCOPE_PERSONAL];
 
     // ── Compose mode ─────────────────────────────────────────────────────────
 
@@ -124,9 +126,10 @@ class Skill extends Model
 
     /**
      * The effective prompt for a phase $key, composed for $user working on
-     * $project. Layers apply in order system → team → personal → project; an
-     * `overwrite` layer discards everything accumulated above it. The personal
-     * layer is dropped when the project's team forbids personal instructions.
+     * $project. Layers apply in order system → team → project → personal; an
+     * `overwrite` layer discards everything accumulated above it. Personal is
+     * last so a person always has the final say, unless the project's team
+     * forbids personal instructions (then the personal layer is dropped).
      *
      * @return array{body: string, layers: list<array{scope: string, title: string, mode: string, version: int}>}
      */
@@ -140,11 +143,11 @@ class Skill extends Model
         if ($team !== null) {
             $candidates[] = self::slotFor(self::SCOPE_TEAM, $team, $key);
         }
-        if ($allowPersonal) {
-            $candidates[] = self::slotFor(self::SCOPE_PERSONAL, $user, $key);
-        }
         if ($project !== null) {
             $candidates[] = self::slotFor(self::SCOPE_PROJECT, $project, $key);
+        }
+        if ($allowPersonal) {
+            $candidates[] = self::slotFor(self::SCOPE_PERSONAL, $user, $key);
         }
 
         $bodies = [];
@@ -237,19 +240,25 @@ class Skill extends Model
 
     /**
      * A named (non-phase) skill resolves to the MOST-SPECIFIC scope only — no
-     * composition: project → personal → team → system. Returns the active
-     * version, or null if no scope defines that key.
+     * composition: personal → project → team → system (personal wins, mirroring
+     * its final say in composition, unless the team locks personal out). Returns
+     * the active version, or null if no scope defines that key.
      */
     public static function resolveNamed(User $user, ?Project $project, string $key): ?SkillVersion
     {
+        $team = $project?->team;
+        $allowPersonal = $team === null ? true : (bool) $team->allow_personal_instructions;
+
         // (scope, owner) candidates, most-specific first.
         $candidates = [];
+        if ($allowPersonal) {
+            $candidates[] = [self::SCOPE_PERSONAL, $user];
+        }
         if ($project !== null) {
             $candidates[] = [self::SCOPE_PROJECT, $project];
         }
-        $candidates[] = [self::SCOPE_PERSONAL, $user];
-        if ($project?->team !== null) {
-            $candidates[] = [self::SCOPE_TEAM, $project->team];
+        if ($team !== null) {
+            $candidates[] = [self::SCOPE_TEAM, $team];
         }
         $candidates[] = [self::SCOPE_SYSTEM, null];
 

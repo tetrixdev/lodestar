@@ -65,12 +65,13 @@ holds the tenancy helpers):
   (legal-transition-only move), `report` (logs a WorkSession).
 
 **Skills (`app/Models/Skill.php`, `SkillVersion`, `SystemSkillSeeder`)** — skills
-are **layered**. A `Skill` is a slot at one scope (`system` / `team` / `personal`
-/ `project`); its prompt text lives in versioned `SkillVersion` rows, one of them
+are **layered**. A `Skill` is a slot at one scope (`system` / `team` / `project`
+/ `personal`); its prompt text lives in versioned `SkillVersion` rows, one of them
 `active`. A phase prompt is **composed** at run time by `Skill::compose()` across
-scopes in order system → team → personal → project — each layer `append`s, or
-`overwrite`s (discarding everything above it); the personal layer is dropped when
-the project's team sets `allow_personal_instructions = false`. System skills ship
+scopes in order system → team → project → personal — each layer `append`s, or
+`overwrite`s (discarding everything above it). Personal is last so a person always
+has the final say (and can test a change locally), unless the project's team sets
+`allow_personal_instructions = false`, which drops the personal layer. System skills ship
 seeded from code. Five phase keys compose: **`main`** — the bootstrap skill an
 agent loads first (`get_skill(phase:'main')`, no task), carrying the loop +
 routing + per-project main instructions; and the four lifecycle phases **`plan` /

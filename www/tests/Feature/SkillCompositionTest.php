@@ -44,13 +44,14 @@ class SkillCompositionTest extends TestCase
 
         $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'SYS');
         $this->slot(Skill::SCOPE_TEAM, $team, 'develop', Skill::MODE_APPEND, 'TEAM');
-        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_APPEND, 'ME');
         $this->slot(Skill::SCOPE_PROJECT, $project, 'develop', Skill::MODE_APPEND, 'PROJ');
+        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_APPEND, 'ME');
 
         $composed = Skill::compose($user, $project, 'develop');
 
-        $this->assertSame("SYS\n\nTEAM\n\nME\n\nPROJ", $composed['body']);
-        $this->assertSame(['system', 'team', 'personal', 'project'], array_column($composed['layers'], 'scope'));
+        // Personal is last so the person has the final say.
+        $this->assertSame("SYS\n\nTEAM\n\nPROJ\n\nME", $composed['body']);
+        $this->assertSame(['system', 'team', 'project', 'personal'], array_column($composed['layers'], 'scope'));
     }
 
     public function test_an_overwrite_layer_discards_everything_above_it(): void
@@ -61,14 +62,31 @@ class SkillCompositionTest extends TestCase
 
         $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'SYS');
         $this->slot(Skill::SCOPE_TEAM, $team, 'develop', Skill::MODE_APPEND, 'TEAM');
-        // Personal overwrites: system + team are discarded, personal becomes the base.
-        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_OVERWRITE, 'ONLY-ME');
-        $this->slot(Skill::SCOPE_PROJECT, $project, 'develop', Skill::MODE_APPEND, 'PROJ');
+        // Project overwrites: system + team discarded, project becomes the base.
+        $this->slot(Skill::SCOPE_PROJECT, $project, 'develop', Skill::MODE_OVERWRITE, 'PROJ-ONLY');
+        // Personal appends onto the project base (personal has the final say).
+        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_APPEND, 'ME');
 
         $composed = Skill::compose($user, $project, 'develop');
 
-        $this->assertSame("ONLY-ME\n\nPROJ", $composed['body']);
-        $this->assertSame(['personal', 'project'], array_column($composed['layers'], 'scope'));
+        $this->assertSame("PROJ-ONLY\n\nME", $composed['body']);
+        $this->assertSame(['project', 'personal'], array_column($composed['layers'], 'scope'));
+    }
+
+    public function test_a_personal_overwrite_wins_outright(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+
+        $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'SYS');
+        $this->slot(Skill::SCOPE_PROJECT, $project, 'develop', Skill::MODE_APPEND, 'PROJ');
+        // Personal is last and overwrites → nothing above it survives.
+        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_OVERWRITE, 'ONLY-ME');
+
+        $composed = Skill::compose($user, $project, 'develop');
+
+        $this->assertSame('ONLY-ME', $composed['body']);
+        $this->assertSame(['personal'], array_column($composed['layers'], 'scope'));
     }
 
     public function test_personal_layer_is_dropped_when_the_team_forbids_it(): void
@@ -108,11 +126,14 @@ class SkillCompositionTest extends TestCase
         $this->slot(Skill::SCOPE_SYSTEM, null, 'db-recipe', Skill::MODE_APPEND, 'SYS-RECIPE');
         $this->slot(Skill::SCOPE_PROJECT, $project, 'db-recipe', Skill::MODE_APPEND, 'PROJ-RECIPE');
 
-        // Named keys don't compose: the most-specific (project) wins outright.
-        $version = Skill::resolveNamed($user, $project, 'db-recipe');
-        $this->assertSame('PROJ-RECIPE', $version->body);
+        // Named keys don't compose: the most-specific present scope wins outright.
+        $this->assertSame('PROJ-RECIPE', Skill::resolveNamed($user, $project, 'db-recipe')->body);
 
-        // Without the project, it falls back to system.
-        $this->assertSame('SYS-RECIPE', Skill::resolveNamed($user, null, 'db-recipe')->body);
+        // A personal slot wins over the project (personal is most-specific).
+        $this->slot(Skill::SCOPE_PERSONAL, $user, 'db-recipe', Skill::MODE_APPEND, 'MY-RECIPE');
+        $this->assertSame('MY-RECIPE', Skill::resolveNamed($user, $project, 'db-recipe')->body);
+
+        // Without the project/personal, it falls back to system.
+        $this->assertSame('SYS-RECIPE', Skill::resolveNamed(User::factory()->create(), null, 'db-recipe')->body);
     }
 }
