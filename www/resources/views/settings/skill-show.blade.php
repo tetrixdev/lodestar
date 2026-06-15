@@ -86,6 +86,12 @@
                             <x-input-error :messages="$errors->get('title')" class="mt-1" />
                         </div>
                         <div>
+                            <x-input-label for="p-summary" value="Summary (one line — for the main catalog)" />
+                            <x-text-input id="p-summary" name="summary" type="text" class="mt-1 block w-full"
+                                          :value="old('summary', $skill->summary)" placeholder="What it's for / when to use it" />
+                            <x-input-error :messages="$errors->get('summary')" class="mt-1" />
+                        </div>
+                        <div>
                             <x-input-label for="p-body" value="Prompt body (markdown)" />
                             <textarea id="p-body" name="body" rows="8"
                                       class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $skill->activeVersion?->body) }}</textarea>

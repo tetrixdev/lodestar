@@ -105,6 +105,13 @@
                     </div>
 
                     <div>
+                        <x-input-label for="np-summary" value="Summary (one line — for named skills, shown in the main catalog)" />
+                        <x-text-input id="np-summary" name="summary" type="text" class="mt-1 block w-full"
+                                      :value="old('summary')" placeholder="What it's for / when to use it" />
+                        <x-input-error :messages="$errors->get('summary')" class="mt-1" />
+                    </div>
+
+                    <div>
                         <x-input-label for="np-body" value="Prompt body (markdown)" />
                         <textarea id="np-body" name="body" rows="6"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body') }}</textarea>

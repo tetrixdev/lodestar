@@ -355,6 +355,7 @@ erDiagram
         string key "phase (main|plan|develop|ai_review|merge) or a named key"
         string mode "append|overwrite"
         string title
+        string summary "nullable, one-line; named skills appear in the main catalog"
     }
 
     SKILL_VERSION {

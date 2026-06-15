@@ -185,7 +185,63 @@ class Skill extends Model
             ];
         }
 
-        return ['body' => implode("\n\n", $bodies), 'layers' => $layers];
+        $body = implode("\n\n", $bodies);
+
+        // The bootstrap skill advertises the named, on-demand skills in scope so
+        // the agent knows what it can pull via get_skill(key:...).
+        if ($key === 'main') {
+            $catalog = self::namedCatalog($user, $project);
+            if ($catalog !== []) {
+                $lines = array_map(fn (array $c) => "- `{$c['key']}` — {$c['summary']}", $catalog);
+                $body .= "\n\n## Available skills (load on demand with get_skill key:<key>)\n".implode("\n", $lines);
+            }
+        }
+
+        return ['body' => $body, 'layers' => $layers];
+    }
+
+    /**
+     * The named (non-phase) skills reachable for $user on $project, each resolved
+     * to its most-specific scope, as [key, summary] rows for the `main` catalog.
+     *
+     * @return list<array{key: string, summary: string}>
+     */
+    public static function namedCatalog(User $user, ?Project $project): array
+    {
+        $team = $project?->team;
+
+        $slots = self::query()
+            ->whereNotIn('key', self::PHASES)
+            ->whereHas('versions', fn ($q) => $q->where('status', SkillVersion::STATUS_ACTIVE))
+            ->where(function ($q) use ($user, $project, $team) {
+                $q->where(fn ($q) => $q->where('scope', self::SCOPE_SYSTEM)->whereNull('owner_id'))
+                    ->orWhere(fn ($q) => $q->where('scope', self::SCOPE_PERSONAL)
+                        ->where('owner_type', User::class)->where('owner_id', $user->id));
+                if ($team) {
+                    $q->orWhere(fn ($q) => $q->where('scope', self::SCOPE_TEAM)
+                        ->where('owner_type', Team::class)->where('owner_id', $team->id));
+                }
+                if ($project) {
+                    $q->orWhere(fn ($q) => $q->where('scope', self::SCOPE_PROJECT)
+                        ->where('owner_type', Project::class)->where('owner_id', $project->id));
+                }
+            })
+            ->get();
+
+        // Keep the most-specific scope per key (project > personal > team > system).
+        $rank = [self::SCOPE_PROJECT => 0, self::SCOPE_PERSONAL => 1, self::SCOPE_TEAM => 2, self::SCOPE_SYSTEM => 3];
+        $byKey = [];
+        foreach ($slots as $slot) {
+            if (! isset($byKey[$slot->key]) || $rank[$slot->scope] < $rank[$byKey[$slot->key]->scope]) {
+                $byKey[$slot->key] = $slot;
+            }
+        }
+
+        return collect($byKey)
+            ->sortKeys()
+            ->map(fn (self $s) => ['key' => $s->key, 'summary' => $s->summary ?: $s->title])
+            ->values()
+            ->all();
     }
 
     // ── Authorization (change control) ───────────────────────────────────────
@@ -220,7 +276,7 @@ class Skill extends Model
     }
 
     /** Find or create the slot for (scope, owner, key); never the system scope. */
-    public static function ensureSlot(string $scope, ?Model $owner, string $key, string $mode, string $title): self
+    public static function ensureSlot(string $scope, ?Model $owner, string $key, string $mode, string $title, ?string $summary = null): self
     {
         return self::firstOrCreate(
             [
@@ -229,7 +285,7 @@ class Skill extends Model
                 'owner_id' => $owner?->getKey(),
                 'key' => $key,
             ],
-            ['mode' => $mode, 'title' => $title],
+            ['mode' => $mode, 'title' => $title, 'summary' => $summary],
         );
     }
 

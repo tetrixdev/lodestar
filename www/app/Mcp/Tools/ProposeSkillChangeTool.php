@@ -27,6 +27,7 @@ class ProposeSkillChangeTool extends LodestarTool
                 }
             }],
             'title' => ['required', 'string', 'max:255'],
+            'summary' => ['nullable', 'string', 'max:255'],
             'body' => ['required', 'string'],
             'mode' => ['nullable', 'in:'.implode(',', Skill::MODES)],
             'note' => ['nullable', 'string'],
@@ -41,9 +42,12 @@ class ProposeSkillChangeTool extends LodestarTool
             return $owner; // a tenancy error
         }
 
-        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title']);
+        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title'], $data['summary'] ?? null);
         if (! $slot->canBeAccessedBy($user)) {
             return Response::error('You cannot propose changes to that scope.');
+        }
+        if (($data['summary'] ?? null) !== null && $slot->summary !== $data['summary']) {
+            $slot->update(['summary' => $data['summary']]);
         }
 
         // byAi: true → never goes live, regardless of who owns the scope.
@@ -80,6 +84,7 @@ class ProposeSkillChangeTool extends LodestarTool
             'scope' => $schema->string()->enum([Skill::SCOPE_PERSONAL, Skill::SCOPE_TEAM, Skill::SCOPE_PROJECT])->description('Which layer to propose on: personal, team or project.')->required(),
             'key' => $schema->string()->description('Skill key: a phase (main/plan/develop/ai_review/merge) or a named key.')->required(),
             'title' => $schema->string()->description('Title for this version.')->required(),
+            'summary' => $schema->string()->description('One-line "what / when to use" — shown in the main catalog for named skills.'),
             'body' => $schema->string()->description('The proposed prompt body (markdown).')->required(),
             'mode' => $schema->string()->enum(Skill::MODES)->description('Set only when creating the slot: append (default) or overwrite (discards the layers above it).'),
             'note' => $schema->string()->description('Optional message for the approver explaining the change.'),

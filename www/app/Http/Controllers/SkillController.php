@@ -135,6 +135,7 @@ class SkillController extends Controller
             'scope' => ['required', Rule::in([Skill::SCOPE_PERSONAL, Skill::SCOPE_TEAM, Skill::SCOPE_PROJECT])],
             'key' => ['required', 'string', 'max:255', $this->notReservedKey()],
             'title' => ['required', 'string', 'max:255'],
+            'summary' => ['nullable', 'string', 'max:255'],
             'body' => ['required', 'string'],
             'mode' => ['nullable', Rule::in(Skill::MODES)],
             'note' => ['nullable', 'string'],
@@ -144,8 +145,13 @@ class SkillController extends Controller
 
         $owner = $this->resolveOwner($request, $data);
 
-        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title']);
+        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title'], $data['summary'] ?? null);
         abort_unless($slot->canBeAccessedBy($user), 403);
+
+        // Keep the slot's catalog summary current when one is supplied.
+        if (($data['summary'] ?? null) !== null && $slot->summary !== $data['summary']) {
+            $slot->update(['summary' => $data['summary']]);
+        }
 
         $version = $slot->submitVersion($data['title'], $data['body'], $user, byAi: false, note: $data['note'] ?? null);
 

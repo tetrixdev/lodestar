@@ -118,6 +118,24 @@ class SkillCompositionTest extends TestCase
         $this->assertSame('V2', $composed['body']);
     }
 
+    public function test_main_advertises_named_skills_in_its_catalog(): void
+    {
+        $user = User::factory()->create();
+        $this->slot(Skill::SCOPE_SYSTEM, null, 'main', Skill::MODE_APPEND, 'You are an agent.');
+
+        // A named skill with a summary; and a phase skill that must NOT be catalogued.
+        $named = $this->slot(Skill::SCOPE_PERSONAL, $user, 'db-recipe', Skill::MODE_APPEND, 'recipe body');
+        $named->update(['summary' => 'Migrate the database safely.']);
+        $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'develop body');
+
+        $body = Skill::compose($user, null, 'main')['body'];
+
+        $this->assertStringContainsString('Available skills', $body);
+        $this->assertStringContainsString('db-recipe', $body);
+        $this->assertStringContainsString('Migrate the database safely.', $body);
+        $this->assertStringNotContainsString('develop', $body); // phase keys aren't catalogued
+    }
+
     public function test_named_skill_resolves_to_the_most_specific_scope(): void
     {
         $user = User::factory()->create();

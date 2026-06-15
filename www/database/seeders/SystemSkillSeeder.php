@@ -18,12 +18,22 @@ class SystemSkillSeeder extends Seeder
 {
     public function run(): void
     {
+        $summaries = $this->summaries();
+
         foreach ($this->skills() as $key => [$title, $body]) {
+            $summary = $summaries[$key] ?? null;
+
             // The system-scope slot (owner null, append base layer).
             $slot = Skill::firstOrCreate(
                 ['scope' => Skill::SCOPE_SYSTEM, 'owner_type' => null, 'owner_id' => null, 'key' => $key],
-                ['mode' => Skill::MODE_APPEND, 'title' => $title],
+                ['mode' => Skill::MODE_APPEND, 'title' => $title, 'summary' => $summary],
             );
+
+            // Keep the slot's title/summary current on reseed.
+            $slot->fill(['title' => $title, 'summary' => $summary]);
+            if ($slot->isDirty()) {
+                $slot->save();
+            }
 
             // Publish a fresh active version only when the body/title changed —
             // so re-running on deploy is idempotent and keeps the history clean.
@@ -32,6 +42,19 @@ class SystemSkillSeeder extends Seeder
                 $slot->publish($title, $body);
             }
         }
+    }
+
+    /** One-line "what / when to use" per system skill (drives the main catalog). */
+    private function summaries(): array
+    {
+        return [
+            'main' => 'Bootstrap — read first: how Lodestar works, your mode, and workspace setup.',
+            'plan' => 'Turn a task into a reviewable structure map (no code).',
+            'develop' => 'Build an approved task on its branch, with tests and doc updates.',
+            'ai_review' => 'Make a developed change reviewable: sections, modes, findings.',
+            'merge' => 'Ship an approved task: merge, test, deploy, mark done.',
+            'work' => 'Run the autonomous backlog loop for a project (one worker per task).',
+        ];
     }
 
     /** @return array<string, array{0:string,1:string}> */
