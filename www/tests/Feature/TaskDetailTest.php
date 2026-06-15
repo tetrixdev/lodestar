@@ -109,4 +109,40 @@ class TaskDetailTest extends TestCase
 
         $this->assertDatabaseCount('task_comments', 0);
     }
+
+    public function test_summary_is_shown_by_default_with_a_full_affordance(): void
+    {
+        $user = User::factory()->create();
+        $task = $this->makeTask($user, [
+            'body' => 'The very long description body.',
+            'body_summary' => 'Short scannable abstract.',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('tasks.show', $task))
+            ->assertOk()
+            ->assertSee('Short scannable abstract.')
+            ->assertSee('Show full');
+    }
+
+    public function test_update_requires_a_summary_when_the_detail_is_filled(): void
+    {
+        $user = User::factory()->create();
+        $task = $this->makeTask($user, ['plan' => null]);
+
+        // Setting body with no body_summary is rejected.
+        $this->actingAs($user)
+            ->from(route('tasks.show', $task))
+            ->patch(route('tasks.update', $task), ['body' => 'A detailed body'])
+            ->assertSessionHasErrors('body_summary');
+
+        $this->assertNull($task->fresh()->body);
+
+        // Both halves together save fine.
+        $this->actingAs($user)
+            ->patch(route('tasks.update', $task), ['body' => 'A detailed body', 'body_summary' => 'TL;DR.'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('TL;DR.', $task->fresh()->body_summary);
+    }
 }

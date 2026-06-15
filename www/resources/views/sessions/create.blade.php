@@ -40,7 +40,15 @@
                     </div>
 
                     <div>
-                        <x-input-label for="body" value="Summary (markdown)" />
+                        <x-input-label for="body_summary" value="Summary" />
+                        <p class="text-xs text-gray-400">A 1–2 sentence TL;DR — required when there's detail below.</p>
+                        <textarea id="body_summary" name="body_summary" rows="2"
+                                  class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body_summary') }}</textarea>
+                        <x-input-error :messages="$errors->get('body_summary')" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <x-input-label for="body" value="Detail (markdown)" />
                         <textarea id="body" name="body" rows="10"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body') }}</textarea>
                         <x-input-error :messages="$errors->get('body')" class="mt-1" />

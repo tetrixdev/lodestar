@@ -102,7 +102,12 @@ class TaskController extends Controller
             'priority' => ['nullable', Rule::in(Task::PRIORITIES)],
             'branch' => ['nullable', 'string', 'max:200'],
             'body' => ['nullable', 'string'],
+            // A summary is mandatory whenever its long-form detail is set, so a
+            // filled body/plan never ships without a scannable TL;DR. Editing a
+            // legacy card therefore forces backfilling its summary.
+            'body_summary' => ['nullable', 'string', 'required_with:body'],
             'plan' => ['nullable', 'string'],
+            'plan_summary' => ['nullable', 'string', 'required_with:plan'],
             'start_date' => ['nullable', 'date'],
             'due_date' => ['nullable', 'date'],
         ]);
@@ -131,7 +136,7 @@ class TaskController extends Controller
         // Status/position are only applied when actually changing status; the
         // content fields below are freely editable (and nullable, so an empty
         // date/branch clears it — only fields the request actually sent are touched).
-        $contentFields = ['title', 'category', 'priority', 'branch', 'body', 'plan', 'start_date', 'due_date'];
+        $contentFields = ['title', 'category', 'priority', 'branch', 'body', 'body_summary', 'plan', 'plan_summary', 'start_date', 'due_date'];
         $update = [];
 
         if (isset($data['status']) && $data['status'] !== $task->status) {

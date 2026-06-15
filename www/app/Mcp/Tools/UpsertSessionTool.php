@@ -23,6 +23,8 @@ class UpsertSessionTool extends LodestarTool
             'title' => ['required_without:id', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
+            // The summary is mandatory whenever the long-form body is set.
+            'body_summary' => ['nullable', 'string', 'required_with:body'],
             'occurred_on' => ['nullable', 'date'],
         ]);
 
@@ -45,7 +47,7 @@ class UpsertSessionTool extends LodestarTool
         } elseif (array_key_exists('slug', $data)) {
             $session->slug = $data['slug'];
         }
-        foreach (['body', 'occurred_on'] as $field) {
+        foreach (['body', 'body_summary', 'occurred_on'] as $field) {
             if (array_key_exists($field, $data)) {
                 $session->{$field} = $data[$field];
             }
@@ -66,7 +68,8 @@ class UpsertSessionTool extends LodestarTool
             'id' => $schema->integer()->description('Existing work-session id to update. Omit to create.'),
             'title' => $schema->string()->description('Session title (required when creating).'),
             'slug' => $schema->string()->description('Optional slug; defaults from the title.'),
-            'body' => $schema->string()->description('Markdown summary of what was done.'),
+            'body' => $schema->string()->description('Full markdown record of what was done. If you set this you MUST also pass body_summary.'),
+            'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the session.'),
             'occurred_on' => $schema->string()->description('Date the work happened (YYYY-MM-DD).'),
         ];
     }

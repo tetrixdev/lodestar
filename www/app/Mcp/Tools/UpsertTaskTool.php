@@ -23,6 +23,12 @@ class UpsertTaskTool extends LodestarTool
             'title' => ['required_without:id', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
+            // A summary is the scannable default the board/card shows; it is
+            // mandatory whenever its long-form detail is set, so detail never
+            // ships without a TL;DR. (Not applied retroactively to old rows.)
+            'body_summary' => ['nullable', 'string', 'required_with:body'],
+            'plan' => ['nullable', 'string'],
+            'plan_summary' => ['nullable', 'string', 'required_with:plan'],
             // A new card may only enter at a backlog state — never mid-lifecycle,
             // a working (*-ing) state, or a human gate. Moves go through advance_task.
             'status' => ['nullable', 'string', 'in:'.Task::STATUS_NEW.','.Task::STATUS_READY_FOR_PLANNING],
@@ -45,7 +51,7 @@ class UpsertTaskTool extends LodestarTool
             ]);
         }
 
-        foreach (['title', 'category', 'body'] as $field) {
+        foreach (['title', 'category', 'body', 'body_summary', 'plan', 'plan_summary'] as $field) {
             if (array_key_exists($field, $data)) {
                 $task->{$field} = $data[$field];
             }
@@ -67,7 +73,10 @@ class UpsertTaskTool extends LodestarTool
             'id' => $schema->integer()->description('Existing task id to update. Omit to create.'),
             'title' => $schema->string()->description('Card title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix, e.g. "mcp", "infra".'),
-            'body' => $schema->string()->description('Optional markdown card detail.'),
+            'body' => $schema->string()->description('Full markdown card detail. If you set this you MUST also pass body_summary.'),
+            'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the card, shown by default (the full body opens on demand).'),
+            'plan' => $schema->string()->description('The planning artifact (markdown). If you set this you MUST also pass plan_summary.'),
+            'plan_summary' => $schema->string()->description('Required whenever plan is set: a 1–2 sentence scannable TL;DR of the plan.'),
             'status' => $schema->string()->enum([Task::STATUS_NEW, Task::STATUS_READY_FOR_PLANNING])->description('Initial backlog status on create: "new" (default) or "ready_for_planning". Ignored on update — use advance_task to move a card.'),
         ];
     }

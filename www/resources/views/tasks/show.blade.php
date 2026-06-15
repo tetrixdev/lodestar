@@ -22,10 +22,10 @@
     </x-slot>
 
     <div class="py-10">
-        <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             {{-- header / meta --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3" x-data="{ editing: false }">
+            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3" x-data="{ editing: @js($errors->hasAny(['title', 'priority', 'category', 'branch', 'body', 'body_summary', 'plan', 'plan_summary', 'start_date', 'due_date'])) }">
                 <div class="flex items-start justify-between gap-3">
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="inline-block text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ $statusLabel }}</span>
@@ -105,13 +105,29 @@
                     </div>
 
                     <div>
-                        <x-input-label for="edit-body" value="Description" />
+                        <x-input-label for="edit-body-summary" value="Description summary" />
+                        <p class="text-xs text-gray-400">A 1–2 sentence TL;DR — required when there's a description.</p>
+                        <textarea id="edit-body-summary" name="body_summary" rows="2"
+                                  class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body_summary', $task->body_summary) }}</textarea>
+                        <x-input-error :messages="$errors->get('body_summary')" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <x-input-label for="edit-body" value="Description (full)" />
                         <textarea id="edit-body" name="body" rows="4"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $task->body) }}</textarea>
                     </div>
 
                     <div>
-                        <x-input-label for="edit-plan" value="Plan" />
+                        <x-input-label for="edit-plan-summary" value="Plan summary" />
+                        <p class="text-xs text-gray-400">A 1–2 sentence TL;DR — required when there's a plan.</p>
+                        <textarea id="edit-plan-summary" name="plan_summary" rows="2"
+                                  class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('plan_summary', $task->plan_summary) }}</textarea>
+                        <x-input-error :messages="$errors->get('plan_summary')" class="mt-1" />
+                    </div>
+
+                    <div>
+                        <x-input-label for="edit-plan" value="Plan (full)" />
                         <textarea id="edit-plan" name="plan" rows="6"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('plan', $task->plan) }}</textarea>
                     </div>
@@ -122,6 +138,11 @@
                     </div>
                 </form>
             </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+            {{-- main column --}}
+            <div class="lg:col-span-2 space-y-6">
 
             {{-- lifecycle controls --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
@@ -138,21 +159,13 @@
             {{-- plan --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Plan</p>
-                @if ($task->plan)
-                    <x-markdown :content="$task->plan" />
-                @else
-                    <p class="text-sm text-gray-400 italic">No plan yet.</p>
-                @endif
+                <x-detail-block title="Plan" :summary="$task->plan_summary" :full="$task->plan" empty="No plan yet." />
             </div>
 
             {{-- description --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Description</p>
-                @if ($task->body)
-                    <x-markdown :content="$task->body" />
-                @else
-                    <p class="text-sm text-gray-400 italic">No description.</p>
-                @endif
+                <x-detail-block title="Description" :summary="$task->body_summary" :full="$task->body" empty="No description." />
             </div>
 
             {{-- rework notes --}}
@@ -163,59 +176,17 @@
                 </div>
             @endif
 
-            {{-- linked reviews --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
-                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Linked reviews</p>
-                @forelse ($task->reviews as $review)
-                    @php $cov = $review->coverage(); @endphp
-                    <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                        <a href="{{ route('reviews.show', $review) }}" class="text-indigo-600 hover:underline truncate">{{ $review->title }}</a>
-                        <span class="shrink-0 text-xs text-gray-500">
-                            {{ $review->status ?? 'open' }} · {{ $cov['covered'] }}/{{ $cov['total'] }} files covered
-                        </span>
-                    </div>
-                @empty
-                    <p class="text-sm text-gray-400 italic">No reviews cover this task yet.</p>
-                @endforelse
-            </div>
-
-            {{-- dependencies (blocked by) --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
-                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Blocked by</p>
-                @forelse ($task->dependencies as $dep)
-                    <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                        <a href="{{ route('tasks.show', $dep) }}" class="text-indigo-600 hover:underline truncate">{{ $dep->title }}</a>
-                        <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-gray-100 text-gray-600">
-                            {{ $T::LABELS[$dep->status] ?? $dep->status }}
-                        </span>
-                    </div>
-                @empty
-                    <p class="text-sm text-gray-400 italic">No dependencies.</p>
-                @endforelse
-            </div>
-
             {{-- work sessions --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Work sessions</p>
                 @forelse ($task->workSessions as $session)
-                    <div x-data="{ open: false }" class="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                    <div class="border-b border-gray-100 pb-3 last:border-0 last:pb-0 space-y-1.5">
                         <div class="flex items-center justify-between gap-3">
                             <a href="{{ route('work-sessions.show', $session) }}"
                                class="text-sm font-medium text-indigo-600 hover:underline truncate">{{ $session->title }}</a>
-                            <div class="flex shrink-0 items-center gap-2">
-                                <span class="text-xs text-gray-400">{{ optional($session->occurred_on)->toFormattedDateString() }}</span>
-                                @if ($session->body)
-                                    <button type="button" @click="open = !open" class="text-xs text-gray-400 hover:text-gray-600">
-                                        <span x-text="open ? 'Hide' : 'Preview'"></span>
-                                    </button>
-                                @endif
-                            </div>
+                            <span class="shrink-0 text-xs text-gray-400">{{ optional($session->occurred_on)->toFormattedDateString() }}</span>
                         </div>
-                        @if ($session->body)
-                            <div x-show="open" x-cloak class="mt-2">
-                                <x-markdown :content="$session->body" />
-                            </div>
-                        @endif
+                        <x-detail-block :title="$session->title" :summary="$session->body_summary" :full="$session->body" />
                     </div>
                 @empty
                     <p class="text-sm text-gray-400 italic">No work sessions yet.</p>
@@ -251,6 +222,42 @@
                 </form>
             </div>
 
+            </div> {{-- /main column --}}
+
+            {{-- sidebar --}}
+            <div class="space-y-6">
+
+            {{-- linked reviews --}}
+            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
+                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Linked reviews</p>
+                @forelse ($task->reviews as $review)
+                    @php $cov = $review->coverage(); @endphp
+                    <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                        <a href="{{ route('reviews.show', $review) }}" class="text-indigo-600 hover:underline truncate">{{ $review->title }}</a>
+                        <span class="shrink-0 text-xs text-gray-500">
+                            {{ $review->status ?? 'open' }} · {{ $cov['covered'] }}/{{ $cov['total'] }} files covered
+                        </span>
+                    </div>
+                @empty
+                    <p class="text-sm text-gray-400 italic">No reviews cover this task yet.</p>
+                @endforelse
+            </div>
+
+            {{-- dependencies (blocked by) --}}
+            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
+                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Blocked by</p>
+                @forelse ($task->dependencies as $dep)
+                    <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                        <a href="{{ route('tasks.show', $dep) }}" class="text-indigo-600 hover:underline truncate">{{ $dep->title }}</a>
+                        <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-gray-100 text-gray-600">
+                            {{ $T::LABELS[$dep->status] ?? $dep->status }}
+                        </span>
+                    </div>
+                @empty
+                    <p class="text-sm text-gray-400 italic">No dependencies.</p>
+                @endforelse
+            </div>
+
             {{-- activity log --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Activity</p>
@@ -270,6 +277,10 @@
                     <p class="text-sm text-gray-400 italic">No activity yet.</p>
                 @endforelse
             </div>
+
+            </div> {{-- /sidebar --}}
+
+            </div> {{-- /grid --}}
 
         </div>
     </div>

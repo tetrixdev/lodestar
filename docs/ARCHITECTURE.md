@@ -219,7 +219,13 @@ agent's input crosses into our data writes.
      cannot put the board in an illegal state.
    - **Input validation.** Every tool validates its arguments with Laravel
      validation (modes constrained to `ReviewSection::MODES`, statuses to
-     `Task::STATUSES`, phases to `Skill::PHASES`) before any write.
+     `Task::STATUSES`, phases to `Skill::PHASES`) before any write. Long-form
+     fields are paired with a scannable summary that the UI shows by default
+     (`body`/`body_summary`, `plan`/`plan_summary`): a summary is mandatory
+     whenever its detail is set (`required_with`), enforced identically at the
+     MCP tools (`upsert_task`, `upsert_session`, `report`) and the web form —
+     so detail never lands without a TL;DR. Not applied retroactively to rows
+     written before the rule.
    - **Skill delivery.** `get_skill` returns prompt *text* the agent then runs;
      the resolution (fork vs system) is decided server-side. A malformed system
      skill is the one thing that could mislead every loop at once, so skills are

@@ -40,6 +40,7 @@ class WorkSessionUiTest extends TestCase
         $response = $this->actingAs($user)->post(route('work-sessions.store', $project), [
             'title' => 'Built the dashboard',
             'body' => 'Wired up the cards.',
+            'body_summary' => 'Dashboard cards wired.',
             'occurred_on' => '2026-06-14',
         ]);
 

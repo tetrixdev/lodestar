@@ -46,6 +46,8 @@ class WorkSessionController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
             'body' => ['nullable', 'string'],
+            // The summary is mandatory whenever the long-form body is set.
+            'body_summary' => ['nullable', 'string', 'required_with:body'],
             'occurred_on' => ['nullable', 'date'],
             'task_id' => [
                 'nullable',
@@ -57,6 +59,7 @@ class WorkSessionController extends Controller
             'title' => $data['title'],
             'slug' => $this->uniqueSlug($project, $data['title']),
             'body' => $data['body'] ?? null,
+            'body_summary' => $data['body_summary'] ?? null,
             'occurred_on' => $data['occurred_on'] ?? null,
             'task_id' => $data['task_id'] ?? null,
         ]);

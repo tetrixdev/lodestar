@@ -34,7 +34,9 @@ class ProjectManagementTest extends TestCase
                 'title' => 'Renamed',
                 'branch' => 'feat/x',
                 'body' => 'desc',
+                'body_summary' => 'desc tldr',
                 'plan' => 'the plan',
+                'plan_summary' => 'plan tldr',
                 'start_date' => '2026-06-20',
             ])
             ->assertRedirect();

@@ -262,7 +262,9 @@ erDiagram
         date due_date "nullable, deadline"
         string branch "nullable, the dev branch"
         text body "nullable, markdown detail"
+        text body_summary "nullable, TL;DR of body; required when body is set"
         text plan "nullable, planning artifact (markdown)"
+        text plan_summary "nullable, TL;DR of plan; required when plan is set"
         text rework_notes "nullable, what a review sent back"
         string status "one of 13 lifecycle states"
         timestamp status_changed_at "nullable, entered-current-status time"
@@ -277,7 +279,8 @@ erDiagram
         bigint task_id FK "nullable, the task it logs"
         string title
         string slug
-        text body "nullable, markdown summary"
+        text body "nullable, markdown detail"
+        text body_summary "nullable, TL;DR of body; required when body is set"
         date occurred_on "nullable, when the work happened"
     }
 

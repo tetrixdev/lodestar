@@ -131,6 +131,53 @@ class McpDataToolsTest extends TestCase
         $this->assertSame('did-things', $project->workSessions()->sole()->slug);
     }
 
+    public function test_upsert_task_requires_a_summary_when_detail_is_set(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+
+        // body without body_summary → rejected.
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Card', 'body' => 'Long detail'])
+            ->assertHasErrors();
+
+        // plan without plan_summary → rejected.
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Card', 'plan' => 'A plan'])
+            ->assertHasErrors();
+
+        $this->assertSame(0, $project->tasks()->count());
+
+        // Both halves present → accepted and stored.
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, [
+                'project' => 'p', 'title' => 'Card',
+                'body' => 'Long detail', 'body_summary' => 'Short.',
+                'plan' => 'A plan', 'plan_summary' => 'Plan TL;DR.',
+            ])
+            ->assertOk();
+
+        $task = $project->tasks()->sole();
+        $this->assertSame('Short.', $task->body_summary);
+        $this->assertSame('Plan TL;DR.', $task->plan_summary);
+    }
+
+    public function test_session_and_report_require_a_summary_when_body_is_set(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+
+        LodestarServer::actingAs($user)
+            ->tool(UpsertSessionTool::class, ['project' => 'p', 'title' => 'S', 'body' => 'What happened'])
+            ->assertHasErrors();
+
+        LodestarServer::actingAs($user)
+            ->tool(UpsertSessionTool::class, ['project' => 'p', 'title' => 'S', 'body' => 'What happened', 'body_summary' => 'Did X.'])
+            ->assertOk();
+
+        $this->assertSame('Did X.', $project->workSessions()->sole()->body_summary);
+    }
+
     public function test_tools_are_scoped_to_the_token_user(): void
     {
         $user = User::factory()->create();
