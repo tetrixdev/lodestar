@@ -17,7 +17,7 @@ class WorkSessionController extends Controller
     /** A project's work sessions, latest first. */
     public function index(Request $request, Project $project): View
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $sessions = $project->workSessions()
             ->with('task:id,title')
@@ -31,7 +31,7 @@ class WorkSessionController extends Controller
     /** The "log a session" form. */
     public function create(Request $request, Project $project): View
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $tasks = $project->tasks()->orderBy('title')->get(['id', 'title']);
 
@@ -41,7 +41,7 @@ class WorkSessionController extends Controller
     /** Persist a new work session for the project. */
     public function store(Request $request, Project $project): RedirectResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
@@ -67,7 +67,7 @@ class WorkSessionController extends Controller
     /** A single work session. */
     public function show(Request $request, WorkSession $workSession): View
     {
-        abort_unless($workSession->project->user_id === $request->user()->id, 403);
+        abort_unless($workSession->project->isAccessibleBy($request->user()), 403);
 
         $workSession->load('project', 'task:id,title');
 

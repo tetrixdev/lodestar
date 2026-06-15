@@ -20,7 +20,7 @@ class ReviewController extends Controller
     /** A project's reviews. */
     public function index(Request $request, Project $project): View
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $reviews = $project->reviews()->latest()->withCount('sections')->get();
 
@@ -30,7 +30,7 @@ class ReviewController extends Controller
     /** The review walkthrough — ordered sections, rebuilt top-to-bottom. */
     public function show(Request $request, Review $review): View
     {
-        abort_unless($review->project->user_id === $request->user()->id, 403);
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
 
         $review->load([
             'sections.files:id,path', 'sections.findings', 'project', 'assignee', 'files',
@@ -43,7 +43,7 @@ class ReviewController extends Controller
     /** Persist a section's sign-off / comment (called from the walkthrough via fetch). */
     public function updateSection(Request $request, Review $review, ReviewSection $section): JsonResponse
     {
-        abort_unless($review->project->user_id === $request->user()->id, 403);
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
         abort_unless($section->review_id === $review->id, 404);
 
         // Sign-off is gated on assignment: only the human currently holding the
@@ -80,7 +80,7 @@ class ReviewController extends Controller
     /** Triage one finding (approve / dismiss / must_fix); gated on holding the review. */
     public function updateFinding(Request $request, Review $review, ReviewSection $section, ReviewFinding $finding): JsonResponse
     {
-        abort_unless($review->project->user_id === $request->user()->id, 403);
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
         abort_unless($section->review_id === $review->id, 404);
         abort_unless($finding->review_section_id === $section->id, 404);
 
@@ -104,7 +104,7 @@ class ReviewController extends Controller
      */
     public function conclude(Request $request, Review $review): RedirectResponse
     {
-        abort_unless($review->project->user_id === $request->user()->id, 403);
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
         abort_unless($review->assigned_to_user_id === $request->user()->id, 403,
             'Assign this review to yourself before concluding it.');
 
@@ -203,7 +203,7 @@ class ReviewController extends Controller
     /** Atomically self-assign this review (succeeds only if currently unassigned). */
     public function assign(Request $request, Review $review): RedirectResponse
     {
-        abort_unless($review->project->user_id === $request->user()->id, 403);
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
 
         if (! $review->claimFor($request->user()->id)) {
             $holder = $review->fresh('assignee')->assignee?->name ?? 'someone else';
@@ -218,7 +218,7 @@ class ReviewController extends Controller
     /** Release this review (only if the requester currently holds it). */
     public function unassign(Request $request, Review $review): RedirectResponse
     {
-        abort_unless($review->project->user_id === $request->user()->id, 403);
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
 
         $review->releaseFor($request->user()->id);
 

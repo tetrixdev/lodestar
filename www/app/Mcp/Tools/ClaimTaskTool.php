@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
+use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\DB;
@@ -27,15 +28,16 @@ class ClaimTaskTool extends LodestarTool
 
         $user = $this->currentUser($request);
 
-        // Scope to the caller's projects (optionally one named project).
+        // Scope to the caller's accessible projects — owned plus their teams'
+        // (optionally one named project, resolved through the same access rule).
         if (! empty($data['project'])) {
             $project = $this->ownedProject($request, $data['project']);
             if (! $project) {
-                return Response::error('No project "'.$data['project'].'" belongs to you.');
+                return Response::error('No project "'.$data['project'].'" is accessible to you.');
             }
             $projectIds = [$project->id];
         } else {
-            $projectIds = $user->projects()->pluck('id')->all();
+            $projectIds = Project::accessibleBy($user)->pluck('id')->all();
         }
 
         // Which queue states are eligible — all four, or the one for a phase.

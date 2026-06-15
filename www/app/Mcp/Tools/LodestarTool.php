@@ -28,37 +28,42 @@ abstract class LodestarTool extends Tool
         return $user;
     }
 
-    /** A project owned by the token's user, addressed by numeric id or slug. */
+    /**
+     * A project the token's user can reach (owner OR a member of its team),
+     * addressed by numeric id or slug. The team-aware access rule lives on the
+     * Project model; we resolve everything through it so tenancy is identical to
+     * the web controllers.
+     */
     protected function ownedProject(Request $request, int|string $ref): ?Project
     {
-        return $this->currentUser($request)->projects()
+        return Project::accessibleBy($this->currentUser($request))
             ->where(is_numeric($ref) ? 'id' : 'slug', $ref)
             ->first();
     }
 
-    /** A task whose project belongs to the token's user. */
+    /** A task whose project the token's user can reach (owner or team). */
     protected function ownedTask(Request $request, int $id): ?Task
     {
         return Task::query()
-            ->whereHas('project', fn ($q) => $q->where('user_id', $this->currentUser($request)->id))
+            ->whereHas('project', fn ($q) => $q->accessibleBy($this->currentUser($request)))
             ->whereKey($id)
             ->first();
     }
 
-    /** A review whose project belongs to the token's user. */
+    /** A review whose project the token's user can reach (owner or team). */
     protected function ownedReview(Request $request, int $id): ?Review
     {
         return Review::query()
-            ->whereHas('project', fn ($q) => $q->where('user_id', $this->currentUser($request)->id))
+            ->whereHas('project', fn ($q) => $q->accessibleBy($this->currentUser($request)))
             ->whereKey($id)
             ->first();
     }
 
-    /** A work-session whose project belongs to the token's user. */
+    /** A work-session whose project the token's user can reach (owner or team). */
     protected function ownedSession(Request $request, int $id): ?WorkSession
     {
         return WorkSession::query()
-            ->whereHas('project', fn ($q) => $q->where('user_id', $this->currentUser($request)->id))
+            ->whereHas('project', fn ($q) => $q->accessibleBy($this->currentUser($request)))
             ->whereKey($id)
             ->first();
     }

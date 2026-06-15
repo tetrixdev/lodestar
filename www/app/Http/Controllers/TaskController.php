@@ -20,7 +20,7 @@ class TaskController extends Controller
     /** The per-task detail page: plan, description, reviews, deps, sessions, comments, activity. */
     public function show(Request $request, Task $task): View
     {
-        abort_unless($task->project->user_id === $request->user()->id, 403);
+        abort_unless($task->project->isAccessibleBy($request->user()), 403);
 
         $task->load([
             'project',
@@ -41,7 +41,7 @@ class TaskController extends Controller
      */
     public function comment(Request $request, Task $task): RedirectResponse
     {
-        abort_unless($task->project->user_id === $request->user()->id, 403);
+        abort_unless($task->project->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate([
             'body' => ['required', 'string'],
@@ -61,7 +61,7 @@ class TaskController extends Controller
     /** Add a card to a project (lands at the bottom of its status). */
     public function store(Request $request, Project $project): RedirectResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:200'],
@@ -93,7 +93,7 @@ class TaskController extends Controller
      */
     public function update(Request $request, Task $task): Response
     {
-        abort_unless($task->project->user_id === $request->user()->id, 403);
+        abort_unless($task->project->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate([
             'status' => ['nullable', Rule::in([...Task::STATUSES, Task::STATUS_CANCELLED])],
@@ -160,7 +160,7 @@ class TaskController extends Controller
      */
     public function release(Request $request, Task $task): RedirectResponse
     {
-        abort_unless($task->project->user_id === $request->user()->id, 403);
+        abort_unless($task->project->isAccessibleBy($request->user()), 403);
 
         $queue = Task::queueStateFor($task->status);
         abort_unless($queue !== null, 422); // only *-ing tasks can be released
@@ -185,7 +185,7 @@ class TaskController extends Controller
     public function move(Request $request, Task $task): JsonResponse
     {
         $project = $task->project;
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate([
             'status' => ['required', Rule::in(Task::STATUSES)],

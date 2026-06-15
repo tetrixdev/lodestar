@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
+use App\Models\Project;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -18,7 +19,8 @@ class ListProjectsTool extends LodestarTool
     {
         $user = $this->currentUser($request);
 
-        $projects = $user->projects()->with('repositories:id,full_name,default_branch')->get();
+        // Owned + team projects, via the central access rule.
+        $projects = Project::accessibleBy($user)->with('repositories:id,full_name,default_branch')->get();
 
         return Response::json([
             'projects' => $projects->map(fn ($p) => [

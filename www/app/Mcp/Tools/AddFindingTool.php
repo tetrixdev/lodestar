@@ -28,7 +28,7 @@ class AddFindingTool extends LodestarTool
         // Resolve the section via an owned review so tenancy is enforced exactly
         // as the section upsert does it.
         $section = ReviewSection::query()
-            ->whereHas('review.project', fn ($q) => $q->where('user_id', $this->currentUser($request)->id))
+            ->whereHas('review.project', fn ($q) => $q->accessibleBy($this->currentUser($request)))
             ->with('review')
             ->whereKey((int) $data['section_id'])
             ->first();

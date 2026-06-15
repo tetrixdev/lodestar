@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\BuildsOnboarding;
+use App\Models\Project;
 use App\Models\Review;
 use App\Models\Task;
 use App\Models\WorkSession;
@@ -19,7 +20,9 @@ class DashboardController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
-        $projectIds = $user->projects()->pluck('id');
+        // Owned + team projects (the central access rule), so a teammate's shared
+        // project surfaces on the dashboard like it does everywhere else.
+        $projectIds = Project::accessibleBy($user)->pluck('id');
 
         // Nothing to gather for a user with no projects.
         if ($projectIds->isEmpty()) {

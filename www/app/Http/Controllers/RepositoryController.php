@@ -21,7 +21,7 @@ class RepositoryController extends Controller
 {
     public function index(Request $request, Project $project): View
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         return view('projects.repositories', [
             'project' => $project,
@@ -32,7 +32,7 @@ class RepositoryController extends Controller
 
     public function store(Request $request, Project $project, GitHubAccount $github): RedirectResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $data = $request->validate([
             'github_connection_id' => ['required', 'integer'],
@@ -62,7 +62,7 @@ class RepositoryController extends Controller
 
     public function destroy(Request $request, Project $project, Repository $repository): RedirectResponse
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $project->repositories()->detach($repository->id);
 

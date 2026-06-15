@@ -17,10 +17,10 @@ class ProjectController extends Controller
 {
     use BuildsOnboarding;
 
-    /** The current user's projects, each with progress + due-date summaries. */
+    /** The projects the user can reach (owned + their teams'), each with progress + due-date summaries. */
     public function index(Request $request): View
     {
-        $projects = $request->user()->projects()->latest()->withCount('tasks')->get();
+        $projects = Project::accessibleBy($request->user())->latest()->withCount('tasks')->get();
 
         // Per-project rollups for the list cards: live task count, done count,
         // per-phase counts (live only), overdue count, and the next upcoming due.
@@ -81,7 +81,7 @@ class ProjectController extends Controller
     /** The project board — live tasks grouped by lifecycle status. */
     public function show(Request $request, Project $project): View
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         // Live (non-archived) cards, keyed by their precise status so the view
         // can place each into its phase column. Within a status, urgent-first
@@ -128,7 +128,7 @@ class ProjectController extends Controller
      */
     public function gantt(Request $request, Project $project): View
     {
-        abort_unless($project->user_id === $request->user()->id, 403);
+        abort_unless($project->isAccessibleBy($request->user()), 403);
 
         $tasks = $project->tasks()
             ->whereIn('status', Task::STATUSES)
