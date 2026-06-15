@@ -89,8 +89,14 @@ class SystemSkillSeeder extends Seeder
                   copy the human's checkout's `.env` if present, else copy `.env.example`;
                   run `php artisan key:generate` if `APP_KEY` is empty; don't publish a
                   host DB port (drop `DB_EXTERNAL_PORT`).
-                - If after that a real SECRET value is still missing and you cannot derive
-                  it, do NOT guess — stop and report which key the operator must provide.
+                - If the project declares required secrets (operator-managed in Lodestar
+                  → Project → Secrets), pull YOUR values out-of-band into a file — never
+                  into your context: `curl -H "Authorization: Bearer <your-token>"
+                  <lodestar-url>/api/projects/<slug>/secrets -o .env.secrets`, then merge
+                  into `.env`. Do NOT print the file. If the response lists `# missing:`
+                  keys (HTTP 409), halt and report exactly those keys to the operator.
+                - If a real SECRET value is still missing and you cannot derive it, do NOT
+                  guess — stop and report which key the operator must provide.
                 - Do all work inside that project's `~/ld-agent` folder.
 
                 USING SKILLS:

@@ -80,6 +80,13 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   superseded active) or `rejected`. `author_user_id` + `proposed_by_ai` record
   who wrote it; `note` is the proposal message. Approving a proposed version
   archives the prior active one.
+- **ProjectSecretRequirement** — a `key` a project needs in its environment to
+  run (the manifest), with a `description` and `is_secret` flag. Not sensitive —
+  just the name; managed by project approvers.
+- **PersonalSecret** — a user's own `value` for a `key`, **encrypted at rest**
+  (`encrypted` cast). `project_id` null = applies to any project; a project-scoped
+  row overrides the global one there. Delivered only to the owning user via the
+  out-of-MCP secrets endpoint, never through an MCP tool.
 - **PersonalAccessToken** — Sanctum's API token (one per machine/agent). The MCP
   server authenticates each request from the `Authorization: Bearer` token and
   resolves the tenant (`tokenable` = the User); `name` is the machine label
@@ -210,6 +217,9 @@ erDiagram
     REVIEW }o--o{ TASK : "review_task (covers)"
     USER ||--o{ REVIEW : "assigned (nullable)"
     SKILL ||--o{ SKILL_VERSION : "versioned by"
+    PROJECT ||--o{ PROJECT_SECRET_REQUIREMENT : "needs (manifest)"
+    USER ||--o{ PERSONAL_SECRET : "owns values"
+    PROJECT ||--o{ PERSONAL_SECRET : "scoped to (nullable)"
     USER ||--o{ SKILL : "owns personal-scope (polymorphic)"
     TEAM ||--o{ SKILL : "owns team-scope (polymorphic)"
     PROJECT ||--o{ SKILL : "owns project-scope (polymorphic)"
@@ -368,6 +378,22 @@ erDiagram
         bigint author_user_id FK "nullable, who authored it"
         boolean proposed_by_ai "an MCP (AI) authored the proposal"
         text note "nullable, proposal note"
+    }
+
+    PROJECT_SECRET_REQUIREMENT {
+        bigint id PK
+        bigint project_id FK
+        string key "the env key the project needs"
+        string description "nullable"
+        boolean is_secret "is the value sensitive"
+    }
+
+    PERSONAL_SECRET {
+        bigint id PK
+        bigint user_id FK
+        bigint project_id FK "nullable, null = any project"
+        text value "the value, encrypted at rest"
+        string key "the env key this value is for"
     }
 
     PERSONAL_ACCESS_TOKEN {

@@ -286,9 +286,22 @@ agent's input crosses into our data writes.
      (one per account/token, stored encrypted) and attaches **repositories** to a
      project (many-to-many — a project = a "stack" of repos). Each repo is read
      through its connection's token, so a review fetches its comparison with the
-     right account's credentials. (A server `GITHUB_TOKEN` remains as a fallback.)
-     Compare returns ≤300 files per response — a diff at that cap throws, not
-     silently truncated.
+     right account's credentials. (The old server `GITHUB_TOKEN` env was removed;
+     `config('services.github.token')` now resolves to null and the per-connection
+     token is the source.) Compare returns ≤300 files per response — a diff at that
+     cap throws, not silently truncated.
+
+3. **The secrets endpoint (BUILT — out-of-MCP by design).** A project declares a
+   manifest of required env **keys** (`ProjectSecretRequirement`, approver-managed);
+   each user provides their own encrypted **values** (`PersonalSecret`). An agent
+   imports its user's values via `GET /api/projects/{project}/secrets` (Sanctum
+   token + `agent` ability, `routes/api.php`), which returns `.env` lines (or `409`
+   + `# missing:` keys). This is deliberately NOT an MCP tool: the agent `curl`s it
+   to a file so values never enter the MCP/LLM context. What holds it: values are
+   encrypted at rest, the endpoint is tenant-scoped (the project's access rule) and
+   only ever returns the **calling** user's own values; the boundary is
+   keep-out-of-context, not process-sandboxing (the skill instructs "don't print
+   the file").
 
 **Still backlog (not built):** the thin npx client (`connect` + `run`) and the
 `check_version` self-update handshake — the only pieces that would live on the

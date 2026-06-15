@@ -46,6 +46,12 @@ class User extends Authenticatable
         return $this->morphMany(Skill::class, 'owner');
     }
 
+    /** The user's own secret values. @return HasMany<PersonalSecret, $this> */
+    public function personalSecrets(): HasMany
+    {
+        return $this->hasMany(PersonalSecret::class);
+    }
+
     /** The user's linked GitHub accounts/tokens. @return HasMany<GithubConnection, $this> */
     public function githubConnections(): HasMany
     {

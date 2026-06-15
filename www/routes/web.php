@@ -6,6 +6,7 @@ use App\Http\Controllers\GithubConnectionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RepositoryController;
+use App\Http\Controllers\SecretController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\McpReferenceController;
@@ -37,6 +38,13 @@ Route::middleware('auth')->group(function () {
     Route::delete('/projects/{project}/approvers/{user}', [ProjectController::class, 'removeApprover'])->name('projects.approvers.remove');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show');
     Route::get('/projects/{project}/gantt', [ProjectController::class, 'gantt'])->name('projects.gantt');
+    // Project secrets — required-keys manifest (approvers) + each user's own values.
+    Route::get('/projects/{project}/secrets', [SecretController::class, 'index'])->name('secrets.index');
+    Route::post('/projects/{project}/secrets/requirements', [SecretController::class, 'storeRequirement'])->name('secrets.requirements.store');
+    Route::delete('/projects/{project}/secrets/requirements/{key}', [SecretController::class, 'destroyRequirement'])->name('secrets.requirements.destroy');
+    Route::post('/projects/{project}/secrets/values', [SecretController::class, 'storeValue'])->name('secrets.values.store');
+    Route::delete('/projects/{project}/secrets/values/{secret}', [SecretController::class, 'destroyValue'])->name('secrets.values.destroy');
+
     Route::get('/projects/{project}/repositories', [RepositoryController::class, 'index'])->name('repositories.index');
     Route::post('/projects/{project}/repositories', [RepositoryController::class, 'store'])->name('repositories.store');
     Route::delete('/projects/{project}/repositories/{repository}', [RepositoryController::class, 'destroy'])->name('repositories.destroy');

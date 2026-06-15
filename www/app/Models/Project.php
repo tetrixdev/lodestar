@@ -93,4 +93,10 @@ class Project extends Model
     {
         return $this->morphMany(Skill::class, 'owner');
     }
+
+    /** The env keys this project needs to run (the secrets manifest). */
+    public function secretRequirements(): HasMany
+    {
+        return $this->hasMany(ProjectSecretRequirement::class);
+    }
 }
