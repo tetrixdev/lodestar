@@ -11,7 +11,6 @@ use App\Mcp\Tools\UpsertReviewSectionTool;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
-use App\Services\GitHubComparison;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -157,19 +156,31 @@ class McpReviewCoverageTest extends TestCase
         ])->assertHasErrors();
     }
 
-    public function test_a_diff_at_the_file_cap_is_rejected_not_truncated(): void
+    public function test_a_large_diff_is_paginated_and_fully_retrieved(): void
     {
-        $names = array_map(fn ($i) => "file{$i}.php", range(1, GitHubComparison::FILE_CAP));
-        $this->fakeCompare($names);
+        // GitHub pages files 100 at a time; the service must walk pages. Fake
+        // three pages (100, 100, 50) = 250 files, keyed by the ?page= query.
+        Http::fake(function ($request) {
+            parse_str(parse_url($request->url(), PHP_URL_QUERY) ?? '', $q);
+            $page = (int) ($q['page'] ?? 1);
+            $count = $page <= 2 ? 100 : ($page === 3 ? 50 : 0);
+            $files = [];
+            for ($i = 0; $i < $count; $i++) {
+                $files[] = ['filename' => "p{$page}_f{$i}.php", 'status' => 'modified'];
+            }
+
+            return Http::response(['files' => $files], 200);
+        });
+
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $this->linkRepo($project);
 
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r', 'base_ref' => 'm', 'head_ref' => 'h',
-        ])->assertHasErrors();
+        ])->assertOk()->assertSee('"files":250');
 
-        $this->assertSame(0, $project->reviews()->count()); // not created half-formed
+        $this->assertSame(250, $project->reviews()->sole()->files()->count());
     }
 
     public function test_a_doc_only_review_with_no_files_is_trivially_complete(): void

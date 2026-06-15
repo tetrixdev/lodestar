@@ -12,14 +12,18 @@ use RuntimeException;
  * compare API. This is deliberately server-side and AI-independent: the agent
  * groups what GitHub says changed, it never gets to decide the file set itself.
  *
- * The compare endpoint returns up to 300 files in one response; a diff that hits
- * that cap throws (rather than silently under-covering), so the coverage guard
- * can never read "complete" while files are missing.
+ * The compare endpoint pages its `files` (100 per page); we walk the pages and
+ * accumulate, so large diffs are retrieved in full rather than truncated. A diff
+ * beyond MAX_FILES throws (rather than silently under-covering) so the coverage
+ * guard can never read "complete" while files are missing.
  */
 class GitHubComparison
 {
-    /** GitHub's per-response file cap on the compare endpoint. */
-    public const FILE_CAP = 300;
+    /** Files per page on the compare endpoint. */
+    public const PER_PAGE = 100;
+
+    /** Hard ceiling so a runaway/enormous diff fails loudly instead of looping. */
+    public const MAX_FILES = 3000;
 
     /**
      * @return list<array{path:string,status:string,old_path:?string,position:int}>
@@ -30,31 +34,41 @@ class GitHubComparison
         // token (v1 single-tenant) when none is given.
         $token ??= config('services.github.token');
 
-        $response = Http::baseUrl('https://api.github.com')
-            ->withHeaders(['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'])
-            ->when($token, fn ($http) => $http->withToken($token))
-            ->get("/repos/{$repo}/compare/".rawurlencode($base).'...'.rawurlencode($head));
+        $path = "/repos/{$repo}/compare/".rawurlencode($base).'...'.rawurlencode($head);
+        $maxPages = (int) (self::MAX_FILES / self::PER_PAGE);
 
-        if ($response->failed()) {
-            throw new RuntimeException(
-                "GitHub compare failed for {$repo} {$base}...{$head}: ".$response->status()
-                .' '.($response->json('message') ?? '')
-            );
+        $files = [];
+        for ($page = 1; $page <= $maxPages + 1; $page++) {
+            $response = Http::baseUrl('https://api.github.com')
+                ->withHeaders(['Accept' => 'application/vnd.github+json', 'X-GitHub-Api-Version' => '2022-11-28'])
+                ->when($token, fn ($http) => $http->withToken($token))
+                ->get($path, ['per_page' => self::PER_PAGE, 'page' => $page]);
+
+            if ($response->failed()) {
+                throw new RuntimeException(
+                    "GitHub compare failed for {$repo} {$base}...{$head}: ".$response->status()
+                    .' '.($response->json('message') ?? '')
+                );
+            }
+
+            $chunk = $response->json('files', []);
+            $files = array_merge($files, $chunk);
+
+            // A short (or empty) page is the last one.
+            if (count($chunk) < self::PER_PAGE) {
+                break;
+            }
+
+            // Still full at the ceiling → the diff is too big to review in one pass.
+            if ($page > $maxPages) {
+                throw new RuntimeException(
+                    "Comparison {$repo} {$base}...{$head} exceeds ".self::MAX_FILES
+                    .' files — too large to review exhaustively in one pass. Split it into smaller comparisons.'
+                );
+            }
         }
 
-        $raw = $response->json('files', []);
-
-        // The compare endpoint caps `files` at 300 with no file-level pagination.
-        // Rather than silently under-cover a huge diff (which would let the
-        // coverage guard read "complete" while missing files), fail loudly so the
-        // review is split. Paging large diffs is a tracked follow-up.
-        if (count($raw) >= self::FILE_CAP) {
-            throw new RuntimeException(
-                "Comparison {$repo} {$base}...{$head} has ".self::FILE_CAP.'+ files — too large to review exhaustively in one pass yet. Split it into smaller comparisons.'
-            );
-        }
-
-        return collect($raw)
+        return collect($files)
             ->values()
             ->map(fn (array $f, int $i): array => [
                 'path' => $f['filename'],
