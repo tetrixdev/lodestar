@@ -23,8 +23,28 @@ class SkillSettingsTest extends TestCase
             ->assertOk()
             ->assertSee('Effective prompts')
             ->assertSee('All skill layers')
+            ->assertSee('Propose a change / add a layer') // the create/propose affordance
             ->assertSee('Develop')          // a phase label
             ->assertSee('develop');         // a system layer row (key)
+    }
+
+    public function test_a_user_can_add_a_personal_layer_from_the_overview_form(): void
+    {
+        $this->seed(SystemSkillSeeder::class);
+        $user = User::factory()->create();
+
+        // The overview's propose form posts a brand-new personal layer into existence.
+        $this->actingAs($user)->post(route('skills.propose'), [
+            'scope' => Skill::SCOPE_PERSONAL,
+            'key' => 'develop',
+            'title' => 'My develop additions',
+            'body' => 'ALWAYS run the linter.',
+            'mode' => Skill::MODE_APPEND,
+        ])->assertRedirect();
+
+        $slot = $user->skills()->where('key', 'develop')->sole();
+        $this->assertSame(Skill::SCOPE_PERSONAL, $slot->scope);
+        $this->assertStringContainsString('ALWAYS run the linter.', Skill::compose($user, null, 'develop')['body']);
     }
 
     public function test_overview_filters_by_scope(): void
