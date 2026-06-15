@@ -381,6 +381,7 @@ erDiagram
         text body "the prompt"
         string status "proposed|active|archived|rejected"
         bigint author_user_id FK "nullable, who authored it"
+        bigint work_session_id FK "nullable, the session it was proposed from"
         boolean proposed_by_ai "an MCP (AI) authored the proposal"
         text note "nullable, proposal note"
     }
