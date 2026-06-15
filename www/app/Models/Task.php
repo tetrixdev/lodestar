@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
  * A kanban card moving through the Lodestar lifecycle.
@@ -376,17 +377,24 @@ class Task extends Model
 
     /**
      * A lightweight "is an agent active?" snapshot across the projects $user can
-     * reach: how many cards are in a working (*-ing) state right now, and the most
-     * recent claim. Drives the nav heartbeat — derived from real activity, no ping.
+     * reach: the cards in a working (*-ing) state right now (with their project +
+     * claiming agent, for the nav hover) and the most recent claim. Derived from
+     * real activity, no ping. A `claimed_by` of "loop*" marks the work loop.
      *
-     * @return array{working: int, last_claim: string|null}
+     * @return array{working: int, tasks: Collection<int, Task>, last_claim: string|null}
      */
     public static function agentSnapshot(User $user): array
     {
         $base = self::query()->whereHas('project', fn ($q) => $q->accessibleBy($user));
 
+        $tasks = (clone $base)
+            ->whereIn('status', self::workingStatuses())
+            ->with('project:id,name')
+            ->get(['id', 'project_id', 'claimed_by', 'status']);
+
         return [
-            'working' => (clone $base)->whereIn('status', self::workingStatuses())->count(),
+            'working' => $tasks->count(),
+            'tasks' => $tasks,
             'last_claim' => (clone $base)->max('claimed_at'),
         ];
     }
