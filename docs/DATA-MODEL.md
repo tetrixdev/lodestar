@@ -22,6 +22,12 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   base its tasks, work-sessions and reviews all hang off. `name` + a per-user
   unique `slug`; an optional `description` and `primary_goal`. Its repositories
   are first-class (the `repositories` table via the `project_repository` pivot).
+  A project belongs to a **Team** (`team_id`) or is **personal** (`team_id` null).
+- **Team** — a group that shares projects + a managed skill set. `owner_user_id`;
+  `allow_personal_instructions` (when off, the personal skill layer is dropped so
+  changes go through the team). Members + their `can_approve_prompts` rights live
+  in the `team_user` pivot (the owner is always a member with approval). The
+  `project_user` pivot does the same for project-level skill approval.
 - **Task** — a kanban card. `status` is one of the **13 lifecycle states** (see
   Invariants); `position` orders cards within a single status; `category` is a
   free-text grouping prefix (e.g. `mcp`, `infra`); `body` is the card detail.
@@ -99,12 +105,13 @@ omitted here, except `users` (the ownership root) and `personal_access_tokens`
 
 These are the rules the column list alone won't tell you:
 
-- **Multi-tenant by ownership.** A Project `belongsTo` a User; Tasks,
-  WorkSessions and Reviews `belongsTo` a Project. There is no per-row `user_id`
-  below Project — ownership is reached through `project.user_id`, and every
-  controller method checks `project->user_id === request->user()->id` (403
-  otherwise). `(user_id, slug)` is unique, so a slug is unique *per user*, not
-  globally.
+- **Multi-tenant by access, through the Project.** Tasks, WorkSessions and
+  Reviews reach their tenant through their Project. A project is reachable by its
+  **owner** or by a **member of its team** — the single rule lives in
+  `Project::isAccessibleBy(User)` / `scopeAccessibleBy`, which every controller
+  and MCP tool uses (403 otherwise). Personal projects (`team_id` null) are
+  owner-only, so this is backward-compatible with the original `user_id` check.
+  `(user_id, slug)` is unique, so a slug is unique *per user*, not globally.
 - **A Task's status is one of 13 — 12 live + `cancelled`.** The live pipeline,
   in order: `new → ready_for_planning → planning → plan_review → ready_for_dev →
   developing → ready_for_ai_review → ai_review → human_review → approved →
@@ -185,6 +192,10 @@ app runs on Postgres, which has no unsigned int type).
 ```mermaid
 erDiagram
     USER ||--o{ PROJECT : owns
+    USER ||--o{ TEAM : "owns (nullable)"
+    TEAM ||--o{ PROJECT : "owns (nullable)"
+    USER }o--o{ TEAM : "team_user (member)"
+    USER }o--o{ PROJECT : "project_user (member)"
     PROJECT ||--o{ TASK : has
     PROJECT ||--o{ WORK_SESSION : "work log"
     PROJECT ||--o{ REVIEW : has
@@ -212,10 +223,33 @@ erDiagram
     PROJECT {
         bigint id PK
         bigint user_id FK
+        bigint team_id FK "nullable, null = personal"
         string name
         string slug "unique per user"
         text description "nullable"
         text primary_goal "nullable"
+    }
+
+    TEAM {
+        bigint id PK
+        string name
+        bigint owner_user_id FK
+        boolean allow_personal_instructions
+    }
+
+    TEAM_USER {
+        bigint id PK
+        bigint team_id FK
+        bigint user_id FK
+        string role "owner|member"
+        boolean can_approve_prompts
+    }
+
+    PROJECT_USER {
+        bigint id PK
+        bigint project_id FK
+        bigint user_id FK
+        boolean can_approve_prompts
     }
 
     TASK {

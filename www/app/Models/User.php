@@ -7,6 +7,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -48,5 +49,24 @@ class User extends Authenticatable
     public function githubConnections(): HasMany
     {
         return $this->hasMany(GithubConnection::class);
+    }
+
+    /** Teams this user belongs to (the owner is also a member). */
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class, 'team_user')
+            ->withPivot(['role', 'can_approve_prompts'])
+            ->withTimestamps();
+    }
+
+    /** Team ids this user belongs to (for project access scoping). */
+    public function teamIds(): array
+    {
+        return $this->teams()->pluck('teams.id')->all();
+    }
+
+    public function isInTeam(int $teamId): bool
+    {
+        return in_array($teamId, $this->teamIds(), true);
     }
 }

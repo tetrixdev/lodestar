@@ -35,6 +35,8 @@ class SchemaMirrorTest extends TestCase
         'REVIEW_TASK' => 'review_task', // the pivot keeps the singular Laravel name
         'REVIEW_FILE_SECTION' => 'review_file_section', // file<->section pivot, singular
         'PROJECT_REPOSITORY' => 'project_repository', // project<->repo pivot, singular
+        'TEAM_USER' => 'team_user', // team membership pivot, singular
+        'PROJECT_USER' => 'project_user', // project membership pivot, singular
     ];
 
     public function test_data_model_diagram_matches_the_live_schema(): void

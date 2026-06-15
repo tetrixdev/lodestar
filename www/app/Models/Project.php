@@ -22,6 +22,50 @@ class Project extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function team(): BelongsTo
+    {
+        return $this->belongsTo(Team::class);
+    }
+
+    /** People explicitly on this project (beyond the team), with approval flags. */
+    public function members(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'project_user')
+            ->withPivot('can_approve_prompts')
+            ->withTimestamps();
+    }
+
+    /**
+     * The access rule, in one place: a project is reachable by its owner, or by a
+     * member of its team. Personal projects (team_id null) are owner-only, so this
+     * is backward-compatible with the pre-teams `user_id` check.
+     */
+    public function isAccessibleBy(User $user): bool
+    {
+        return $this->user_id === $user->id
+            || ($this->team_id !== null && $user->isInTeam($this->team_id));
+    }
+
+    /** Scope a query to the projects a user can access (owned + their teams'). */
+    public function scopeAccessibleBy($query, User $user)
+    {
+        return $query->where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)
+                ->orWhereIn('team_id', $user->teamIds());
+        });
+    }
+
+    /** May this user approve project-level skill changes? (owner or an assigned approver) */
+    public function canApprovePrompts(User $user): bool
+    {
+        if ($this->user_id === $user->id) {
+            return true;
+        }
+        $member = $this->members()->where('users.id', $user->id)->first();
+
+        return $member !== null && (bool) $member->pivot->can_approve_prompts;
+    }
+
     public function tasks(): HasMany
     {
         return $this->hasMany(Task::class);
