@@ -170,6 +170,37 @@ class SkillController extends Controller
         return back()->with('status', 'skill-approved');
     }
 
+    /**
+     * Approve a proposal *with edits*: publish the amended body as a new active
+     * version (authored by the approver), and archive the original proposal with
+     * a note recording it was amended into the new one. Approver only.
+     */
+    public function approveWithEdits(Request $request, SkillVersion $version): RedirectResponse
+    {
+        $slot = $version->skill;
+        abort_unless($slot->canBeApprovedBy($request->user()), 403);
+        abort_unless($version->isProposed(), 422);
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'summary' => ['nullable', 'string', 'max:255'],
+            'body' => ['required', 'string'],
+        ]);
+
+        $new = $slot->publish($data['title'], $data['body'], $request->user());
+        $version->update([
+            'status' => SkillVersion::STATUS_ARCHIVED,
+            'note' => 'Amended into v'.$new->version.' by '.$request->user()->name
+                .($version->note ? ' — '.$version->note : ''),
+        ]);
+
+        if (($data['summary'] ?? null) !== null && $slot->summary !== $data['summary']) {
+            $slot->update(['summary' => $data['summary']]);
+        }
+
+        return back()->with('status', 'skill-approved');
+    }
+
     /** Reject a proposed version. Approver only. */
     public function reject(Request $request, SkillVersion $version): RedirectResponse
     {

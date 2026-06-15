@@ -94,6 +94,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/skills/{skill}', [SkillController::class, 'show'])->name('skills.show');
     Route::post('/settings/skills/propose', [SkillController::class, 'propose'])->name('skills.propose');
     Route::post('/settings/skills/versions/{version}/approve', [SkillController::class, 'approve'])->name('skills.versions.approve');
+    Route::post('/settings/skills/versions/{version}/approve-edits', [SkillController::class, 'approveWithEdits'])->name('skills.versions.approveEdits');
     Route::post('/settings/skills/versions/{version}/reject', [SkillController::class, 'reject'])->name('skills.versions.reject');
     Route::patch('/settings/skills/{skill}/mode', [SkillController::class, 'toggleMode'])->name('skills.mode');
 

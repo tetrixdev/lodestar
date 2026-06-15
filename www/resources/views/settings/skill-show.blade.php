@@ -107,30 +107,30 @@
                 </div>
             @endif
 
-            {{-- compare two versions --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Compare versions</p>
+            {{-- compare versions + decide on a proposal --}}
+            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3" x-data="{ editing: false }">
+                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Compare &amp; review</p>
                 @if ($versions->count() < 2)
                     <p class="text-sm text-gray-400 italic">Need at least two versions to compare.</p>
                 @else
                     <form method="GET" class="flex flex-wrap items-end gap-2 text-sm">
                         <div>
-                            <label class="block text-xs text-gray-500">From</label>
-                            <select name="a" class="mt-1 rounded-md border-gray-300 text-sm">
+                            <label class="block text-xs text-gray-500 mb-1">From</label>
+                            <select name="a" class="rounded-md border-gray-300 text-sm">
                                 @foreach ($versions as $v)
                                     <option value="{{ $v->id }}" @selected($diffA && $diffA->is($v))>v{{ $v->version }} · {{ $v->status }}</option>
                                 @endforeach
                             </select>
                         </div>
                         <div>
-                            <label class="block text-xs text-gray-500">To</label>
-                            <select name="b" class="mt-1 rounded-md border-gray-300 text-sm">
+                            <label class="block text-xs text-gray-500 mb-1">To</label>
+                            <select name="b" class="rounded-md border-gray-300 text-sm">
                                 @foreach ($versions as $v)
                                     <option value="{{ $v->id }}" @selected($diffB && $diffB->is($v))>v{{ $v->version }} · {{ $v->status }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        <x-primary-button class="!py-1.5 !text-xs">Diff</x-primary-button>
+                        <x-primary-button>Diff</x-primary-button>
                     </form>
 
                     @if ($diff)
@@ -145,40 +145,70 @@
                     @else
                         <p class="text-sm text-gray-400 italic">Pick two different versions to see the diff.</p>
                     @endif
+
+                    {{-- decide on the "To" version when it's a proposal you can approve --}}
+                    @if ($canApprove && $diffB && $diffB->isProposed())
+                        <div class="border-t border-gray-100 pt-3 space-y-3">
+                            <p class="text-xs text-gray-500">Decide on <span class="font-medium">v{{ $diffB->version }}</span> (proposed{{ $diffB->proposed_by_ai ? ', by AI' : '' }}){{ $diffB->note ? ' — '.$diffB->note : '' }}:</p>
+                            <div class="flex flex-wrap items-center gap-2" x-show="!editing">
+                                <form method="POST" action="{{ route('skills.versions.approve', $diffB) }}">
+                                    @csrf
+                                    <button class="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-500">Approve</button>
+                                </form>
+                                <button type="button" @click="editing = true" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Approve with edits</button>
+                                <form method="POST" action="{{ route('skills.versions.reject', $diffB) }}">
+                                    @csrf
+                                    <button class="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">Reject</button>
+                                </form>
+                            </div>
+
+                            {{-- approve-with-edits: publishes your amended body as a new active version, archiving this proposal --}}
+                            <form x-show="editing" x-cloak method="POST" action="{{ route('skills.versions.approveEdits', $diffB) }}" class="space-y-3">
+                                @csrf
+                                <p class="text-xs text-gray-500">Your edits publish a new active version; this proposal is archived as "amended into" it.</p>
+                                <div>
+                                    <x-input-label for="ae-title" value="Title" />
+                                    <x-text-input id="ae-title" name="title" type="text" class="mt-1 block w-full" :value="old('title', $diffB->title)" />
+                                    <x-input-error :messages="$errors->get('title')" class="mt-1" />
+                                </div>
+                                <div>
+                                    <x-input-label for="ae-summary" value="Summary (one line)" />
+                                    <x-text-input id="ae-summary" name="summary" type="text" class="mt-1 block w-full" :value="old('summary', $skill->summary)" />
+                                </div>
+                                <div>
+                                    <x-input-label for="ae-body" value="Body (markdown)" />
+                                    <textarea id="ae-body" name="body" rows="10"
+                                              class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $diffB->body) }}</textarea>
+                                    <x-input-error :messages="$errors->get('body')" class="mt-1" />
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <x-primary-button>Publish amended version</x-primary-button>
+                                    <button type="button" @click="editing = false" class="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    @endif
                 @endif
             </div>
 
-            {{-- version history --}}
+            {{-- version history (read-only log) --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Version history</p>
+                <p class="text-xs text-gray-400">Review proposals in <span class="font-medium">Compare &amp; review</span> above (pick the proposal as “To”).</p>
                 @foreach ($versions as $v)
-                    <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 py-2 last:border-0">
-                        <div class="flex items-center gap-2 min-w-0">
-                            <span class="text-gray-700 font-medium">v{{ $v->version }}</span>
-                            <span class="text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5
-                                @class([
-                                    'bg-green-100 text-green-800' => $v->status === $V::STATUS_ACTIVE,
-                                    'bg-amber-100 text-amber-800' => $v->status === $V::STATUS_PROPOSED,
-                                    'bg-gray-100 text-gray-500' => $v->status === $V::STATUS_ARCHIVED,
-                                    'bg-red-100 text-red-700' => $v->status === $V::STATUS_REJECTED,
-                                ])">{{ $v->status }}</span>
-                            <span class="text-xs text-gray-400 truncate">
-                                {{ $v->author?->name ?? 'system' }}@if ($v->proposed_by_ai) <span class="text-indigo-500">(AI)</span>@endif
-                                · {{ $v->created_at->diffForHumans() }}
-                            </span>
-                        </div>
-                        @if ($canApprove && $v->status === $V::STATUS_PROPOSED)
-                            <div class="flex shrink-0 items-center gap-2">
-                                <form method="POST" action="{{ route('skills.versions.approve', $v) }}">
-                                    @csrf
-                                    <button class="text-xs font-medium text-green-700 hover:text-green-900">Approve</button>
-                                </form>
-                                <form method="POST" action="{{ route('skills.versions.reject', $v) }}">
-                                    @csrf
-                                    <button class="text-xs font-medium text-red-600 hover:text-red-800">Reject</button>
-                                </form>
-                            </div>
-                        @endif
+                    <div class="flex items-center gap-2 text-sm border-b border-gray-100 py-2 last:border-0 min-w-0">
+                        <span class="text-gray-700 font-medium">v{{ $v->version }}</span>
+                        <span class="text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5
+                            @class([
+                                'bg-green-100 text-green-800' => $v->status === $V::STATUS_ACTIVE,
+                                'bg-amber-100 text-amber-800' => $v->status === $V::STATUS_PROPOSED,
+                                'bg-gray-100 text-gray-500' => $v->status === $V::STATUS_ARCHIVED,
+                                'bg-red-100 text-red-700' => $v->status === $V::STATUS_REJECTED,
+                            ])">{{ $v->status }}</span>
+                        <span class="text-xs text-gray-400 truncate">
+                            {{ $v->author?->name ?? 'system' }}@if ($v->proposed_by_ai) <span class="text-indigo-500">(AI)</span>@endif
+                            · {{ $v->created_at->diffForHumans() }}@if ($v->note) · {{ $v->note }}@endif
+                        </span>
                     </div>
                 @endforeach
             </div>

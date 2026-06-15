@@ -166,6 +166,29 @@ class SkillProposalTest extends TestCase
         $this->assertSame('NEW', Skill::compose($user, null, 'plan')['body']);
     }
 
+    public function test_approve_with_edits_publishes_amended_version_and_archives_the_proposal(): void
+    {
+        $user = User::factory()->create();
+        $slot = $user->skills()->create([
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'mode' => Skill::MODE_APPEND, 'title' => 'p',
+        ]);
+        $slot->publish('p', 'V1 active', $user);
+        $proposal = $slot->propose('p', 'AI proposed body', $user, byAi: true);
+
+        $this->actingAs($user)->post(route('skills.versions.approveEdits', $proposal), [
+            'title' => 'p', 'body' => 'AI proposed body, refined by me.',
+        ])->assertRedirect();
+
+        // The amended body is now live…
+        $this->assertSame('AI proposed body, refined by me.', Skill::compose($user, null, 'plan')['body']);
+        // …the proposal is archived with provenance…
+        $proposal->refresh();
+        $this->assertSame(SkillVersion::STATUS_ARCHIVED, $proposal->status);
+        $this->assertStringContainsString('Amended into v', $proposal->note);
+        // …and exactly one active version remains.
+        $this->assertSame(1, $slot->versions()->where('status', SkillVersion::STATUS_ACTIVE)->count());
+    }
+
     public function test_rejecting_marks_a_proposal_rejected(): void
     {
         $user = User::factory()->create();
