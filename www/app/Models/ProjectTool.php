@@ -16,11 +16,16 @@ class ProjectTool extends Model
 {
     protected $guarded = [];
 
+    protected $casts = ['last_checked_at' => 'datetime'];
+
     public const KIND_PROGRAM = 'program';
 
     public const KIND_COMMAND = 'command';
 
     public const KINDS = [self::KIND_PROGRAM, self::KIND_COMMAND];
+
+    /** Statuses an agent may report after verifying a tool. */
+    public const STATUSES = ['ok', 'missing', 'error', 'unknown'];
 
     public function project(): BelongsTo
     {

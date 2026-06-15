@@ -62,6 +62,28 @@ class ProjectToolController extends Controller
         return back()->with('status', 'tool-removed');
     }
 
+    /** The agent reports back which tools it verified/installed in its workspace. */
+    public function reportStatus(Request $request, Project $project): JsonResponse
+    {
+        abort_unless($project->isAccessibleBy($request->user()), 403);
+
+        $data = $request->validate([
+            'statuses' => ['required', 'array'],
+            'statuses.*.kind' => ['required', Rule::in(ProjectTool::KINDS)],
+            'statuses.*.name' => ['required', 'string'],
+            'statuses.*.status' => ['required', Rule::in(ProjectTool::STATUSES)],
+        ]);
+
+        $updated = 0;
+        foreach ($data['statuses'] as $row) {
+            $updated += $project->tools()
+                ->where('kind', $row['kind'])->where('name', $row['name'])
+                ->update(['last_status' => $row['status'], 'last_checked_at' => now()]);
+        }
+
+        return response()->json(['updated' => $updated]);
+    }
+
     /** Out-of-MCP manifest the agent reads during workspace setup. */
     public function manifest(Request $request, Project $project): JsonResponse
     {

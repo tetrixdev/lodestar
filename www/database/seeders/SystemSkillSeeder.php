@@ -101,7 +101,10 @@ class SystemSkillSeeder extends Seeder
                   (same Bearer token). For each `program`, run its `check`; if absent, run
                   `run` to install it. For each `command`, write `run` to
                   `~/ld-agent/<slug>/bin/<name>`, `chmod +x` it, and use it as its
-                  `description` says.
+                  `description` says. Then report what you found: POST to
+                  `<lodestar-url>/api/projects/<slug>/tools/status` a JSON
+                  `{"statuses":[{"kind","name","status":"ok|missing|error|unknown"}]}`
+                  so the operator sees real tool status.
                 - Do all work inside that project's `~/ld-agent` folder.
 
                 USING SKILLS:

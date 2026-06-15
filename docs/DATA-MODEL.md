@@ -409,6 +409,8 @@ erDiagram
         string description "nullable"
         text check "nullable, program presence check"
         text run "install command, or the command script body"
+        string last_status "nullable, ok|missing|error|unknown (agent-reported)"
+        timestamp last_checked_at "nullable, when the agent last verified it"
     }
 
     PERSONAL_ACCESS_TOKEN {

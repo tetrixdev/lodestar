@@ -48,6 +48,20 @@ class ProjectToolTest extends TestCase
             ->assertJsonPath('tools.0.run', 'echo wrapper');
     }
 
+    public function test_agent_reports_tool_status(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $project->tools()->create(['kind' => ProjectTool::KIND_PROGRAM, 'name' => 'pandoc', 'run' => 'install']);
+
+        Sanctum::actingAs($user, ['agent']);
+        $this->postJson(route('api.projects.tools.status', $project), [
+            'statuses' => [['kind' => 'program', 'name' => 'pandoc', 'status' => 'ok']],
+        ])->assertOk()->assertJsonPath('updated', 1);
+
+        $this->assertDatabaseHas('project_tools', ['name' => 'pandoc', 'last_status' => 'ok']);
+    }
+
     public function test_manifest_is_scoped_to_the_caller(): void
     {
         $stranger = User::factory()->create();

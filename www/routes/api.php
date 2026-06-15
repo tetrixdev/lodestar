@@ -15,4 +15,8 @@ Route::middleware(['auth:sanctum', 'abilities:agent'])->group(function () {
     // The project's tools manifest (programs to install + command scripts).
     Route::get('/projects/{project}/tools', [ProjectToolController::class, 'manifest'])
         ->name('api.projects.tools');
+
+    // The agent reports which tools it verified/installed.
+    Route::post('/projects/{project}/tools/status', [ProjectToolController::class, 'reportStatus'])
+        ->name('api.projects.tools.status');
 });

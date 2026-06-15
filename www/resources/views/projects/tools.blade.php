@@ -35,6 +35,16 @@
                             <div class="min-w-0">
                                 <span class="text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-gray-100 text-gray-600">{{ $tool->kind }}</span>
                                 <code class="text-sm font-medium text-gray-800">{{ $tool->name }}</code>
+                                @if ($tool->last_status)
+                                    <span class="ml-1 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5
+                                        @class([
+                                            'bg-green-100 text-green-800' => $tool->last_status === 'ok',
+                                            'bg-amber-100 text-amber-800' => $tool->last_status === 'missing',
+                                            'bg-red-100 text-red-700' => $tool->last_status === 'error',
+                                            'bg-gray-100 text-gray-500' => $tool->last_status === 'unknown',
+                                        ])"
+                                        title="reported {{ optional($tool->last_checked_at)->diffForHumans() }}">{{ $tool->last_status }}</span>
+                                @endif
                                 @if ($tool->description)<p class="text-xs text-gray-500">{{ $tool->description }}</p>@endif
                             </div>
                             @if ($canManage)
