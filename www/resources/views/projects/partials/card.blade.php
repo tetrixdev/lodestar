@@ -46,7 +46,7 @@
                 <span class="absolute inline-flex size-1.5 rounded-full bg-violet-400 opacity-75 animate-ping"></span>
                 <span class="relative inline-flex size-1.5 rounded-full bg-violet-500"></span>
             </span>
-            <span class="text-xs text-gray-800 truncate flex-1">{{ $task->title }}</span>
+            <span class="text-xs text-gray-800 truncate flex-1"><span class="text-gray-400">#{{ $task->id }}</span> {{ $task->title }}</span>
             @if ($since)
                 <span class="text-[10px] text-gray-400 shrink-0" title="in {{ $statusLabel }}">{{ $since }}</span>
             @endif
@@ -84,7 +84,7 @@
         </div>
 
         <div class="text-sm text-gray-900 mt-1.5">
-            <a href="{{ route('tasks.show', $task) }}" class="hover:underline">{{ $task->title }}</a>
+            <a href="{{ route('tasks.show', $task) }}" class="hover:underline"><span class="text-gray-400 font-medium">#{{ $task->id }}</span> {{ $task->title }}</a>
         </div>
 
         @if ($reviewLink)

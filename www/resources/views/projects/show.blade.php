@@ -53,8 +53,10 @@
                 const title = (el.dataset.title || '').toLowerCase();
                 const cat = (el.dataset.category || '');
                 const prio = (el.dataset.priority || '');
+                const id = (el.dataset.taskId || '');
                 const q = this.search.trim().toLowerCase();
-                const okText = !q || title.includes(q) || cat.toLowerCase().includes(q);
+                const qId = q.replace(/^#/, '');
+                const okText = !q || title.includes(q) || cat.toLowerCase().includes(q) || (qId !== '' && id === qId);
                 const okCat = !this.category || cat === this.category;
                 const okPrio = this.priorities.length === 0 || this.priorities.includes(prio);
                 return okText && okCat && okPrio;

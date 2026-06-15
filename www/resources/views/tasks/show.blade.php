@@ -17,7 +17,7 @@
     <x-slot name="header">
         <div class="flex items-center gap-3">
             <a href="{{ route('projects.show', $task->project) }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $task->title }}</h2>
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight"><span class="text-gray-400">#{{ $task->id }}</span> {{ $task->title }}</h2>
         </div>
     </x-slot>
 
