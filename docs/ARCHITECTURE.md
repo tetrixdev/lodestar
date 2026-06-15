@@ -290,8 +290,9 @@ agent's input crosses into our data writes.
      through its connection's token, so a review fetches its comparison with the
      right account's credentials. (The old server `GITHUB_TOKEN` env was removed;
      `config('services.github.token')` now resolves to null and the per-connection
-     token is the source.) Compare returns ≤300 files per response — a diff at that
-     cap throws, not silently truncated.
+     token is the source.) `GitHubComparison` pages the compare endpoint
+     (100/page) and accumulates up to `MAX_FILES` (3000); a diff beyond that
+     throws rather than silently under-covering the coverage guard.
 
 3. **The secrets endpoint (BUILT — out-of-MCP by design).** A project declares a
    manifest of required env **keys** (`ProjectSecretRequirement`, approver-managed);
