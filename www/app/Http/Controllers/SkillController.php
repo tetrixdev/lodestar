@@ -133,7 +133,7 @@ class SkillController extends Controller
 
         $data = $request->validate([
             'scope' => ['required', Rule::in([Skill::SCOPE_PERSONAL, Skill::SCOPE_TEAM, Skill::SCOPE_PROJECT])],
-            'key' => ['required', 'string', 'max:255'],
+            'key' => ['required', 'string', 'max:255', $this->notReservedKey()],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
             'mode' => ['nullable', Rule::in(Skill::MODES)],
@@ -189,6 +189,16 @@ class SkillController extends Controller
         ]);
 
         return back()->with('status', 'skill-mode-changed');
+    }
+
+    /** A validation rule rejecting Lodestar-reserved key prefixes. */
+    private function notReservedKey(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail): void {
+            if (is_string($value) && Skill::isReservedKey($value)) {
+                $fail('Keys starting with "'.Skill::RESERVED_KEY_PREFIX.'" are reserved for Lodestar.');
+            }
+        };
     }
 
     /** Resolve and access-check the scope owner for a proposal. */

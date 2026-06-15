@@ -69,6 +69,10 @@
                             {{ __('Skills') }}
                         </x-dropdown-link>
 
+                        <x-dropdown-link :href="route('mcp.reference')">
+                            {{ __('MCP reference') }}
+                        </x-dropdown-link>
+
                         <div class="border-t border-gray-100"></div>
 
                         <!-- Authentication -->

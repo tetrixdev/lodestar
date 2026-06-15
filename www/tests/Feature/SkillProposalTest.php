@@ -64,6 +64,28 @@ class SkillProposalTest extends TestCase
         $this->assertSame(0, SkillVersion::count());
     }
 
+    public function test_reserved_key_prefix_is_rejected_on_both_surfaces(): void
+    {
+        $user = User::factory()->create();
+
+        // Web propose with an ls_ key → validation error, nothing created.
+        $this->actingAs($user)->post(route('skills.propose'), [
+            'scope' => Skill::SCOPE_PERSONAL,
+            'key' => 'ls_internal',
+            'title' => 'x',
+            'body' => 'y',
+        ])->assertSessionHasErrors('key');
+
+        // MCP propose with an ls_ key → rejected.
+        LodestarServer::actingAs($user)
+            ->tool(ProposeSkillChangeTool::class, [
+                'scope' => Skill::SCOPE_PERSONAL, 'key' => 'ls_internal', 'title' => 'x', 'body' => 'y',
+            ])
+            ->assertHasErrors();
+
+        $this->assertSame(0, SkillVersion::count());
+    }
+
     // ── Web (human) proposals ─────────────────────────────────────────────────
 
     public function test_a_human_self_approves_their_own_personal_change(): void

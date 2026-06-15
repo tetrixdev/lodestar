@@ -69,6 +69,18 @@ class Skill extends Model
         return in_array($key, self::PHASES, true);
     }
 
+    /**
+     * Keys with this prefix are reserved for Lodestar's own (system-seeded)
+     * skills — users can't create them, so we never collide with future
+     * internal keys. Users may still layer on phase keys (that's composition).
+     */
+    public const RESERVED_KEY_PREFIX = 'ls_';
+
+    public static function isReservedKey(string $key): bool
+    {
+        return str_starts_with($key, self::RESERVED_KEY_PREFIX);
+    }
+
     // ── Relationships ─────────────────────────────────────────────────────────
 
     /** The owner of the slot: a Team, User (personal) or Project. Null = system. */

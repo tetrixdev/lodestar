@@ -8,6 +8,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\McpReferenceController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
@@ -69,6 +70,9 @@ Route::middleware('auth')->group(function () {
     // Skills — view the composed effective prompt per phase, and change control:
     // propose a version (anyone in scope), approve/reject (assigned approvers),
     // toggle a layer's append/overwrite mode (approvers).
+    // MCP reference — every tool, its params and example output (read-only).
+    Route::get('/settings/mcp', [McpReferenceController::class, 'index'])->name('mcp.reference');
+
     Route::get('/settings/skills', [SkillController::class, 'index'])->name('skills.index');
     Route::get('/settings/skills/{skill}', [SkillController::class, 'show'])->name('skills.show');
     Route::post('/settings/skills/propose', [SkillController::class, 'propose'])->name('skills.propose');

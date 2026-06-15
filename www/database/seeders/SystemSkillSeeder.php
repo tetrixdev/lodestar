@@ -94,6 +94,15 @@ class SystemSkillSeeder extends Seeder
                 split the task and say so. Call out any structural/product decision the
                 human must make.
 
+                NEVER ask the user a question in your response — encode it in the card:
+                - Too little to plan at all? Advance the card BACK to its backlog state
+                  with your open questions written into the description, so the human can
+                  answer and requeue it.
+                - Enough to draft a rough plan? Write the plan and put the open questions
+                  IN it, clearly flagged. Then advance to `plan_review`: that human gate
+                  blocks the card from reaching development until a person answers and
+                  sends it back to planning.
+
                 When the plan is ready, advance the task to `plan_review` for a human.
                 Do not write code in this phase.
                 MD],
@@ -153,6 +162,11 @@ class SystemSkillSeeder extends Seeder
                    Use the section `note` only for section-level commentary.
                 6. Sound? advance_task to `human_review` and hand back the review URL.
                    Needs rework? advance_task back to `ready_for_dev` with the reasons.
+
+                Bias toward passing to `human_review` with your concerns recorded as
+                findings — the human triages them. Reserve sending a card back to dev for
+                genuinely blocking problems (broken build, wrong behaviour, unsafe change),
+                not taste or polish. Never ask the user anything in your response.
 
                 THE FIVE MODES (cheapest first; one per section):
                 1. skip — no operator-meaningful risk, or covered transitively (migration

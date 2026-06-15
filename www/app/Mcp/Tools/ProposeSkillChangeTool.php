@@ -21,7 +21,11 @@ class ProposeSkillChangeTool extends LodestarTool
     {
         $data = $request->validate([
             'scope' => ['required', 'in:'.Skill::SCOPE_PERSONAL.','.Skill::SCOPE_TEAM.','.Skill::SCOPE_PROJECT],
-            'key' => ['required', 'string', 'max:255'],
+            'key' => ['required', 'string', 'max:255', function (string $a, mixed $v, \Closure $fail) {
+                if (is_string($v) && Skill::isReservedKey($v)) {
+                    $fail('Keys starting with "'.Skill::RESERVED_KEY_PREFIX.'" are reserved for Lodestar.');
+                }
+            }],
             'title' => ['required', 'string', 'max:255'],
             'body' => ['required', 'string'],
             'mode' => ['nullable', 'in:'.implode(',', Skill::MODES)],
