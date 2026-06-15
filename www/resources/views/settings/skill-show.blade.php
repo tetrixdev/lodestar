@@ -150,7 +150,33 @@
                         <x-primary-button>Diff</x-primary-button>
                     </form>
 
-                    @if ($diff)
+                    @if ($diffA && $diffB && $diffA->isNot($diffB))
+                        {{-- field changes (title + summary) are part of the change, shown above the body --}}
+                        <div class="text-xs rounded-md border border-gray-100 p-3 space-y-1">
+                            <div>
+                                <span class="text-gray-400 inline-block w-16">Title</span>
+                                @if ($diffA->title !== $diffB->title)
+                                    <span class="bg-red-50 text-red-800 px-1 line-through">{{ $diffA->title }}</span>
+                                    <span class="text-gray-400">&rarr;</span>
+                                    <span class="bg-green-50 text-green-800 px-1">{{ $diffB->title }}</span>
+                                @else
+                                    <span class="text-gray-600">{{ $diffB->title }}</span>
+                                @endif
+                            </div>
+                            @unless ($isPhase)
+                                <div>
+                                    <span class="text-gray-400 inline-block w-16">Summary</span>
+                                    @if (($diffA->summary ?? '') !== ($diffB->summary ?? ''))
+                                        <span class="bg-red-50 text-red-800 px-1 line-through">{{ $diffA->summary ?: '—' }}</span>
+                                        <span class="text-gray-400">&rarr;</span>
+                                        <span class="bg-green-50 text-green-800 px-1">{{ $diffB->summary ?: '—' }}</span>
+                                    @else
+                                        <span class="text-gray-600">{{ $diffB->summary ?: '—' }}</span>
+                                    @endif
+                                </div>
+                            @endunless
+                        </div>
+                        <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Body</p>
                         <div class="font-mono text-xs rounded-md border border-gray-100 overflow-x-auto">
                             @foreach ($diff as $row)
                                 <div class="px-3 py-0.5 whitespace-pre-wrap break-words
@@ -166,13 +192,7 @@
                     {{-- decide on the "To" version when it's a proposal you can approve --}}
                     @if ($canApprove && $diffB && $diffB->isProposed())
                         <div class="border-t border-gray-100 pt-3 space-y-3">
-                            <div class="text-xs text-gray-500 space-y-0.5">
-                                <p>Decide on <span class="font-medium">v{{ $diffB->version }}</span> (proposed{{ $diffB->proposed_by_ai ? ', by AI' : '' }}){{ $diffB->note ? ' — '.$diffB->note : '' }}:</p>
-                                <p><span class="text-gray-400">Title:</span> {{ $diffB->title }}</p>
-                                @unless ($isPhase)
-                                    <p><span class="text-gray-400">Summary:</span> {{ $diffB->summary ?: '—' }}</p>
-                                @endunless
-                            </div>
+                            <p class="text-xs text-gray-500">Decide on <span class="font-medium">v{{ $diffB->version }}</span> (proposed{{ $diffB->proposed_by_ai ? ', by AI' : '' }}){{ $diffB->note ? ' — '.$diffB->note : '' }}:</p>
                             <div class="flex flex-wrap items-center gap-2" x-show="!editing">
                                 <form method="POST" action="{{ route('skills.versions.approve', $diffB) }}">
                                     @csrf
