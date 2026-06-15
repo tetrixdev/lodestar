@@ -136,7 +136,7 @@ class BoardTest extends TestCase
         $this->assertSame('new', $task->fresh()->status);
     }
 
-    public function test_cancel_and_restore_round_trip(): void
+    public function test_cancel_is_a_permanent_archive(): void
     {
         $user = User::factory()->create();
         $project = $this->project($user);
@@ -148,11 +148,12 @@ class BoardTest extends TestCase
             ->assertRedirect();
         $this->assertSame('cancelled', $task->fresh()->status);
 
-        // Restore brings it back to new.
+        // Cancelled is a permanent archive — it cannot be restored to a live state.
         $this->actingAs($user)
+            ->from("/tasks/{$task->id}")
             ->patch("/tasks/{$task->id}", ['status' => 'new'])
-            ->assertRedirect();
-        $this->assertSame('new', $task->fresh()->status);
+            ->assertSessionHasErrors('status');
+        $this->assertSame('cancelled', $task->fresh()->status);
     }
 
     public function test_transition_is_blocked_for_other_users(): void

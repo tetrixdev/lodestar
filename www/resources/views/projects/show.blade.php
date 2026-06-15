@@ -258,12 +258,8 @@
                         @if ($task->category)
                             <span class="inline-block text-[11px] font-medium uppercase tracking-wide text-gray-500 bg-gray-100 rounded px-1.5 py-0.5">{{ $task->category }}</span>
                         @endif
-                        <span class="text-sm text-gray-500 line-through flex-1">{{ $task->title }}</span>
-                        <form method="POST" action="{{ route('tasks.update', $task) }}">
-                            @csrf @method('PATCH')
-                            <input type="hidden" name="status" value="{{ \App\Models\Task::STATUS_NEW }}">
-                            <button class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Restore</button>
-                        </form>
+                        <a href="{{ route('tasks.show', $task) }}" class="text-sm text-gray-500 line-through flex-1 hover:text-gray-700">{{ $task->title }}</a>
+                        <span class="text-[10px] uppercase tracking-wide text-gray-400">archived</span>
                     </div>
                 @empty
                     <p class="text-xs text-gray-400 italic">Nothing archived.</p>

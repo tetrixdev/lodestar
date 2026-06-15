@@ -212,7 +212,9 @@ class Task extends Model
         self::STATUS_APPROVED => [self::STATUS_MERGE_DEPLOY, self::STATUS_HUMAN_REVIEW, self::STATUS_CANCELLED],
         self::STATUS_MERGE_DEPLOY => [self::STATUS_DONE, self::STATUS_APPROVED, self::STATUS_CANCELLED],
         self::STATUS_DONE => [self::STATUS_CANCELLED],
-        self::STATUS_CANCELLED => [self::STATUS_NEW],
+        // Cancelled is a permanent archive — no restore. A card stays viewable
+        // (and can always be recreated); it never re-enters the live pipeline.
+        self::STATUS_CANCELLED => [],
     ];
 
     // ── Claim map (the agent loop) ───────────────────────────────────────────
@@ -266,8 +268,6 @@ class Task extends Model
     public const KIND_BACK = 'back';
 
     public const KIND_CANCEL = 'cancel';
-
-    public const KIND_RESTORE = 'restore';
 
     protected static function booted(): void
     {
@@ -348,9 +348,6 @@ class Task extends Model
     /** Classify a transition from this card's current status to $target. */
     public function transitionKind(string $target): string
     {
-        if ($this->status === self::STATUS_CANCELLED) {
-            return self::KIND_RESTORE;
-        }
         if ($target === self::STATUS_CANCELLED) {
             return self::KIND_CANCEL;
         }

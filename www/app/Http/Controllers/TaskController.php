@@ -87,7 +87,7 @@ class TaskController extends Controller
 
     /**
      * Move a card along the lifecycle (the per-card transition controls and the
-     * archive/restore flows use this). Status changes are LEGAL-ONLY: a move to
+     * archive flow uses this). Status changes are LEGAL-ONLY: a move to
      * a status that isn't in the card's allowed-transition set is rejected (422).
      * `status_changed_at` is stamped automatically by the model on status change.
      */
