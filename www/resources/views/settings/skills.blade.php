@@ -139,9 +139,27 @@
 
             {{-- Effective composed prompt per phase --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                <div>
-                    <h3 class="font-semibold text-gray-800">Effective prompts</h3>
-                    <p class="text-xs text-gray-500">How each phase composes for you right now. Layers shown in order.</p>
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h3 class="font-semibold text-gray-800">Effective prompts</h3>
+                        <p class="text-xs text-gray-500">
+                            How each phase composes
+                            @if ($previewProject) on <strong>{{ $previewProject->name }}</strong> (system &rarr; team &rarr; project &rarr; personal).
+                            @else for you (system &rarr; personal). Pick a project to preview its team/project layers. @endif
+                        </p>
+                    </div>
+                    <form method="GET" class="flex items-end gap-2 text-sm">
+                        {{-- preserve list filters when switching preview --}}
+                        @foreach (['scope', 'key', 'team_id', 'project_id', 'status'] as $f)
+                            @if ($filters[$f] ?? null)<input type="hidden" name="{{ $f }}" value="{{ $filters[$f] }}">@endif
+                        @endforeach
+                        <select name="preview_project" onchange="this.form.submit()" class="rounded-md border-gray-300 text-sm">
+                            <option value="">Preview: just me</option>
+                            @foreach ($projects as $pr)
+                                <option value="{{ $pr->id }}" @selected($previewProject && $previewProject->id === $pr->id)>Preview: {{ $pr->name }}</option>
+                            @endforeach
+                        </select>
+                    </form>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     @foreach ($phases as $phase)

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Skill;
+use App\Models\Team;
 use App\Models\User;
 use Database\Seeders\SystemSkillSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -87,6 +88,30 @@ class SkillSettingsTest extends TestCase
             ->assertOk()
             ->assertSee('line two')   // removed
             ->assertSee('line THREE'); // added
+    }
+
+    public function test_overview_previews_composition_for_a_chosen_project(): void
+    {
+        $this->seed(SystemSkillSeeder::class);
+        $user = User::factory()->create();
+        $team = Team::create(['name' => 'Acme', 'owner_user_id' => $user->id]);
+        $project = $user->projects()->create(['name' => 'Rocket', 'slug' => 'rocket', 'team_id' => $team->id]);
+
+        // A project-scope layer only shows up when composing in that project's context.
+        $slot = $project->skills()->create([
+            'scope' => Skill::SCOPE_PROJECT, 'key' => 'develop', 'mode' => Skill::MODE_APPEND, 'title' => 'Rocket dev',
+        ]);
+        $slot->publish('Rocket dev', 'PROJECT-RULE', $user);
+
+        // Plain view (just me) does not reach the project layer.
+        $plain = Skill::compose($user, null, 'develop');
+        $this->assertStringNotContainsString('PROJECT-RULE', $plain['body']);
+
+        // Previewing the project surfaces it.
+        $this->actingAs($user)->get(route('skills.index', ['preview_project' => $project->id]))
+            ->assertOk()
+            ->assertSee('Rocket');
+        $this->assertStringContainsString('PROJECT-RULE', Skill::compose($user, $project, 'develop')['body']);
     }
 
     public function test_a_stranger_cannot_view_a_personal_slot(): void

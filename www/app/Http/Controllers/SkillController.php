@@ -39,7 +39,14 @@ class SkillController extends Controller
             'team_id' => ['nullable', 'integer'],
             'project_id' => ['nullable', 'integer'],
             'status' => ['nullable', Rule::in(SkillVersion::STATUSES)],
+            'preview_project' => ['nullable', 'integer'],
         ]);
+
+        // Preview composition as it would run on a chosen project (adds the
+        // team + project layers), else the plain system + personal view.
+        $previewProject = ($filters['preview_project'] ?? null)
+            ? Project::accessibleBy($user)->with('team')->find($filters['preview_project'])
+            : null;
 
         $slots = $this->accessibleSlots($user)
             ->with(['owner', 'activeVersion'])
@@ -52,15 +59,17 @@ class SkillController extends Controller
             ->orderBy('key')->orderBy('scope')
             ->get();
 
-        // Composed without a project: the system base + this user's personal layer.
+        // Composed for the previewed project (system → team → project → personal),
+        // or just system + personal when no project is chosen.
         $composed = collect(Skill::PHASES)->mapWithKeys(
-            fn (string $phase) => [$phase => Skill::compose($user, null, $phase)],
+            fn (string $phase) => [$phase => Skill::compose($user, $previewProject, $phase)],
         );
 
         return view('settings.skills', [
             'phases' => Skill::PHASES,
             'phaseLabels' => Skill::PHASE_LABELS,
             'composed' => $composed,
+            'previewProject' => $previewProject,
             'slots' => $slots,
             'filters' => $filters,
             'scopes' => Skill::SCOPES,
