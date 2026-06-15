@@ -67,6 +67,19 @@ class AgentLoopTest extends TestCase
         $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Loop running');
     }
 
+    public function test_agents_page_lists_working_agents_and_their_tasks(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'Rocket', 'slug' => 'rocket']);
+        $project->tasks()->create(['title' => 'Build it', 'status' => Task::STATUS_DEVELOPING, 'claimed_by' => 'loop']);
+
+        $this->actingAs($user)->get(route('agents.index'))
+            ->assertOk()
+            ->assertSee('loop')
+            ->assertSee('Build it')
+            ->assertSee('Rocket');
+    }
+
     public function test_heartbeat_snapshot_ignores_other_users_tasks(): void
     {
         $me = User::factory()->create();
