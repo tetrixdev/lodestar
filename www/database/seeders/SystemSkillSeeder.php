@@ -97,6 +97,11 @@ class SystemSkillSeeder extends Seeder
                   keys (HTTP 409), halt and report exactly those keys to the operator.
                 - If a real SECRET value is still missing and you cannot derive it, do NOT
                   guess — stop and report which key the operator must provide.
+                - Ensure the project's TOOLS: GET `<lodestar-url>/api/projects/<slug>/tools`
+                  (same Bearer token). For each `program`, run its `check`; if absent, run
+                  `run` to install it. For each `command`, write `run` to
+                  `~/ld-agent/<slug>/bin/<name>`, `chmod +x` it, and use it as its
+                  `description` says.
                 - Do all work inside that project's `~/ld-agent` folder.
 
                 USING SKILLS:

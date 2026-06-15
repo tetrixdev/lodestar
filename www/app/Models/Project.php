@@ -99,4 +99,10 @@ class Project extends Model
     {
         return $this->hasMany(ProjectSecretRequirement::class);
     }
+
+    /** Programs to install + commands to provide in this project's agent workspace. */
+    public function tools(): HasMany
+    {
+        return $this->hasMany(ProjectTool::class);
+    }
 }

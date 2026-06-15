@@ -3,13 +3,14 @@
 use App\Http\Controllers\AgentTokenController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GithubConnectionController;
+use App\Http\Controllers\McpReferenceController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectToolController;
 use App\Http\Controllers\RepositoryController;
-use App\Http\Controllers\SecretController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\SecretController;
 use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\McpReferenceController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
@@ -44,6 +45,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/projects/{project}/secrets/requirements/{key}', [SecretController::class, 'destroyRequirement'])->name('secrets.requirements.destroy');
     Route::post('/projects/{project}/secrets/values', [SecretController::class, 'storeValue'])->name('secrets.values.store');
     Route::delete('/projects/{project}/secrets/values/{secret}', [SecretController::class, 'destroyValue'])->name('secrets.values.destroy');
+
+    // Project tools — programs to install + commands to provide for the agent.
+    Route::get('/projects/{project}/tools', [ProjectToolController::class, 'index'])->name('tools.index');
+    Route::post('/projects/{project}/tools', [ProjectToolController::class, 'store'])->name('tools.store');
+    Route::delete('/projects/{project}/tools/{tool}', [ProjectToolController::class, 'destroy'])->name('tools.destroy');
 
     Route::get('/projects/{project}/repositories', [RepositoryController::class, 'index'])->name('repositories.index');
     Route::post('/projects/{project}/repositories', [RepositoryController::class, 'store'])->name('repositories.store');

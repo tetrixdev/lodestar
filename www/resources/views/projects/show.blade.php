@@ -83,7 +83,11 @@
                         Paste this into a fresh Claude Code session (with the Lodestar MCP connected) to claim and
                         work every ready task on this project. It self-paces until the backlog is dry.
                     </p>
-                    <a href="{{ route('secrets.index', $project) }}" class="text-xs font-medium text-indigo-600 hover:text-indigo-800">Manage secrets &rarr;</a>
+                    <span class="text-xs">
+                        <a href="{{ route('secrets.index', $project) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Manage secrets &rarr;</a>
+                        <span class="text-gray-300 mx-1">·</span>
+                        <a href="{{ route('tools.index', $project) }}" class="font-medium text-indigo-600 hover:text-indigo-800">Tools &rarr;</a>
+                    </span>
                 </div>
                 @include('projects.partials.loop-prompt', ['project' => $project])
             </div>

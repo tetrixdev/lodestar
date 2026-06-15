@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ProjectToolController;
 use App\Http\Controllers\SecretController;
 use Illuminate\Support\Facades\Route;
 
@@ -10,4 +11,8 @@ Route::middleware(['auth:sanctum', 'abilities:agent'])->group(function () {
     // The project's required secrets, filled with the calling user's own values.
     Route::get('/projects/{project}/secrets', [SecretController::class, 'bundle'])
         ->name('api.projects.secrets');
+
+    // The project's tools manifest (programs to install + command scripts).
+    Route::get('/projects/{project}/tools', [ProjectToolController::class, 'manifest'])
+        ->name('api.projects.tools');
 });

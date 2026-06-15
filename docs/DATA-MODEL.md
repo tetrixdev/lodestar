@@ -87,6 +87,10 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   (`encrypted` cast). `project_id` null = applies to any project; a project-scoped
   row overrides the global one there. Delivered only to the owning user via the
   out-of-MCP secrets endpoint, never through an MCP tool.
+- **ProjectTool** — a `program` the agent installs/verifies (`check` detects it,
+  `run` installs it) or a `command` (a small reusable script — `run` is the body)
+  the agent writes into its workspace `bin/`. Approver-managed (it runs shell on
+  the agent's machine); fetched via the out-of-MCP tools manifest.
 - **PersonalAccessToken** — Sanctum's API token (one per machine/agent). The MCP
   server authenticates each request from the `Authorization: Bearer` token and
   resolves the tenant (`tokenable` = the User); `name` is the machine label
@@ -220,6 +224,7 @@ erDiagram
     PROJECT ||--o{ PROJECT_SECRET_REQUIREMENT : "needs (manifest)"
     USER ||--o{ PERSONAL_SECRET : "owns values"
     PROJECT ||--o{ PERSONAL_SECRET : "scoped to (nullable)"
+    PROJECT ||--o{ PROJECT_TOOL : "provides"
     USER ||--o{ SKILL : "owns personal-scope (polymorphic)"
     TEAM ||--o{ SKILL : "owns team-scope (polymorphic)"
     PROJECT ||--o{ SKILL : "owns project-scope (polymorphic)"
@@ -394,6 +399,16 @@ erDiagram
         bigint project_id FK "nullable, null = any project"
         text value "the value, encrypted at rest"
         string key "the env key this value is for"
+    }
+
+    PROJECT_TOOL {
+        bigint id PK
+        bigint project_id FK
+        string kind "program|command"
+        string name
+        string description "nullable"
+        text check "nullable, program presence check"
+        text run "install command, or the command script body"
     }
 
     PERSONAL_ACCESS_TOKEN {
