@@ -195,7 +195,7 @@ class McpLoopToolsTest extends TestCase
         $slot = $user->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'mode' => Skill::MODE_APPEND, 'title' => 'My extras',
         ]);
-        $slot->publish('My extras', 'ALSO: run the linter.', $user);
+        $slot->publish('My extras', null, 'ALSO: run the linter.', $user);
 
         LodestarServer::actingAs($user)
             ->tool(GetSkillTool::class, ['task_id' => $task->id])

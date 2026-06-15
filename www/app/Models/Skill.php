@@ -212,6 +212,7 @@ class Skill extends Model
 
         $slots = self::query()
             ->whereNotIn('key', self::PHASES)
+            ->with('activeVersion')
             ->whereHas('versions', fn ($q) => $q->where('status', SkillVersion::STATUS_ACTIVE))
             ->where(function ($q) use ($user, $project, $team) {
                 $q->where(fn ($q) => $q->where('scope', self::SCOPE_SYSTEM)->whereNull('owner_id'))
@@ -239,7 +240,7 @@ class Skill extends Model
 
         return collect($byKey)
             ->sortKeys()
-            ->map(fn (self $s) => ['key' => $s->key, 'summary' => $s->summary ?: $s->title])
+            ->map(fn (self $s) => ['key' => $s->key, 'summary' => $s->activeVersion?->summary ?: $s->activeVersion?->title ?: $s->key])
             ->values()
             ->all();
     }
@@ -276,7 +277,7 @@ class Skill extends Model
     }
 
     /** Find or create the slot for (scope, owner, key); never the system scope. */
-    public static function ensureSlot(string $scope, ?Model $owner, string $key, string $mode, string $title, ?string $summary = null): self
+    public static function ensureSlot(string $scope, ?Model $owner, string $key, string $mode, string $title): self
     {
         return self::firstOrCreate(
             [
@@ -285,7 +286,7 @@ class Skill extends Model
                 'owner_id' => $owner?->getKey(),
                 'key' => $key,
             ],
-            ['mode' => $mode, 'title' => $title, 'summary' => $summary],
+            ['mode' => $mode, 'title' => $title],
         );
     }
 
@@ -302,11 +303,12 @@ class Skill extends Model
      * anyone who can access the scope but cannot approve it, and by every MCP
      * (AI) proposal regardless of who owns it.
      */
-    public function propose(string $title, string $body, ?User $author, bool $byAi, ?string $note = null, ?int $workSessionId = null): SkillVersion
+    public function propose(string $title, ?string $summary, string $body, ?User $author, bool $byAi, ?string $note = null, ?int $workSessionId = null): SkillVersion
     {
         return $this->versions()->create([
             'version' => $this->nextVersion(),
             'title' => $title,
+            'summary' => $summary,
             'body' => $body,
             'status' => SkillVersion::STATUS_PROPOSED,
             'author_user_id' => $author?->id,
@@ -339,13 +341,13 @@ class Skill extends Model
      * self-approves to `active`; anyone else's change lands `proposed` for an
      * approver. Used identically by the web form and the MCP tool.
      */
-    public function submitVersion(string $title, string $body, User $author, bool $byAi, ?string $note = null): SkillVersion
+    public function submitVersion(string $title, ?string $summary, string $body, User $author, bool $byAi, ?string $note = null): SkillVersion
     {
         if (! $byAi && $this->canBeApprovedBy($author)) {
-            return $this->publish($title, $body, $author);
+            return $this->publish($title, $summary, $body, $author);
         }
 
-        return $this->propose($title, $body, $author, $byAi, $note);
+        return $this->propose($title, $summary, $body, $author, $byAi, $note);
     }
 
     /**
@@ -353,11 +355,12 @@ class Skill extends Model
      * immediately): a self-approved human edit, or the system seeder. Archives
      * the prior active version.
      */
-    public function publish(string $title, string $body, ?User $author = null, bool $byAi = false): SkillVersion
+    public function publish(string $title, ?string $summary, string $body, ?User $author = null, bool $byAi = false): SkillVersion
     {
         $version = $this->versions()->create([
             'version' => $this->nextVersion(),
             'title' => $title,
+            'summary' => $summary,
             'body' => $body,
             'status' => SkillVersion::STATUS_ACTIVE,
             'author_user_id' => $author?->id,

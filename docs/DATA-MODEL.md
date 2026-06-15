@@ -370,7 +370,6 @@ erDiagram
         string key "phase (main|plan|develop|ai_review|merge) or a named key"
         string mode "append|overwrite"
         string title
-        string summary "nullable, one-line; named skills appear in the main catalog"
     }
 
     SKILL_VERSION {
@@ -378,6 +377,7 @@ erDiagram
         bigint skill_id FK
         integer version
         string title
+        string summary "nullable, one-line; named skills appear in the main catalog"
         text body "the prompt"
         string status "proposed|active|archived|rejected"
         bigint author_user_id FK "nullable, who authored it"

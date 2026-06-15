@@ -56,7 +56,7 @@ class SkillSettingsTest extends TestCase
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'my-recipe',
             'mode' => Skill::MODE_APPEND, 'title' => 'My recipe',
         ]);
-        $slot->publish('My recipe', 'body', $user);
+        $slot->publish('My recipe', null, 'body', $user);
         $systemSlot = Skill::slotFor(Skill::SCOPE_SYSTEM, null, 'develop');
 
         // Personal filter lists the personal slot row, not the system slot row.
@@ -73,8 +73,8 @@ class SkillSettingsTest extends TestCase
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop',
             'mode' => Skill::MODE_APPEND, 'title' => 'Mine',
         ]);
-        $v1 = $slot->publish('Mine', "line one\nline two", $user);
-        $v2 = $slot->publish('Mine', "line one\nline THREE", $user);
+        $v1 = $slot->publish('Mine', null, "line one\nline two", $user);
+        $v2 = $slot->publish('Mine', null, "line one\nline THREE", $user);
 
         $this->actingAs($user)->get(route('skills.show', $slot))
             ->assertOk()
@@ -101,7 +101,7 @@ class SkillSettingsTest extends TestCase
         $slot = $project->skills()->create([
             'scope' => Skill::SCOPE_PROJECT, 'key' => 'develop', 'mode' => Skill::MODE_APPEND, 'title' => 'Rocket dev',
         ]);
-        $slot->publish('Rocket dev', 'PROJECT-RULE', $user);
+        $slot->publish('Rocket dev', null, 'PROJECT-RULE', $user);
 
         // Plain view (just me) does not reach the project layer.
         $plain = Skill::compose($user, null, 'develop');

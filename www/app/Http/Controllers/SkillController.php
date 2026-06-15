@@ -135,7 +135,7 @@ class SkillController extends Controller
             'scope' => ['required', Rule::in([Skill::SCOPE_PERSONAL, Skill::SCOPE_TEAM, Skill::SCOPE_PROJECT])],
             'key' => ['required', 'string', 'max:255', $this->notReservedKey()],
             'title' => ['required', 'string', 'max:255'],
-            'summary' => ['nullable', 'string', 'max:255'],
+            'summary' => $this->summaryRule((string) $request->input('key')),
             'body' => ['required', 'string'],
             'mode' => ['nullable', Rule::in(Skill::MODES)],
             'note' => ['nullable', 'string'],
@@ -145,15 +145,10 @@ class SkillController extends Controller
 
         $owner = $this->resolveOwner($request, $data);
 
-        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title'], $data['summary'] ?? null);
+        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title']);
         abort_unless($slot->canBeAccessedBy($user), 403);
 
-        // Keep the slot's catalog summary current when one is supplied.
-        if (($data['summary'] ?? null) !== null && $slot->summary !== $data['summary']) {
-            $slot->update(['summary' => $data['summary']]);
-        }
-
-        $version = $slot->submitVersion($data['title'], $data['body'], $user, byAi: false, note: $data['note'] ?? null);
+        $version = $slot->submitVersion($data['title'], $data['summary'] ?? null, $data['body'], $user, byAi: false, note: $data['note'] ?? null);
 
         return back()->with('status', $version->isActive() ? 'skill-published' : 'skill-proposed');
     }
@@ -183,20 +178,16 @@ class SkillController extends Controller
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
-            'summary' => ['nullable', 'string', 'max:255'],
+            'summary' => $this->summaryRule($slot->key),
             'body' => ['required', 'string'],
         ]);
 
-        $new = $slot->publish($data['title'], $data['body'], $request->user());
+        $new = $slot->publish($data['title'], $data['summary'] ?? null, $data['body'], $request->user());
         $version->update([
             'status' => SkillVersion::STATUS_ARCHIVED,
             'note' => 'Amended into v'.$new->version.' by '.$request->user()->name
                 .($version->note ? ' — '.$version->note : ''),
         ]);
-
-        if (($data['summary'] ?? null) !== null && $slot->summary !== $data['summary']) {
-            $slot->update(['summary' => $data['summary']]);
-        }
 
         return back()->with('status', 'skill-approved');
     }
@@ -226,6 +217,18 @@ class SkillController extends Controller
         ]);
 
         return back()->with('status', 'skill-mode-changed');
+    }
+
+    /**
+     * Summary is REQUIRED for named (on-demand) skills — that's the line the
+     * `main` catalog shows so an agent knows when to pull it — and optional for
+     * phase keys (which compose automatically and aren't catalogued).
+     */
+    private function summaryRule(string $key): array
+    {
+        return Skill::isPhase($key)
+            ? ['nullable', 'string', 'max:255']
+            : ['required', 'string', 'max:255'];
     }
 
     /** A validation rule rejecting Lodestar-reserved key prefixes. */

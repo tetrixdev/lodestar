@@ -52,6 +52,7 @@ class RememberTool extends LodestarTool
 
         $version = $slot->propose(
             $slot->activeVersion?->title ?? $slot->title,
+            $slot->activeVersion?->summary, // carry forward the layer's summary
             $body,
             $user,
             byAi: true,

@@ -6,10 +6,11 @@
     </x-slot>
 
     <div class="py-12" x-data="{
-        proposeOpen: {{ $errors->hasAny(['scope', 'key', 'title', 'body', 'mode', 'team_id', 'project_id']) ? 'true' : 'false' }},
+        proposeOpen: {{ $errors->hasAny(['scope', 'key', 'title', 'summary', 'body', 'mode', 'team_id', 'project_id']) ? 'true' : 'false' }},
         scope: '{{ old('scope', $M::SCOPE_PERSONAL) }}',
         mode: '{{ old('mode', $M::MODE_APPEND) }}',
         key: '{{ old('key', '') }}',
+        phases: @js($phases),
         startProposal(scope, key) { this.scope = scope; this.key = key; this.proposeOpen = true; this.$nextTick(() => this.$refs.proposePanel?.scrollIntoView({ behavior: 'smooth' })); },
     }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
@@ -105,9 +106,11 @@
                     </div>
 
                     <div>
-                        <x-input-label for="np-summary" value="Summary (one line — for named skills, shown in the main catalog)" />
+                        <x-input-label for="np-summary" value="Summary (one line — required for named skills, shown in the main catalog)" />
                         <x-text-input id="np-summary" name="summary" type="text" class="mt-1 block w-full"
+                                      x-bind:disabled="phases.includes(key)"
                                       :value="old('summary')" placeholder="What it's for / when to use it" />
+                        <p x-show="phases.includes(key)" x-cloak class="text-[11px] text-gray-400 mt-1">Not used for phase skills — they compose automatically and aren't listed in the main catalog.</p>
                         <x-input-error :messages="$errors->get('summary')" class="mt-1" />
                     </div>
 

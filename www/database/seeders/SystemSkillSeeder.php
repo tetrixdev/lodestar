@@ -26,20 +26,17 @@ class SystemSkillSeeder extends Seeder
             // The system-scope slot (owner null, append base layer).
             $slot = Skill::firstOrCreate(
                 ['scope' => Skill::SCOPE_SYSTEM, 'owner_type' => null, 'owner_id' => null, 'key' => $key],
-                ['mode' => Skill::MODE_APPEND, 'title' => $title, 'summary' => $summary],
+                ['mode' => Skill::MODE_APPEND, 'title' => $title],
             );
-
-            // Keep the slot's title/summary current on reseed.
-            $slot->fill(['title' => $title, 'summary' => $summary]);
-            if ($slot->isDirty()) {
-                $slot->save();
+            if ($slot->title !== $title) {
+                $slot->update(['title' => $title]);
             }
 
-            // Publish a fresh active version only when the body/title changed —
+            // Publish a fresh active version only when title/summary/body changed —
             // so re-running on deploy is idempotent and keeps the history clean.
             $active = $slot->activeVersion()->first();
-            if ($active === null || $active->title !== $title || $active->body !== $body) {
-                $slot->publish($title, $body);
+            if ($active === null || $active->title !== $title || $active->summary !== $summary || $active->body !== $body) {
+                $slot->publish($title, $summary, $body);
             }
         }
     }

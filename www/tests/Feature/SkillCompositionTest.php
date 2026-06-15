@@ -31,7 +31,7 @@ class SkillCompositionTest extends TestCase
             'mode' => $mode,
             'title' => "{$scope} {$key}",
         ]);
-        $slot->publish("{$scope} {$key}", $body);
+        $slot->publish("{$scope} {$key}", null, $body);
 
         return $slot;
     }
@@ -109,9 +109,9 @@ class SkillCompositionTest extends TestCase
         $user = User::factory()->create();
         $slot = $this->slot(Skill::SCOPE_SYSTEM, null, 'plan', Skill::MODE_APPEND, 'V1');
         // A newer ACTIVE version supersedes the old one (now archived).
-        $slot->publish('plan', 'V2');
+        $slot->publish('plan', null, 'V2');
         // A proposed version must NOT leak into the composed body.
-        $slot->propose('plan', 'PROPOSED', $user, byAi: false);
+        $slot->propose('plan', null, 'PROPOSED', $user, byAi: false);
 
         $composed = Skill::compose($user, null, 'plan');
 
@@ -125,7 +125,7 @@ class SkillCompositionTest extends TestCase
 
         // A named skill with a summary; and a phase skill that must NOT be catalogued.
         $named = $this->slot(Skill::SCOPE_PERSONAL, $user, 'db-recipe', Skill::MODE_APPEND, 'recipe body');
-        $named->update(['summary' => 'Migrate the database safely.']);
+        $named->activeVersion()->update(['summary' => 'Migrate the database safely.']);
         $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'develop body');
 
         $body = Skill::compose($user, null, 'main')['body'];

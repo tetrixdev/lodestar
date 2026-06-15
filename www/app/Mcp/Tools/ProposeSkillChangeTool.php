@@ -35,6 +35,12 @@ class ProposeSkillChangeTool extends LodestarTool
             'project' => ['required_if:scope,'.Skill::SCOPE_PROJECT, 'string'],
         ]);
 
+        // A summary is the catalog line for named (on-demand) skills, so require
+        // it there; phase skills compose automatically and aren't catalogued.
+        if (! Skill::isPhase($data['key']) && blank($data['summary'] ?? null)) {
+            return Response::error('A summary is required for a named skill — it\'s the line the main catalog shows so an agent knows when to load it.');
+        }
+
         $user = $this->currentUser($request);
 
         $owner = $this->resolveOwner($request, $data);
@@ -42,16 +48,13 @@ class ProposeSkillChangeTool extends LodestarTool
             return $owner; // a tenancy error
         }
 
-        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title'], $data['summary'] ?? null);
+        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title']);
         if (! $slot->canBeAccessedBy($user)) {
             return Response::error('You cannot propose changes to that scope.');
         }
-        if (($data['summary'] ?? null) !== null && $slot->summary !== $data['summary']) {
-            $slot->update(['summary' => $data['summary']]);
-        }
 
         // byAi: true → never goes live, regardless of who owns the scope.
-        $version = $slot->submitVersion($data['title'], $data['body'], $user, byAi: true, note: $data['note'] ?? null);
+        $version = $slot->submitVersion($data['title'], $data['summary'] ?? null, $data['body'], $user, byAi: true, note: $data['note'] ?? null);
 
         return Response::json([
             'skill_id' => $slot->id,

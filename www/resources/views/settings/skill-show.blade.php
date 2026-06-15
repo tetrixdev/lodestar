@@ -1,5 +1,9 @@
 <x-app-layout>
-    @php $M = \App\Models\Skill::class; $V = \App\Models\SkillVersion::class; @endphp
+    @php
+        $M = \App\Models\Skill::class;
+        $V = \App\Models\SkillVersion::class;
+        $isPhase = $M::isPhase($skill->key); // phase keys aren't catalogued → summary N/A
+    @endphp
 
     <x-slot name="header">
         <div class="flex items-center gap-3">
@@ -62,10 +66,18 @@
                 @endif
             </div>
 
-            {{-- propose a change --}}
+            {{-- propose a change (collapsed by default so it's not shown alongside the review) --}}
             @if ($canPropose)
-                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Propose a change</p>
+                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3"
+                     x-data="{ proposing: @js($errors->hasAny(['title', 'summary', 'body', 'note'])) }">
+                    <div class="flex items-center justify-between">
+                        <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Propose a change</p>
+                        <button type="button" @click="proposing = !proposing"
+                                class="text-xs font-medium text-indigo-600 hover:text-indigo-800">
+                            <span x-text="proposing ? 'Cancel' : 'Propose a change'"></span>
+                        </button>
+                    </div>
+                    <div x-show="proposing" x-cloak class="space-y-3">
                     <p class="text-xs text-gray-500">
                         @if ($canApprove) You can approve this scope, so your change goes live immediately.
                         @else Your change is recorded as a proposal for an approver. @endif
@@ -88,7 +100,11 @@
                         <div>
                             <x-input-label for="p-summary" value="Summary (one line — for the main catalog)" />
                             <x-text-input id="p-summary" name="summary" type="text" class="mt-1 block w-full"
-                                          :value="old('summary', $skill->summary)" placeholder="What it's for / when to use it" />
+                                          :value="old('summary', $skill->activeVersion?->summary)"
+                                          :disabled="$isPhase" placeholder="What it's for / when to use it" />
+                            @if ($isPhase)
+                                <p class="text-[11px] text-gray-400 mt-1">Not used for phase skills — they compose automatically and aren't listed in the main catalog.</p>
+                            @endif
                             <x-input-error :messages="$errors->get('summary')" class="mt-1" />
                         </div>
                         <div>
@@ -104,6 +120,7 @@
                         </div>
                         <x-primary-button>{{ $canApprove ? 'Publish' : 'Propose' }}</x-primary-button>
                     </form>
+                    </div>
                 </div>
             @endif
 
@@ -149,7 +166,13 @@
                     {{-- decide on the "To" version when it's a proposal you can approve --}}
                     @if ($canApprove && $diffB && $diffB->isProposed())
                         <div class="border-t border-gray-100 pt-3 space-y-3">
-                            <p class="text-xs text-gray-500">Decide on <span class="font-medium">v{{ $diffB->version }}</span> (proposed{{ $diffB->proposed_by_ai ? ', by AI' : '' }}){{ $diffB->note ? ' — '.$diffB->note : '' }}:</p>
+                            <div class="text-xs text-gray-500 space-y-0.5">
+                                <p>Decide on <span class="font-medium">v{{ $diffB->version }}</span> (proposed{{ $diffB->proposed_by_ai ? ', by AI' : '' }}){{ $diffB->note ? ' — '.$diffB->note : '' }}:</p>
+                                <p><span class="text-gray-400">Title:</span> {{ $diffB->title }}</p>
+                                @unless ($isPhase)
+                                    <p><span class="text-gray-400">Summary:</span> {{ $diffB->summary ?: '—' }}</p>
+                                @endunless
+                            </div>
                             <div class="flex flex-wrap items-center gap-2" x-show="!editing">
                                 <form method="POST" action="{{ route('skills.versions.approve', $diffB) }}">
                                     @csrf
@@ -173,7 +196,11 @@
                                 </div>
                                 <div>
                                     <x-input-label for="ae-summary" value="Summary (one line)" />
-                                    <x-text-input id="ae-summary" name="summary" type="text" class="mt-1 block w-full" :value="old('summary', $skill->summary)" />
+                                    <x-text-input id="ae-summary" name="summary" type="text" class="mt-1 block w-full"
+                                                  :value="old('summary', $diffB->summary)" :disabled="$isPhase" />
+                                    @if ($isPhase)
+                                        <p class="text-[11px] text-gray-400 mt-1">Not used for phase skills (not catalogued).</p>
+                                    @endif
                                 </div>
                                 <div>
                                     <x-input-label for="ae-body" value="Body (markdown)" />

@@ -83,6 +83,32 @@ class SkillProposalTest extends TestCase
         $this->assertSame('', Skill::compose($user, null, 'main')['body']);
     }
 
+    public function test_summary_is_required_for_named_skills_optional_for_phases(): void
+    {
+        $user = User::factory()->create();
+
+        // Named skill without a summary → rejected (web + MCP).
+        $this->actingAs($user)->post(route('skills.propose'), [
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'db-recipe', 'title' => 'Recipe', 'body' => 'do it',
+        ])->assertSessionHasErrors('summary');
+
+        LodestarServer::actingAs($user)
+            ->tool(ProposeSkillChangeTool::class, [
+                'scope' => Skill::SCOPE_PERSONAL, 'key' => 'db-recipe', 'title' => 'Recipe', 'body' => 'do it',
+            ])->assertHasErrors();
+
+        // With a summary → accepted, stored on the version.
+        $this->actingAs($user)->post(route('skills.propose'), [
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'db-recipe', 'title' => 'Recipe', 'summary' => 'Migrate the DB.', 'body' => 'do it',
+        ])->assertRedirect();
+        $this->assertSame('Migrate the DB.', SkillVersion::sole()->summary);
+
+        // A phase skill needs no summary.
+        $this->actingAs($user)->post(route('skills.propose'), [
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'title' => 'Dev', 'body' => 'build',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+    }
+
     public function test_reserved_key_prefix_is_rejected_on_both_surfaces(): void
     {
         $user = User::factory()->create();
@@ -156,8 +182,8 @@ class SkillProposalTest extends TestCase
         $slot = $user->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'mode' => Skill::MODE_APPEND, 'title' => 'p',
         ]);
-        $old = $slot->publish('p', 'OLD', $user);
-        $new = $slot->propose('p', 'NEW', $user, byAi: true);
+        $old = $slot->publish('p', null, 'OLD', $user);
+        $new = $slot->propose('p', null, 'NEW', $user, byAi: true);
 
         $this->actingAs($user)->post(route('skills.versions.approve', $new))->assertRedirect();
 
@@ -172,8 +198,8 @@ class SkillProposalTest extends TestCase
         $slot = $user->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'mode' => Skill::MODE_APPEND, 'title' => 'p',
         ]);
-        $slot->publish('p', 'V1 active', $user);
-        $proposal = $slot->propose('p', 'AI proposed body', $user, byAi: true);
+        $slot->publish('p', null, 'V1 active', $user);
+        $proposal = $slot->propose('p', null, 'AI proposed body', $user, byAi: true);
 
         $this->actingAs($user)->post(route('skills.versions.approveEdits', $proposal), [
             'title' => 'p', 'body' => 'AI proposed body, refined by me.',
@@ -195,7 +221,7 @@ class SkillProposalTest extends TestCase
         $slot = $user->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'mode' => Skill::MODE_APPEND, 'title' => 'p',
         ]);
-        $proposal = $slot->propose('p', 'NOPE', $user, byAi: true);
+        $proposal = $slot->propose('p', null, 'NOPE', $user, byAi: true);
 
         $this->actingAs($user)->post(route('skills.versions.reject', $proposal))->assertRedirect();
         $this->assertSame(SkillVersion::STATUS_REJECTED, $proposal->fresh()->status);
