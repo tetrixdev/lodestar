@@ -99,7 +99,8 @@
                         </div>
                         <div>
                             <x-input-label for="p-summary" value="Summary (one line — for the main catalog)" />
-                            <x-text-input id="p-summary" name="summary" type="text" class="mt-1 block w-full"
+                            <x-text-input id="p-summary" name="summary" type="text"
+                                          class="mt-1 block w-full disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                                           :value="old('summary', $skill->activeVersion?->summary)"
                                           :disabled="$isPhase" placeholder="What it's for / when to use it" />
                             @if ($isPhase)
@@ -163,18 +164,16 @@
                                     <span class="text-gray-600">{{ $diffB->title }}</span>
                                 @endif
                             </div>
-                            @unless ($isPhase)
-                                <div>
-                                    <span class="text-gray-400 inline-block w-16">Summary</span>
-                                    @if (($diffA->summary ?? '') !== ($diffB->summary ?? ''))
-                                        <span class="bg-red-50 text-red-800 px-1 line-through">{{ $diffA->summary ?: '—' }}</span>
-                                        <span class="text-gray-400">&rarr;</span>
-                                        <span class="bg-green-50 text-green-800 px-1">{{ $diffB->summary ?: '—' }}</span>
-                                    @else
-                                        <span class="text-gray-600">{{ $diffB->summary ?: '—' }}</span>
-                                    @endif
-                                </div>
-                            @endunless
+                            <div>
+                                <span class="text-gray-400 inline-block w-16">Summary</span>
+                                @if (($diffA->summary ?? '') !== ($diffB->summary ?? ''))
+                                    <span class="bg-red-50 text-red-800 px-1 line-through">{{ $diffA->summary ?: '—' }}</span>
+                                    <span class="text-gray-400">&rarr;</span>
+                                    <span class="bg-green-50 text-green-800 px-1">{{ $diffB->summary ?: '—' }}</span>
+                                @else
+                                    <span class="text-gray-600">{{ $diffB->summary ?: '—' }}@if ($isPhase) <span class="text-gray-300">(n/a for phase skills)</span>@endif</span>
+                                @endif
+                            </div>
                         </div>
                         <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Body</p>
                         <div class="font-mono text-xs rounded-md border border-gray-100 overflow-x-auto">
@@ -216,7 +215,8 @@
                                 </div>
                                 <div>
                                     <x-input-label for="ae-summary" value="Summary (one line)" />
-                                    <x-text-input id="ae-summary" name="summary" type="text" class="mt-1 block w-full"
+                                    <x-text-input id="ae-summary" name="summary" type="text"
+                                                  class="mt-1 block w-full disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                                                   :value="old('summary', $diffB->summary)" :disabled="$isPhase" />
                                     @if ($isPhase)
                                         <p class="text-[11px] text-gray-400 mt-1">Not used for phase skills (not catalogued).</p>

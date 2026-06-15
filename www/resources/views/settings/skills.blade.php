@@ -107,7 +107,8 @@
 
                     <div>
                         <x-input-label for="np-summary" value="Summary (one line — required for named skills, shown in the main catalog)" />
-                        <x-text-input id="np-summary" name="summary" type="text" class="mt-1 block w-full"
+                        <x-text-input id="np-summary" name="summary" type="text"
+                                      class="mt-1 block w-full disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                                       x-bind:disabled="phases.includes(key)"
                                       :value="old('summary')" placeholder="What it's for / when to use it" />
                         <p x-show="phases.includes(key)" x-cloak class="text-[11px] text-gray-400 mt-1">Not used for phase skills — they compose automatically and aren't listed in the main catalog.</p>
