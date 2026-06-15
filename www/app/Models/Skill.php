@@ -171,7 +171,7 @@ class Skill extends Model
                 continue; // a slot with no active version contributes nothing
             }
 
-            if ($slot->mode === self::MODE_OVERWRITE) {
+            if ($version->mode === self::MODE_OVERWRITE) {
                 $bodies = [];   // discard everything above this layer
                 $layers = [];
             }
@@ -180,7 +180,7 @@ class Skill extends Model
             $layers[] = [
                 'scope' => $slot->scope,
                 'title' => $version->title,
-                'mode' => $slot->mode,
+                'mode' => $version->mode,
                 'version' => $version->version,
             ];
         }
@@ -277,7 +277,7 @@ class Skill extends Model
     }
 
     /** Find or create the slot for (scope, owner, key); never the system scope. */
-    public static function ensureSlot(string $scope, ?Model $owner, string $key, string $mode, string $title): self
+    public static function ensureSlot(string $scope, ?Model $owner, string $key, string $title): self
     {
         return self::firstOrCreate(
             [
@@ -286,7 +286,7 @@ class Skill extends Model
                 'owner_id' => $owner?->getKey(),
                 'key' => $key,
             ],
-            ['mode' => $mode, 'title' => $title],
+            ['title' => $title],
         );
     }
 
@@ -303,12 +303,13 @@ class Skill extends Model
      * anyone who can access the scope but cannot approve it, and by every MCP
      * (AI) proposal regardless of who owns it.
      */
-    public function propose(string $title, ?string $summary, string $body, ?User $author, bool $byAi, ?string $note = null, ?int $workSessionId = null): SkillVersion
+    public function propose(string $title, ?string $summary, string $body, ?User $author, bool $byAi, ?string $note = null, ?int $workSessionId = null, string $mode = self::MODE_APPEND): SkillVersion
     {
         return $this->versions()->create([
             'version' => $this->nextVersion(),
             'title' => $title,
             'summary' => $summary,
+            'mode' => $mode,
             'body' => $body,
             'status' => SkillVersion::STATUS_PROPOSED,
             'author_user_id' => $author?->id,
@@ -341,13 +342,13 @@ class Skill extends Model
      * self-approves to `active`; anyone else's change lands `proposed` for an
      * approver. Used identically by the web form and the MCP tool.
      */
-    public function submitVersion(string $title, ?string $summary, string $body, User $author, bool $byAi, ?string $note = null): SkillVersion
+    public function submitVersion(string $title, ?string $summary, string $body, User $author, bool $byAi, ?string $note = null, string $mode = self::MODE_APPEND): SkillVersion
     {
         if (! $byAi && $this->canBeApprovedBy($author)) {
-            return $this->publish($title, $summary, $body, $author);
+            return $this->publish($title, $summary, $body, $author, mode: $mode);
         }
 
-        return $this->propose($title, $summary, $body, $author, $byAi, $note);
+        return $this->propose($title, $summary, $body, $author, $byAi, $note, mode: $mode);
     }
 
     /**
@@ -355,12 +356,13 @@ class Skill extends Model
      * immediately): a self-approved human edit, or the system seeder. Archives
      * the prior active version.
      */
-    public function publish(string $title, ?string $summary, string $body, ?User $author = null, bool $byAi = false): SkillVersion
+    public function publish(string $title, ?string $summary, string $body, ?User $author = null, bool $byAi = false, string $mode = self::MODE_APPEND): SkillVersion
     {
         $version = $this->versions()->create([
             'version' => $this->nextVersion(),
             'title' => $title,
             'summary' => $summary,
+            'mode' => $mode,
             'body' => $body,
             'status' => SkillVersion::STATUS_ACTIVE,
             'author_user_id' => $author?->id,

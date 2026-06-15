@@ -180,7 +180,7 @@ class SkillProposalTest extends TestCase
     {
         $user = User::factory()->create();
         $slot = $user->skills()->create([
-            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'mode' => Skill::MODE_APPEND, 'title' => 'p',
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'title' => 'p',
         ]);
         $old = $slot->publish('p', null, 'OLD', $user);
         $new = $slot->propose('p', null, 'NEW', $user, byAi: true);
@@ -196,7 +196,7 @@ class SkillProposalTest extends TestCase
     {
         $user = User::factory()->create();
         $slot = $user->skills()->create([
-            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'mode' => Skill::MODE_APPEND, 'title' => 'p',
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'title' => 'p',
         ]);
         $slot->publish('p', null, 'V1 active', $user);
         $proposal = $slot->propose('p', null, 'AI proposed body', $user, byAi: true);
@@ -219,7 +219,7 @@ class SkillProposalTest extends TestCase
     {
         $user = User::factory()->create();
         $slot = $user->skills()->create([
-            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'mode' => Skill::MODE_APPEND, 'title' => 'p',
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'plan', 'title' => 'p',
         ]);
         $proposal = $slot->propose('p', null, 'NOPE', $user, byAi: true);
 
@@ -227,21 +227,38 @@ class SkillProposalTest extends TestCase
         $this->assertSame(SkillVersion::STATUS_REJECTED, $proposal->fresh()->status);
     }
 
-    public function test_toggling_overwrite_mode_is_approver_only(): void
+    public function test_mode_is_versioned_and_changes_through_propose_approve(): void
+    {
+        $user = User::factory()->create();
+        $slot = $user->skills()->create(['scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'title' => 'd']);
+        $slot->publish('d', null, 'BODY', $user, mode: Skill::MODE_APPEND);
+
+        // Composes as append.
+        $this->assertSame(Skill::MODE_APPEND, $slot->activeVersion->fresh()->mode);
+
+        // Flipping to overwrite is a proposal carrying the new mode → self-approved live (own personal).
+        $this->actingAs($user)->post(route('skills.propose'), [
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'title' => 'd', 'body' => 'BODY', 'mode' => Skill::MODE_OVERWRITE,
+        ])->assertRedirect();
+
+        $this->assertSame(Skill::MODE_OVERWRITE, $slot->fresh()->activeVersion->mode);
+    }
+
+    public function test_mode_change_lands_proposed_for_a_non_approver(): void
     {
         $owner = User::factory()->create();
         $team = Team::create(['name' => 'T', 'owner_user_id' => $owner->id]);
         $member = User::factory()->create();
         $team->members()->attach($member->id, ['role' => 'member', 'can_approve_prompts' => false]);
+        $slot = $team->skills()->create(['scope' => Skill::SCOPE_TEAM, 'key' => 'develop', 'title' => 'd']);
+        $slot->publish('d', null, 'BODY', $owner, mode: Skill::MODE_APPEND);
 
-        $slot = $team->skills()->create([
-            'scope' => Skill::SCOPE_TEAM, 'key' => 'develop', 'mode' => Skill::MODE_APPEND, 'title' => 'd',
-        ]);
+        // A non-approver proposing overwrite lands PROPOSED — not live.
+        $this->actingAs($member)->post(route('skills.propose'), [
+            'scope' => Skill::SCOPE_TEAM, 'team_id' => $team->id, 'key' => 'develop', 'title' => 'd', 'body' => 'BODY', 'mode' => Skill::MODE_OVERWRITE,
+        ])->assertRedirect();
 
-        $this->actingAs($member)->patch(route('skills.mode', $slot))->assertForbidden();
-        $this->assertSame(Skill::MODE_APPEND, $slot->fresh()->mode);
-
-        $this->actingAs($owner)->patch(route('skills.mode', $slot))->assertRedirect();
-        $this->assertSame(Skill::MODE_OVERWRITE, $slot->fresh()->mode);
+        $this->assertSame(Skill::MODE_APPEND, $slot->fresh()->activeVersion->mode); // still append
+        $this->assertSame(1, $slot->versions()->where('status', SkillVersion::STATUS_PROPOSED)->where('mode', Skill::MODE_OVERWRITE)->count());
     }
 }

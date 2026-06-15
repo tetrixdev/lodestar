@@ -31,9 +31,9 @@
                 </div>
             @endif
 
-            {{-- overwrite warning + mode control --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3" x-data="{ mode: '{{ $skill->mode }}' }">
-                @if ($skill->mode === $M::MODE_OVERWRITE)
+            {{-- how the active version composes (mode is versioned — change it via a proposal) --}}
+            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-1">
+                @if ($skill->activeVersion?->mode === $M::MODE_OVERWRITE)
                     <div class="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-300 p-3 text-sm text-amber-800">
                         <span class="text-lg leading-none">&#9888;</span>
                         <p><strong>This layer OVERWRITES.</strong> When composed, it discards everything above it
@@ -43,16 +43,7 @@
                 @else
                     <p class="text-sm text-gray-600"><strong>Append layer.</strong> Its body is added onto the layers above it.</p>
                 @endif
-
-                @if ($canApprove)
-                    <form method="POST" action="{{ route('skills.mode', $skill) }}"
-                          @submit="if (mode === '{{ $M::MODE_APPEND }}' && ! confirm('Switch to OVERWRITE? When composed, this layer will DISCARD everything above it (system/team/project) and become the base. Continue?')) $event.preventDefault()">
-                        @csrf @method('PATCH')
-                        <button class="text-xs font-medium text-indigo-600 hover:text-indigo-800">
-                            @if ($skill->mode === $M::MODE_OVERWRITE) Switch to append @else Switch to overwrite (full override) @endif
-                        </button>
-                    </form>
-                @endif
+                <p class="text-[11px] text-gray-400">Append vs overwrite is part of a version — change it by proposing a new version below (with its big warning), then approving.</p>
             </div>
 
             {{-- active version --}}
@@ -114,6 +105,18 @@
                                       class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $skill->activeVersion?->body) }}</textarea>
                             <x-input-error :messages="$errors->get('body')" class="mt-1" />
                         </div>
+                        <div x-data="{ mode: '{{ old('mode', $skill->activeVersion?->mode ?? $M::MODE_APPEND) }}' }">
+                            <x-input-label value="How this layer combines" />
+                            <x-select name="mode" x-model="mode" class="mt-1 block w-full sm:w-80">
+                                <option value="{{ $M::MODE_APPEND }}">Append — add onto the layers above it</option>
+                                <option value="{{ $M::MODE_OVERWRITE }}">Overwrite — discard everything above it</option>
+                            </x-select>
+                            <p x-show="mode === '{{ $M::MODE_OVERWRITE }}'" x-cloak
+                               class="mt-2 flex items-start gap-2 rounded-md bg-amber-50 border border-amber-300 p-2 text-xs text-amber-800">
+                                <span class="text-base leading-none">&#9888;</span>
+                                <span><strong>Overwrite is a full override.</strong> When composed, this layer discards everything above it (system / team / project) and becomes the base.</span>
+                            </p>
+                        </div>
                         <div>
                             <x-input-label for="p-note" value="Note for the approver (optional)" />
                             <textarea id="p-note" name="note" rows="2"
@@ -174,6 +177,17 @@
                                     <span class="text-gray-600">{{ $diffB->summary ?: '—' }}@if ($isPhase) <span class="text-gray-300">(n/a for phase skills)</span>@endif</span>
                                 @endif
                             </div>
+                            <div>
+                                <span class="text-gray-400 inline-block w-16">Mode</span>
+                                @if ($diffA->mode !== $diffB->mode)
+                                    <span class="bg-red-50 text-red-800 px-1 line-through">{{ $diffA->mode }}</span>
+                                    <span class="text-gray-400">&rarr;</span>
+                                    <span class="bg-green-50 text-green-800 px-1">{{ $diffB->mode }}</span>
+                                    @if ($diffB->mode === $M::MODE_OVERWRITE)<span class="text-amber-600">&#9888; full override</span>@endif
+                                @else
+                                    <span class="text-gray-600">{{ $diffB->mode }}</span>
+                                @endif
+                            </div>
                         </div>
                         <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Body</p>
                         <div class="font-mono text-xs rounded-md border border-gray-100 overflow-x-auto">
@@ -221,6 +235,18 @@
                                     @if ($isPhase)
                                         <p class="text-[11px] text-gray-400 mt-1">Not used for phase skills (not catalogued).</p>
                                     @endif
+                                </div>
+                                <div x-data="{ mode: '{{ old('mode', $diffB->mode) }}' }">
+                                    <x-input-label value="How this layer combines" />
+                                    <x-select name="mode" x-model="mode" class="mt-1 block w-full sm:w-80">
+                                        <option value="{{ $M::MODE_APPEND }}">Append — add onto the layers above it</option>
+                                        <option value="{{ $M::MODE_OVERWRITE }}">Overwrite — discard everything above it</option>
+                                    </x-select>
+                                    <p x-show="mode === '{{ $M::MODE_OVERWRITE }}'" x-cloak
+                                       class="mt-2 flex items-start gap-2 rounded-md bg-amber-50 border border-amber-300 p-2 text-xs text-amber-800">
+                                        <span class="text-base leading-none">&#9888;</span>
+                                        <span><strong>Overwrite is a full override</strong> — discards everything above this layer.</span>
+                                    </p>
                                 </div>
                                 <div>
                                     <x-input-label for="ae-body" value="Body (markdown)" />

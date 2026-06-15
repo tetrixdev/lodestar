@@ -37,7 +37,7 @@ class RememberTool extends LodestarTool
             return Response::error('No project "'.($data['project'] ?? '').'" belongs to you.');
         }
 
-        $slot = Skill::ensureSlot($scope, $owner, $key, Skill::MODE_APPEND, ucfirst($scope).' '.$key);
+        $slot = Skill::ensureSlot($scope, $owner, $key, ucfirst($scope).' '.$key);
         if (! $slot->canBeAccessedBy($user)) {
             return Response::error('You cannot add learnings to that scope.');
         }
@@ -58,6 +58,7 @@ class RememberTool extends LodestarTool
             byAi: true,
             note: 'Remembered: '.$data['learning'],
             workSessionId: $session?->id,
+            mode: $slot->activeVersion?->mode ?? Skill::MODE_APPEND,
         );
 
         return Response::json([

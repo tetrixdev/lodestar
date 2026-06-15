@@ -96,7 +96,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/skills/versions/{version}/approve', [SkillController::class, 'approve'])->name('skills.versions.approve');
     Route::post('/settings/skills/versions/{version}/approve-edits', [SkillController::class, 'approveWithEdits'])->name('skills.versions.approveEdits');
     Route::post('/settings/skills/versions/{version}/reject', [SkillController::class, 'reject'])->name('skills.versions.reject');
-    Route::patch('/settings/skills/{skill}/mode', [SkillController::class, 'toggleMode'])->name('skills.mode');
 
     // Work sessions — a project's running history of what was done.
     Route::get('/projects/{project}/sessions', [WorkSessionController::class, 'index'])->name('work-sessions.index');

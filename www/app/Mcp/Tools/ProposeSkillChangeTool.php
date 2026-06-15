@@ -48,13 +48,16 @@ class ProposeSkillChangeTool extends LodestarTool
             return $owner; // a tenancy error
         }
 
-        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title']);
+        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['title']);
         if (! $slot->canBeAccessedBy($user)) {
             return Response::error('You cannot propose changes to that scope.');
         }
 
         // byAi: true → never goes live, regardless of who owns the scope.
-        $version = $slot->submitVersion($data['title'], $data['summary'] ?? null, $data['body'], $user, byAi: true, note: $data['note'] ?? null);
+        $version = $slot->submitVersion(
+            $data['title'], $data['summary'] ?? null, $data['body'], $user,
+            byAi: true, note: $data['note'] ?? null, mode: $data['mode'] ?? Skill::MODE_APPEND,
+        );
 
         return Response::json([
             'skill_id' => $slot->id,
@@ -89,7 +92,7 @@ class ProposeSkillChangeTool extends LodestarTool
             'title' => $schema->string()->description('Title for this version.')->required(),
             'summary' => $schema->string()->description('One-line "what / when to use" — shown in the main catalog for named skills.'),
             'body' => $schema->string()->description('The proposed prompt body (markdown).')->required(),
-            'mode' => $schema->string()->enum(Skill::MODES)->description('Set only when creating the slot: append (default) or overwrite (discards the layers above it).'),
+            'mode' => $schema->string()->enum(Skill::MODES)->description('How this version composes: append (default) or overwrite (discards the layers above it). Changing it is part of the proposal.'),
             'note' => $schema->string()->description('Optional message for the approver explaining the change.'),
             'team_id' => $schema->integer()->description('Required when scope=team: the team that owns the layer.'),
             'project' => $schema->string()->description('Required when scope=project: project id or slug.'),

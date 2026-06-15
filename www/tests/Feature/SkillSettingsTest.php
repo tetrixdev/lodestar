@@ -40,7 +40,7 @@ class SkillSettingsTest extends TestCase
             'key' => 'develop',
             'title' => 'My develop additions',
             'body' => 'ALWAYS run the linter.',
-            'mode' => Skill::MODE_APPEND,
+
         ])->assertRedirect();
 
         $slot = $user->skills()->where('key', 'develop')->sole();
@@ -54,7 +54,7 @@ class SkillSettingsTest extends TestCase
         $user = User::factory()->create();
         $slot = $user->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'my-recipe',
-            'mode' => Skill::MODE_APPEND, 'title' => 'My recipe',
+            'title' => 'My recipe',
         ]);
         $slot->publish('My recipe', null, 'body', $user);
         $systemSlot = Skill::slotFor(Skill::SCOPE_SYSTEM, null, 'develop');
@@ -71,7 +71,7 @@ class SkillSettingsTest extends TestCase
         $user = User::factory()->create();
         $slot = $user->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop',
-            'mode' => Skill::MODE_APPEND, 'title' => 'Mine',
+            'title' => 'Mine',
         ]);
         $v1 = $slot->publish('Mine', null, "line one\nline two", $user);
         $v2 = $slot->publish('Mine', null, "line one\nline THREE", $user);
@@ -99,7 +99,7 @@ class SkillSettingsTest extends TestCase
 
         // A project-scope layer only shows up when composing in that project's context.
         $slot = $project->skills()->create([
-            'scope' => Skill::SCOPE_PROJECT, 'key' => 'develop', 'mode' => Skill::MODE_APPEND, 'title' => 'Rocket dev',
+            'scope' => Skill::SCOPE_PROJECT, 'key' => 'develop', 'title' => 'Rocket dev',
         ]);
         $slot->publish('Rocket dev', null, 'PROJECT-RULE', $user);
 
@@ -119,7 +119,7 @@ class SkillSettingsTest extends TestCase
         $owner = User::factory()->create();
         $slot = $owner->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop',
-            'mode' => Skill::MODE_APPEND, 'title' => 'theirs',
+            'title' => 'theirs',
         ]);
 
         $this->actingAs(User::factory()->create())

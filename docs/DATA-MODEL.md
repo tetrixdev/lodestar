@@ -71,15 +71,16 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
 - **Skill** — a *slot*: one addressable layer of a composed prompt, identified by
   (`scope`, `owner`, `key`). `scope` is `system` (ours, `owner` null), `team`,
   `personal` (owner = a User) or `project`. `key` is a phase (`main` / `plan` /
-  `develop` / `ai_review` / `merge`) or an arbitrary named key. `mode` is
-  `append` (add onto the layers above it) or `overwrite` (discard them and start
-  from this layer's body). One slot per (scope, owner, key).
-- **SkillVersion** — one version of a slot's prompt. A slot keeps its full
-  history; exactly one version is `active` (the body composition uses).
-  `status` is `proposed` (awaiting a human approver), `active`, `archived` (a
-  superseded active) or `rejected`. `author_user_id` + `proposed_by_ai` record
-  who wrote it; `note` is the proposal message. Approving a proposed version
-  archives the prior active one.
+  `develop` / `ai_review` / `merge`) or an arbitrary named key. The slot is pure
+  identity — one per (scope, owner, key); all content lives on its versions.
+- **SkillVersion** — one version of a slot's content. A slot keeps its full
+  history; exactly one version is `active` (the one composition uses). It carries
+  `title`, `summary`, `mode` (`append` = add onto the layers above it, or
+  `overwrite` = discard them and start from this body) and `body` — so a proposal
+  changes all of them together and the diff shows it. `status` is `proposed`
+  (awaiting a human approver), `active`, `archived` (a superseded active) or
+  `rejected`. `author_user_id` + `proposed_by_ai` record who wrote it; `note` is
+  the proposal message. Approving a proposed version archives the prior active one.
 - **ProjectSecretRequirement** — a `key` a project needs in its environment to
   run (the manifest), with a `description` and `is_secret` flag. Not sensitive —
   just the name; managed by project approvers.
@@ -368,7 +369,6 @@ erDiagram
         string owner_type "nullable, Team|User|Project; null = system"
         bigint owner_id "nullable, the owner; null = system"
         string key "phase (main|plan|develop|ai_review|merge) or a named key"
-        string mode "append|overwrite"
         string title
     }
 
@@ -378,6 +378,7 @@ erDiagram
         integer version
         string title
         string summary "nullable, one-line; named skills appear in the main catalog"
+        string mode "append|overwrite (how this version composes)"
         text body "the prompt"
         string status "proposed|active|archived|rejected"
         bigint author_user_id FK "nullable, who authored it"

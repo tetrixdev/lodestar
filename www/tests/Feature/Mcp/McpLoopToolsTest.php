@@ -193,7 +193,7 @@ class McpLoopToolsTest extends TestCase
 
         // A personal APPEND layer is composed onto the system base.
         $slot = $user->skills()->create([
-            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'mode' => Skill::MODE_APPEND, 'title' => 'My extras',
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'title' => 'My extras',
         ]);
         $slot->publish('My extras', null, 'ALSO: run the linter.', $user);
 

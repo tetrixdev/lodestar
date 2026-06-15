@@ -26,7 +26,7 @@ class SystemSkillSeeder extends Seeder
             // The system-scope slot (owner null, append base layer).
             $slot = Skill::firstOrCreate(
                 ['scope' => Skill::SCOPE_SYSTEM, 'owner_type' => null, 'owner_id' => null, 'key' => $key],
-                ['mode' => Skill::MODE_APPEND, 'title' => $title],
+                ['title' => $title],
             );
             if ($slot->title !== $title) {
                 $slot->update(['title' => $title]);

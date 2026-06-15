@@ -145,10 +145,13 @@ class SkillController extends Controller
 
         $owner = $this->resolveOwner($request, $data);
 
-        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['mode'] ?? Skill::MODE_APPEND, $data['title']);
+        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['title']);
         abort_unless($slot->canBeAccessedBy($user), 403);
 
-        $version = $slot->submitVersion($data['title'], $data['summary'] ?? null, $data['body'], $user, byAi: false, note: $data['note'] ?? null);
+        $version = $slot->submitVersion(
+            $data['title'], $data['summary'] ?? null, $data['body'], $user,
+            byAi: false, note: $data['note'] ?? null, mode: $data['mode'] ?? Skill::MODE_APPEND,
+        );
 
         return back()->with('status', $version->isActive() ? 'skill-published' : 'skill-proposed');
     }
@@ -179,10 +182,11 @@ class SkillController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'summary' => $this->summaryRule($slot->key),
+            'mode' => ['nullable', Rule::in(Skill::MODES)],
             'body' => ['required', 'string'],
         ]);
 
-        $new = $slot->publish($data['title'], $data['summary'] ?? null, $data['body'], $request->user());
+        $new = $slot->publish($data['title'], $data['summary'] ?? null, $data['body'], $request->user(), mode: $data['mode'] ?? Skill::MODE_APPEND);
         $version->update([
             'status' => SkillVersion::STATUS_ARCHIVED,
             'note' => 'Amended into v'.$new->version.' by '.$request->user()->name
@@ -201,22 +205,6 @@ class SkillController extends Controller
         $version->update(['status' => SkillVersion::STATUS_REJECTED]);
 
         return back()->with('status', 'skill-rejected');
-    }
-
-    /**
-     * Flip a slot between append and overwrite. This changes what the whole layer
-     * does (overwrite discards everything above it), so it is an approver-only
-     * control and the UI warns before applying it.
-     */
-    public function toggleMode(Request $request, Skill $skill): RedirectResponse
-    {
-        abort_unless($skill->canBeApprovedBy($request->user()), 403);
-
-        $skill->update([
-            'mode' => $skill->mode === Skill::MODE_OVERWRITE ? Skill::MODE_APPEND : Skill::MODE_OVERWRITE,
-        ]);
-
-        return back()->with('status', 'skill-mode-changed');
     }
 
     /**

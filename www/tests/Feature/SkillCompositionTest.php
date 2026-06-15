@@ -28,10 +28,9 @@ class SkillCompositionTest extends TestCase
             'owner_type' => $owner ? $owner->getMorphClass() : null,
             'owner_id' => $owner?->getKey(),
             'key' => $key,
-            'mode' => $mode,
             'title' => "{$scope} {$key}",
         ]);
-        $slot->publish("{$scope} {$key}", null, $body);
+        $slot->publish("{$scope} {$key}", null, $body, mode: $mode);
 
         return $slot;
     }
