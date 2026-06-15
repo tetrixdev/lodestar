@@ -14,31 +14,71 @@ class SkillSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_skills_page_shows_the_composed_phases(): void
+    public function test_overview_shows_effective_phases_and_the_layer_list(): void
     {
         $this->seed(SystemSkillSeeder::class);
         $user = User::factory()->create();
 
         $this->actingAs($user)->get(route('skills.index'))
             ->assertOk()
-            ->assertSee('Develop')
-            ->assertSee('Merge & deploy')
-            ->assertSee('layered'); // the explainer copy
+            ->assertSee('Effective prompts')
+            ->assertSee('All skill layers')
+            ->assertSee('Develop')          // a phase label
+            ->assertSee('develop');         // a system layer row (key)
     }
 
-    public function test_a_personal_layer_appears_in_the_composed_prompt(): void
+    public function test_overview_filters_by_scope(): void
     {
         $this->seed(SystemSkillSeeder::class);
         $user = User::factory()->create();
+        $slot = $user->skills()->create([
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'my-recipe',
+            'mode' => Skill::MODE_APPEND, 'title' => 'My recipe',
+        ]);
+        $slot->publish('My recipe', 'body', $user);
+        $systemSlot = Skill::slotFor(Skill::SCOPE_SYSTEM, null, 'develop');
 
+        // Personal filter lists the personal slot row, not the system slot row.
+        $this->actingAs($user)->get(route('skills.index', ['scope' => Skill::SCOPE_PERSONAL]))
+            ->assertOk()
+            ->assertSee(route('skills.show', $slot))
+            ->assertDontSee(route('skills.show', $systemSlot));
+    }
+
+    public function test_slot_detail_shows_versions_active_body_and_a_diff(): void
+    {
+        $user = User::factory()->create();
         $slot = $user->skills()->create([
             'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop',
-            'mode' => Skill::MODE_APPEND, 'title' => 'My extras',
+            'mode' => Skill::MODE_APPEND, 'title' => 'Mine',
         ]);
-        $slot->publish('My extras', 'ALWAYS run the linter.', $user);
+        $v1 = $slot->publish('Mine', "line one\nline two", $user);
+        $v2 = $slot->publish('Mine', "line one\nline THREE", $user);
 
-        $this->actingAs($user)->get(route('skills.index'))
+        $this->actingAs($user)->get(route('skills.show', $slot))
             ->assertOk()
-            ->assertSee('ALWAYS run the linter.');
+            ->assertSee('Active version')
+            ->assertSee('Version history')
+            ->assertSee('Propose a change')
+            ->assertSee('line THREE');
+
+        // Diffing the two versions surfaces the changed line.
+        $this->actingAs($user)->get(route('skills.show', ['skill' => $slot->id, 'a' => $v1->id, 'b' => $v2->id]))
+            ->assertOk()
+            ->assertSee('line two')   // removed
+            ->assertSee('line THREE'); // added
+    }
+
+    public function test_a_stranger_cannot_view_a_personal_slot(): void
+    {
+        $owner = User::factory()->create();
+        $slot = $owner->skills()->create([
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop',
+            'mode' => Skill::MODE_APPEND, 'title' => 'theirs',
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->get(route('skills.show', $slot))
+            ->assertForbidden();
     }
 }

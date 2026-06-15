@@ -70,6 +70,7 @@ Route::middleware('auth')->group(function () {
     // propose a version (anyone in scope), approve/reject (assigned approvers),
     // toggle a layer's append/overwrite mode (approvers).
     Route::get('/settings/skills', [SkillController::class, 'index'])->name('skills.index');
+    Route::get('/settings/skills/{skill}', [SkillController::class, 'show'])->name('skills.show');
     Route::post('/settings/skills/propose', [SkillController::class, 'propose'])->name('skills.propose');
     Route::post('/settings/skills/versions/{version}/approve', [SkillController::class, 'approve'])->name('skills.versions.approve');
     Route::post('/settings/skills/versions/{version}/reject', [SkillController::class, 'reject'])->name('skills.versions.reject');

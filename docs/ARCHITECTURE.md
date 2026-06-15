@@ -82,7 +82,13 @@ they resolve to the most-specific scope (`resolveNamed()`), loaded on demand. Th
 Laravel structure→mode taxonomy + the surface register, ported from the vps-setup
 dev-method). Bodies are delivered at run time via `get_skill`, not as files on the
 developer's machine — so a skill edit reaches every loop on its next call.
-Authoring is **human-gated propose→approve** with versioning (task #53 P3/P4).
+Authoring is **human-gated propose→approve**: anyone in a scope may propose a
+`SkillVersion` (web or the `propose_skill_change` MCP tool), only an assigned
+approver makes it `active`, and an AI proposal never goes live (the rule is
+`Skill::submitVersion()`). The filterable Skills overview (`SkillController`,
+`settings/skills` + `settings/skill-show`) shows the composed effective prompt,
+every layer, version history, a two-version diff (`App\Support\LineDiff`), and the
+append/overwrite toggle (approver-only, with a warning).
 
 **Auth & tenancy** — standard Breeze auth for the web; **Sanctum** for MCP.
 Agents authenticate with a per-machine personal-access token minted in the web UI
