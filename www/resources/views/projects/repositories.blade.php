@@ -60,12 +60,12 @@
                         </div>
                         <div>
                             <x-input-label for="github_connection_id" :value="__('Read through connection')" />
-                            <select id="github_connection_id" name="github_connection_id"
+                            <x-select id="github_connection_id" name="github_connection_id"
                                     class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
                                 @foreach ($connections as $c)
                                     <option value="{{ $c->id }}">{{ $c->label }} (@{{ $c->github_login }})</option>
                                 @endforeach
-                            </select>
+                            </x-select>
                             <x-input-error :messages="$errors->get('github_connection_id')" class="mt-2" />
                         </div>
                         <x-primary-button>{{ __('Link repository') }}</x-primary-button>

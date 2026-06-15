@@ -53,35 +53,35 @@
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <x-input-label value="Scope" />
-                            <select name="scope" x-model="scope" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
+                            <x-select name="scope" x-model="scope" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
                                 <option value="{{ $M::SCOPE_PERSONAL }}">Personal (yours)</option>
                                 <option value="{{ $M::SCOPE_TEAM }}">Team</option>
                                 <option value="{{ $M::SCOPE_PROJECT }}">Project</option>
-                            </select>
+                            </x-select>
                             <x-input-error :messages="$errors->get('scope')" class="mt-1" />
                         </div>
 
                         <div x-show="scope === '{{ $M::SCOPE_TEAM }}'" x-cloak>
                             <x-input-label value="Team" />
-                            <select name="team_id" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
+                            <x-select name="team_id" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
                                 @forelse ($teams as $t)
                                     <option value="{{ $t->id }}" @selected((string) old('team_id') === (string) $t->id)>{{ $t->name }}</option>
                                 @empty
                                     <option value="">You're not in a team</option>
                                 @endforelse
-                            </select>
+                            </x-select>
                             <x-input-error :messages="$errors->get('team_id')" class="mt-1" />
                         </div>
 
                         <div x-show="scope === '{{ $M::SCOPE_PROJECT }}'" x-cloak>
                             <x-input-label value="Project" />
-                            <select name="project_id" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
+                            <x-select name="project_id" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
                                 @forelse ($projects as $pr)
                                     <option value="{{ $pr->id }}" @selected((string) old('project_id') === (string) $pr->id)>{{ $pr->name }}</option>
                                 @empty
                                     <option value="">No projects</option>
                                 @endforelse
-                            </select>
+                            </x-select>
                             <x-input-error :messages="$errors->get('project_id')" class="mt-1" />
                         </div>
 
@@ -120,10 +120,10 @@
 
                     <div>
                         <x-input-label value="How this layer combines" />
-                        <select name="mode" x-model="mode" class="mt-1 block w-full sm:w-72 rounded-md border-gray-300 text-sm">
+                        <x-select name="mode" x-model="mode" class="mt-1 block w-full sm:w-72 rounded-md border-gray-300 text-sm">
                             <option value="{{ $M::MODE_APPEND }}">Append — add onto the layers above it</option>
                             <option value="{{ $M::MODE_OVERWRITE }}">Overwrite — discard everything above it</option>
-                        </select>
+                        </x-select>
                         <p x-show="mode === '{{ $M::MODE_OVERWRITE }}'" x-cloak
                            class="mt-2 flex items-start gap-2 rounded-md bg-amber-50 border border-amber-300 p-2 text-xs text-amber-800">
                             <span class="text-base leading-none">&#9888;</span>
@@ -160,12 +160,12 @@
                         @foreach (['scope', 'key', 'team_id', 'project_id', 'status'] as $f)
                             @if ($filters[$f] ?? null)<input type="hidden" name="{{ $f }}" value="{{ $filters[$f] }}">@endif
                         @endforeach
-                        <select name="preview_project" onchange="this.form.submit()" class="rounded-md border-gray-300 text-sm">
+                        <x-select name="preview_project" onchange="this.form.submit()" class="rounded-md border-gray-300 text-sm">
                             <option value="">Preview: just me</option>
                             @foreach ($projects as $pr)
                                 <option value="{{ $pr->id }}" @selected($previewProject && $previewProject->id === $pr->id)>Preview: {{ $pr->name }}</option>
                             @endforeach
-                        </select>
+                        </x-select>
                     </form>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -196,36 +196,36 @@
                 <h3 class="font-semibold text-gray-800">All skill layers</h3>
 
                 <form method="GET" class="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
-                    <select name="scope" class="rounded-md border-gray-300 text-sm">
+                    <x-select name="scope" class="rounded-md border-gray-300 text-sm">
                         <option value="">Any scope</option>
                         @foreach ($scopes as $s)
                             <option value="{{ $s }}" @selected(($filters['scope'] ?? '') === $s)>{{ ucfirst($s) }}</option>
                         @endforeach
-                    </select>
-                    <select name="key" class="rounded-md border-gray-300 text-sm">
+                    </x-select>
+                    <x-select name="key" class="rounded-md border-gray-300 text-sm">
                         <option value="">Any phase/key</option>
                         @foreach ($phases as $p)
                             <option value="{{ $p }}" @selected(($filters['key'] ?? '') === $p)>{{ $phaseLabels[$p] ?? $p }}</option>
                         @endforeach
-                    </select>
-                    <select name="team_id" class="rounded-md border-gray-300 text-sm">
+                    </x-select>
+                    <x-select name="team_id" class="rounded-md border-gray-300 text-sm">
                         <option value="">Any team</option>
                         @foreach ($teams as $t)
                             <option value="{{ $t->id }}" @selected((string) ($filters['team_id'] ?? '') === (string) $t->id)>{{ $t->name }}</option>
                         @endforeach
-                    </select>
-                    <select name="project_id" class="rounded-md border-gray-300 text-sm">
+                    </x-select>
+                    <x-select name="project_id" class="rounded-md border-gray-300 text-sm">
                         <option value="">Any project</option>
                         @foreach ($projects as $pr)
                             <option value="{{ $pr->id }}" @selected((string) ($filters['project_id'] ?? '') === (string) $pr->id)>{{ $pr->name }}</option>
                         @endforeach
-                    </select>
-                    <select name="status" class="rounded-md border-gray-300 text-sm">
+                    </x-select>
+                    <x-select name="status" class="rounded-md border-gray-300 text-sm">
                         <option value="">Any status</option>
                         @foreach ($statuses as $st)
                             <option value="{{ $st }}" @selected(($filters['status'] ?? '') === $st)>{{ ucfirst($st) }}</option>
                         @endforeach
-                    </select>
+                    </x-select>
                     <div class="col-span-2 md:col-span-5 flex gap-2">
                         <x-primary-button class="!py-1.5 !text-xs">Filter</x-primary-button>
                         <a href="{{ route('skills.index') }}" class="text-xs text-gray-500 hover:text-gray-700 self-center">Clear</a>

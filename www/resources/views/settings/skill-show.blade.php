@@ -116,21 +116,21 @@
                     <form method="GET" class="flex flex-wrap items-end gap-2 text-sm">
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">From</label>
-                            <select name="a" class="h-10 rounded-md border-gray-300 text-sm">
+                            <x-select name="a">
                                 @foreach ($versions as $v)
                                     <option value="{{ $v->id }}" @selected($diffA && $diffA->is($v))>v{{ $v->version }} · {{ $v->status }}</option>
                                 @endforeach
-                            </select>
+                            </x-select>
                         </div>
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">To</label>
-                            <select name="b" class="h-10 rounded-md border-gray-300 text-sm">
+                            <x-select name="b">
                                 @foreach ($versions as $v)
                                     <option value="{{ $v->id }}" @selected($diffB && $diffB->is($v))>v{{ $v->version }} · {{ $v->status }}</option>
                                 @endforeach
-                            </select>
+                            </x-select>
                         </div>
-                        <x-primary-button class="!h-10">Diff</x-primary-button>
+                        <x-primary-button>Diff</x-primary-button>
                     </form>
 
                     @if ($diff)

@@ -110,13 +110,13 @@
                                class="w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
                     </div>
                     @if ($categories->isNotEmpty())
-                        <select x-model="category"
+                        <x-select x-model="category"
                                 class="sm:w-48 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
                             <option value="">All categories</option>
                             @foreach ($categories as $cat)
                                 <option value="{{ $cat }}">{{ $cat }}</option>
                             @endforeach
-                        </select>
+                        </x-select>
                     @endif
                     <div x-data="{ open: false }" class="relative">
                         <button type="button" @click="open = !open" @click.outside="open = false"
@@ -226,12 +226,12 @@
                                 <input name="category" placeholder="Category (optional)"
                                        class="w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
                                 <div class="flex items-center gap-2">
-                                    <select name="priority"
+                                    <x-select name="priority"
                                             class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
                                         @foreach (\App\Models\Task::PRIORITIES as $p)
                                             <option value="{{ $p }}" @selected($p === \App\Models\Task::PRIORITY_NORMAL)>{{ ucfirst($p) }}</option>
                                         @endforeach
-                                    </select>
+                                    </x-select>
                                     <input type="date" name="due_date" title="Due date (optional)"
                                            class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
                                 </div>

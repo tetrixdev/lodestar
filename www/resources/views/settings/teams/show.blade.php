@@ -69,10 +69,10 @@
                                     <form method="POST" action="{{ route('teams.members.update', [$team, $member]) }}"
                                           class="flex items-center gap-2">
                                         @csrf @method('PATCH')
-                                        <select name="role" class="text-sm rounded border-gray-300">
+                                        <x-select name="role" class="text-sm rounded border-gray-300">
                                             <option value="member" @selected($member->pivot->role === 'member')>member</option>
                                             <option value="admin" @selected($member->pivot->role === 'admin')>admin</option>
-                                        </select>
+                                        </x-select>
                                         <label class="flex items-center gap-1 text-xs text-gray-600">
                                             <input type="checkbox" name="can_approve_prompts" value="1"
                                                    @checked($member->pivot->can_approve_prompts)
@@ -109,10 +109,10 @@
                             </div>
                             <div>
                                 <x-input-label for="role" :value="__('Role')" />
-                                <select id="role" name="role" class="mt-1 block rounded border-gray-300 text-sm">
+                                <x-select id="role" name="role" class="mt-1 block rounded border-gray-300 text-sm">
                                     <option value="member">member</option>
                                     <option value="admin">admin</option>
-                                </select>
+                                </x-select>
                             </div>
                         </div>
                         <label class="flex items-center gap-2 text-sm text-gray-700">

@@ -71,12 +71,12 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <x-input-label for="edit-priority" value="Priority" />
-                            <select id="edit-priority" name="priority"
+                            <x-select id="edit-priority" name="priority"
                                     class="mt-1 block w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
                                 @foreach ($T::PRIORITIES as $p)
                                     <option value="{{ $p }}" @selected(old('priority', $priority) === $p)>{{ ucfirst($p) }}</option>
                                 @endforeach
-                            </select>
+                            </x-select>
                         </div>
                         <div>
                             <x-input-label for="edit-category" value="Category" />

@@ -41,13 +41,13 @@
                     <div>
                         <x-input-label for="team_id" :value="__('Team')" />
                         @if ($isOwner)
-                            <select id="team_id" name="team_id"
+                            <x-select id="team_id" name="team_id"
                                     class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
                                 <option value="" @selected($project->team_id === null)>Personal (no team)</option>
                                 @foreach ($teams as $team)
                                     <option value="{{ $team->id }}" @selected($project->team_id === $team->id)>{{ $team->name }}</option>
                                 @endforeach
-                            </select>
+                            </x-select>
                             <x-input-error :messages="$errors->get('team_id')" class="mt-2" />
                         @else
                             <p class="mt-1 text-sm text-gray-600">
@@ -104,12 +104,12 @@
                             @csrf
                             <div class="flex-1">
                                 <x-input-label for="user_id" :value="__('Add a team member')" />
-                                <select id="user_id" name="user_id"
+                                <x-select id="user_id" name="user_id"
                                         class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
                                     @foreach ($candidates as $candidate)
                                         <option value="{{ $candidate->id }}">{{ $candidate->name }} — {{ $candidate->email }}</option>
                                     @endforeach
-                                </select>
+                                </x-select>
                                 <x-input-error :messages="$errors->get('user_id')" class="mt-2" />
                             </div>
                             <label class="flex items-center gap-2 text-sm text-gray-700">
