@@ -75,6 +75,18 @@
                 <p class="text-gray-600">{{ $project->primary_goal }}</p>
             @endif
 
+            {{-- Connect an agent: kick off the autonomous work loop --}}
+            <div class="bg-white shadow-sm sm:rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <p class="text-sm font-medium text-gray-800">Run the work loop</p>
+                    <p class="text-xs text-gray-500">
+                        Paste this into a fresh Claude Code session (with the Lodestar MCP connected) to claim and
+                        work every ready task on this project. It self-paces until the backlog is dry.
+                    </p>
+                </div>
+                @include('projects.partials.loop-prompt', ['project' => $project])
+            </div>
+
             @if ($byStatus->isEmpty() && $archived->isEmpty())
                 <div class="bg-white shadow-sm sm:rounded-lg p-6 text-center space-y-2">
                     <h3 class="font-medium text-gray-900">No tasks yet</h3>

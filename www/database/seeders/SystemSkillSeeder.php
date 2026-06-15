@@ -196,6 +196,36 @@ class SystemSkillSeeder extends Seeder
                 Report a work-session with what shipped, then advance the task to `done`.
                 If anything blocks the merge, advance back to `approved` and report why.
                 MD],
+
+            'work' => ['Work the backlog (the loop)', <<<'MD'
+                You are running the Lodestar work loop for a project. Your job: pick up
+                everything that is ready for an AI and move each card to its next state.
+                Work autonomously — NEVER ask the user a question in your responses; if a
+                task lacks the information to proceed, encode that in the task itself (see
+                below) and move on.
+
+                LOOP:
+                1. Identify the project (the prompt names it). Read the `main` skill first
+                   (get_skill phase:'main') and do its workspace setup.
+                2. claim_task — atomically take the next ready_* card. If nothing is
+                   claimable, you are done; stop.
+                3. For each claimed task, get_skill with its task_id and follow that phase
+                   skill exactly. If you are working several tasks in one run, spawn ONE
+                   subagent per task so each has a clean context, and have it do the work.
+                4. report a work-session, then advance_task. The server allows only legal
+                   moves; a refusal is the rule, not an error.
+                5. Go back to step 2 until nothing is claimable.
+
+                WHEN A TASK LACKS INFORMATION (don't ask the user — act):
+                - PLANNING: if there isn't enough to plan at all, advance the card back to
+                  its backlog state with your questions written into the card; if you can
+                  draft a rough plan, write the plan WITH the open questions called out and
+                  advance to `plan_review` — the human gate stops it reaching dev until a
+                  person answers and sends it back to planning.
+                - AI REVIEW: prefer to pass to `human_review` with concerns recorded as
+                  findings; only send back to dev for genuinely blocking problems. Don't
+                  block the path to merge for taste.
+                MD],
         ];
     }
 }

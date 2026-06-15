@@ -145,15 +145,29 @@
             <div class="lg:col-span-2 space-y-6">
 
             {{-- lifecycle controls --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Lifecycle</p>
-                <div class="flex items-center gap-2 flex-wrap">
-                    @include('projects.partials.transitions', ['task' => $task, 'targets' => $task->allowedTransitions(), 'compact' => false])
+            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-4">
+                <div class="space-y-2">
+                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Lifecycle</p>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        @include('projects.partials.transitions', ['task' => $task, 'targets' => $task->allowedTransitions(), 'compact' => false])
+                    </div>
+                    <x-input-error :messages="$errors->get('status')" />
                 </div>
-                <div>
-                    @include('projects.partials.copy-prompt', ['task' => $task])
+
+                {{-- Hand this off to an agent --}}
+                <div class="border-t border-gray-100 pt-3 space-y-2">
+                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Run with an agent</p>
+                    <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        <div class="flex items-center gap-1.5">
+                            @include('projects.partials.copy-prompt', ['task' => $task])
+                            <span class="text-[11px] text-gray-400">— just this task</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            @include('projects.partials.loop-prompt', ['project' => $task->project])
+                            <span class="text-[11px] text-gray-400">— loop every ready task on {{ $task->project->name }}</span>
+                        </div>
+                    </div>
                 </div>
-                <x-input-error :messages="$errors->get('status')" />
             </div>
 
             {{-- plan --}}

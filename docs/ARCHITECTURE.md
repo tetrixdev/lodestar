@@ -90,6 +90,19 @@ approver makes it `active`, and an AI proposal never goes live (the rule is
 every layer, version history, a two-version diff (`App\Support\LineDiff`), and the
 append/overwrite toggle (approver-only, with a warning).
 
+**The work loop + heartbeat** — a seeded system **`work`** skill (a named, non-phase
+skill) holds the loop's instructions: scan a project's `ready_*` cards, claim each,
+work it (one subagent per task), report + `advance_task`, repeat — autonomously,
+never prompting the user. A human kicks it off with the **loop copy-prompt**
+(`projects/partials/loop-prompt`) — a `/loop` command referencing the `work` skill —
+surfaced on the project page and each task's lifecycle (alongside the single-task
+copy-prompt). The nav **heartbeat** (`<x-agent-heartbeat>`, `Task::agentSnapshot()`)
+is derived, not pinged: it lights up while any reachable card sits in a working
+(`*-ing`) state or was claimed in the last 10 minutes. NOTE: in headless/routine
+runs Claude Code only exposes *locally* configured MCP servers, so the loop setup
+must register Lodestar's MCP locally (`.mcp.json`/`--mcp-config`), not as a
+claude.ai connector.
+
 **Auth & tenancy** — standard Breeze auth for the web; **Sanctum** for MCP.
 Agents authenticate with a per-machine personal-access token minted in the web UI
 (**AgentTokenController**, "Connect a coding agent" — create / list / revoke,

@@ -373,4 +373,21 @@ class Task extends Model
             fn (string $actor) => $actor === self::ACTOR_AI_WORKING,
         ));
     }
+
+    /**
+     * A lightweight "is an agent active?" snapshot across the projects $user can
+     * reach: how many cards are in a working (*-ing) state right now, and the most
+     * recent claim. Drives the nav heartbeat — derived from real activity, no ping.
+     *
+     * @return array{working: int, last_claim: string|null}
+     */
+    public static function agentSnapshot(User $user): array
+    {
+        $base = self::query()->whereHas('project', fn ($q) => $q->accessibleBy($user));
+
+        return [
+            'working' => (clone $base)->whereIn('status', self::workingStatuses())->count(),
+            'last_claim' => (clone $base)->max('claimed_at'),
+        ];
+    }
 }
