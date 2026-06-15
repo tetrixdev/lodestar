@@ -52,6 +52,10 @@
                             {{ __('Profile') }}
                         </x-dropdown-link>
 
+                        <x-dropdown-link :href="route('teams.index')">
+                            {{ __('Teams') }}
+                        </x-dropdown-link>
+
                         <x-dropdown-link :href="route('agent-tokens.index')">
                             {{ __('Connect agent') }}
                         </x-dropdown-link>
@@ -117,6 +121,10 @@
 
                 <x-responsive-nav-link :href="route('profile.edit')">
                     {{ __('Profile') }}
+                </x-responsive-nav-link>
+
+                <x-responsive-nav-link :href="route('teams.index')">
+                    {{ __('Teams') }}
                 </x-responsive-nav-link>
 
                 <x-responsive-nav-link :href="route('agent-tokens.index')">

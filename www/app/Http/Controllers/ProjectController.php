@@ -61,6 +61,94 @@ class ProjectController extends Controller
         ]);
     }
 
+    /** Project settings — name/goal, team assignment, and project approvers. */
+    public function settings(Request $request, Project $project): View
+    {
+        abort_unless($project->isAccessibleBy($request->user()), 403);
+
+        $project->load(['team', 'members']);
+
+        // People who could be a project approver: the team's members (minus the
+        // owner, who always approves). Personal projects have no candidate pool.
+        $candidates = $project->team
+            ? $project->team->members()->where('users.id', '!=', $project->user_id)->orderBy('name')->get()
+            : collect();
+
+        return view('projects.settings', [
+            'project' => $project,
+            'teams' => $request->user()->teams()->orderBy('name')->get(),
+            'isOwner' => $project->user_id === $request->user()->id,
+            'candidates' => $candidates,
+        ]);
+    }
+
+    /** Edit name/description/goal; only the owner may reassign the team. */
+    public function update(Request $request, Project $project): RedirectResponse
+    {
+        abort_unless($project->isAccessibleBy($request->user()), 403);
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'primary_goal' => ['nullable', 'string', 'max:2000'],
+            'team_id' => ['nullable', 'integer'],
+        ]);
+
+        $update = [
+            'name' => $data['name'],
+            'description' => $data['description'] ?? null,
+            'primary_goal' => $data['primary_goal'] ?? null,
+        ];
+
+        // Only the owner can move a project between teams (or to personal). The
+        // chosen team must be one the owner belongs to.
+        if (array_key_exists('team_id', $data) && $project->user_id === $request->user()->id) {
+            $teamId = $data['team_id'] ?: null;
+            if ($teamId !== null && ! $request->user()->isInTeam((int) $teamId)) {
+                return back()->withErrors(['team_id' => 'Pick a team you belong to.']);
+            }
+            $update['team_id'] = $teamId;
+        }
+
+        $project->update($update);
+
+        return redirect()->route('projects.settings', $project)->with('status', 'Project updated.');
+    }
+
+    /** Add a project approver — must be a team member (owner only). */
+    public function addApprover(Request $request, Project $project): RedirectResponse
+    {
+        abort_unless($project->user_id === $request->user()->id, 403);
+
+        $data = $request->validate([
+            'user_id' => ['required', 'integer'],
+            'can_approve_prompts' => ['nullable', 'boolean'],
+        ]);
+
+        // Eligible only if they belong to the project's team.
+        $eligible = $project->team
+            && $project->team->members()->whereKey($data['user_id'])->exists();
+        if (! $eligible) {
+            return back()->withErrors(['user_id' => 'That person is not on this project’s team.']);
+        }
+
+        $project->members()->syncWithoutDetaching([
+            $data['user_id'] => ['can_approve_prompts' => $request->boolean('can_approve_prompts')],
+        ]);
+
+        return redirect()->route('projects.settings', $project)->with('status', 'Approver added.');
+    }
+
+    /** Remove a project approver (owner only). */
+    public function removeApprover(Request $request, Project $project, int $user): RedirectResponse
+    {
+        abort_unless($project->user_id === $request->user()->id, 403);
+
+        $project->members()->detach($user);
+
+        return redirect()->route('projects.settings', $project)->with('status', 'Approver removed.');
+    }
+
     /** Create a project for the current user. */
     public function store(Request $request): RedirectResponse
     {

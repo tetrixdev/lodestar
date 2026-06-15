@@ -12,6 +12,8 @@
                    class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Sessions &rarr;</a>
                 <a href="{{ route('repositories.index', $project) }}"
                    class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Repositories &rarr;</a>
+                <a href="{{ route('projects.settings', $project) }}"
+                   class="text-sm font-medium text-indigo-600 hover:text-indigo-800">Settings &rarr;</a>
             </div>
         </div>
     </x-slot>

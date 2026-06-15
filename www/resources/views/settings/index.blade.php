@@ -18,6 +18,11 @@
                         'desc' => 'Mint per-machine tokens so your coding agents can reach the board over MCP.',
                     ],
                     [
+                        'href' => route('teams.index'),
+                        'title' => 'Teams',
+                        'desc' => 'Create teams, manage members, and share projects + approval rights.',
+                    ],
+                    [
                         'href' => route('github.index'),
                         'title' => 'GitHub connections',
                         'desc' => 'Link the accounts and tokens used to read your repositories.',
