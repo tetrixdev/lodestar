@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * A project: a group of repos with a shared goal, owned by a user. The home base
@@ -85,5 +86,11 @@ class Project extends Model
     public function repositories(): BelongsToMany
     {
         return $this->belongsToMany(Repository::class, 'project_repository')->withTimestamps();
+    }
+
+    /** This project's project-scope skill slots. */
+    public function skills(): MorphMany
+    {
+        return $this->morphMany(Skill::class, 'owner');
     }
 }

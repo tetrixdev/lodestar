@@ -10,21 +10,27 @@ use Illuminate\Database\Seeder;
 /**
  * The system skills that ship with Lodestar — the prompts that drive the loop.
  * `main` is the bootstrap entry point; the other four drive one lifecycle phase
- * each. Idempotent by (kind, key, version): re-running upserts the current
- * version in place, so this is safe to call on every deploy. Bump the version
- * constant when a skill's contract changes and both old and new should coexist.
+ * each. Each is a system-scope append slot carrying one active version.
+ * Idempotent: re-running publishes a new active version only when the title or
+ * body actually changed, so this is safe to call on every deploy.
  */
 class SystemSkillSeeder extends Seeder
 {
-    private const VERSION = 1;
-
     public function run(): void
     {
         foreach ($this->skills() as $key => [$title, $body]) {
-            Skill::updateOrCreate(
-                ['kind' => Skill::KIND_SYSTEM, 'key' => $key, 'version' => self::VERSION],
-                ['title' => $title, 'body' => $body, 'user_id' => null, 'source_version' => null],
+            // The system-scope slot (owner null, append base layer).
+            $slot = Skill::firstOrCreate(
+                ['scope' => Skill::SCOPE_SYSTEM, 'owner_type' => null, 'owner_id' => null, 'key' => $key],
+                ['mode' => Skill::MODE_APPEND, 'title' => $title],
             );
+
+            // Publish a fresh active version only when the body/title changed —
+            // so re-running on deploy is idempotent and keeps the history clean.
+            $active = $slot->activeVersion()->first();
+            if ($active === null || $active->title !== $title || $active->body !== $body) {
+                $slot->publish($title, $body);
+            }
         }
     }
 

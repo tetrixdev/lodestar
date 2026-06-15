@@ -46,8 +46,8 @@ signed-in user.
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
   `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
   `queueStateFor()`), the claim/release rules live as guarded conditional-UPDATE
-  helpers on **`Review`** (`claimFor()`, `releaseFor()`), and skill resolution
-  lives on **`Skill`** (`resolve()`, `currentSystem()`).
+  helpers on **`Review`** (`claimFor()`, `releaseFor()`), and skill composition
+  lives on **`Skill`** (`compose()`, `resolveNamed()`, `slotFor()`).
 
 **The MCP server (`app/Mcp/`, laravel/mcp)** — the agent-facing surface, mirror
 of the web UI. `LodestarServer` is registered at `POST /mcp` in `routes/ai.php`
@@ -64,17 +64,23 @@ holds the tenancy helpers):
   (resolves the phase prompt — incl. the `main` bootstrap), `advance_task`
   (legal-transition-only move), `report` (logs a WorkSession).
 
-**Skills (`app/Models/Skill.php`, `SkillBinding`, `SystemSkillSeeder`)** — the
-prompts ship as `system` skills (seeded/upserted from code), resolved per
-user/project through `skill_bindings`; a user may fork one into an editable
-`user` skill. Five keys: **`main`** — the bootstrap skill an agent loads first
-(`get_skill(phase:'main')`, no task), carrying the loop + routing + per-project
-main instructions; and the four lifecycle phases **`plan` / `develop` /
-`ai_review` / `merge`**. The **`ai_review`** skill encodes the structure-first
-review method (the 5 modes + the Laravel structure→mode taxonomy + the surface
-register, ported from the vps-setup dev-method). Bodies are delivered at run time
-via `get_skill`, not as files on the developer's machine — so a skill edit
-reaches every loop on its next call.
+**Skills (`app/Models/Skill.php`, `SkillVersion`, `SystemSkillSeeder`)** — skills
+are **layered**. A `Skill` is a slot at one scope (`system` / `team` / `personal`
+/ `project`); its prompt text lives in versioned `SkillVersion` rows, one of them
+`active`. A phase prompt is **composed** at run time by `Skill::compose()` across
+scopes in order system → team → personal → project — each layer `append`s, or
+`overwrite`s (discarding everything above it); the personal layer is dropped when
+the project's team sets `allow_personal_instructions = false`. System skills ship
+seeded from code. Five phase keys compose: **`main`** — the bootstrap skill an
+agent loads first (`get_skill(phase:'main')`, no task), carrying the loop +
+routing + per-project main instructions; and the four lifecycle phases **`plan` /
+`develop` / `ai_review` / `merge`**. Arbitrary **named** keys don't compose —
+they resolve to the most-specific scope (`resolveNamed()`), loaded on demand. The
+**`ai_review`** skill encodes the structure-first review method (the 5 modes + the
+Laravel structure→mode taxonomy + the surface register, ported from the vps-setup
+dev-method). Bodies are delivered at run time via `get_skill`, not as files on the
+developer's machine — so a skill edit reaches every loop on its next call.
+Authoring is **human-gated propose→approve** with versioning (task #53 P3/P4).
 
 **Auth & tenancy** — standard Breeze auth for the web; **Sanctum** for MCP.
 Agents authenticate with a per-machine personal-access token minted in the web UI
@@ -227,10 +233,12 @@ agent's input crosses into our data writes.
      so detail never lands without a TL;DR. Not applied retroactively to rows
      written before the rule.
    - **Skill delivery.** `get_skill` returns prompt *text* the agent then runs;
-     the resolution (fork vs system) is decided server-side. A malformed system
-     skill is the one thing that could mislead every loop at once, so skills are
-     versioned and treated as reviewable logic (the previous system version stays
-     pinnable for rollback).
+     the composition (which scope layers, append vs overwrite) is decided
+     server-side. A malformed system skill is the one thing that could mislead
+     every loop at once, so skill bodies are versioned and treated as reviewable
+     logic — every change is a `SkillVersion`, and any prior `active` version
+     stays pinnable for rollback. AI clients may *propose* a version over MCP but
+     can never make one `active` (human-gated approval — task #53 P3).
 
 2. **The GitHub compare API (BUILT).** When a review is created from a comparison
    (`repo` + `base_ref`…`head_ref`), Lodestar fetches the changed-file list

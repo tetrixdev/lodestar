@@ -10,8 +10,8 @@
 Lodestar is the home base for software work: **Projects** hold **Tasks** (kanban
 cards that ride a 13-state lifecycle), **WorkSessions** (a work-log), and
 **Reviews** (a change reviewed against a base, walked through as ordered
-**ReviewSections**). **Skills** are the versioned prompts that drive each loop
-phase, and **SkillBindings** pick which skill a user's loop runs. Everything is
+**ReviewSections**). **Skills** are layered prompt slots and **SkillVersions**
+their versioned bodies — a phase prompt is composed across scopes. Everything is
 **multi-tenant by ownership** — a Project belongs to a User, and everything else
 reaches its owner through that Project; AI agents reach the same data through MCP,
 authenticated by a per-machine **PersonalAccessToken** (Sanctum).
@@ -68,17 +68,18 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   file / route); `checks` is a JSON list of "what to confirm"; `status`
   (`open` / `signed_off`) + `note` carry the human's per-section sign-off.
 
-- **Skill** — a versioned prompt that drives one loop phase. `kind` is `system`
-  (ours, read-only, `user_id` null — shipped from code and upserted on deploy,
-  unique per `key`+`version`) or `user` (a user's editable fork, with
-  `source_version` recording the system version it was cloned from). `key` is the
-  phase (`plan` / `develop` / `ai_review` / `merge`); `title` + `body` (the
-  prompt) are what `get_skill` returns.
-- **SkillBinding** — which Skill a user's loop runs for a phase. `user_id` +
-  `phase` + an optional `project_id` (null = the user's default across projects;
-  a row with a project overrides it there) point at a `skill_id`. No binding row
-  → the loop falls back to the current system skill, so system-skill updates
-  reach unbound users automatically.
+- **Skill** — a *slot*: one addressable layer of a composed prompt, identified by
+  (`scope`, `owner`, `key`). `scope` is `system` (ours, `owner` null), `team`,
+  `personal` (owner = a User) or `project`. `key` is a phase (`main` / `plan` /
+  `develop` / `ai_review` / `merge`) or an arbitrary named key. `mode` is
+  `append` (add onto the layers above it) or `overwrite` (discard them and start
+  from this layer's body). One slot per (scope, owner, key).
+- **SkillVersion** — one version of a slot's prompt. A slot keeps its full
+  history; exactly one version is `active` (the body composition uses).
+  `status` is `proposed` (awaiting a human approver), `active`, `archived` (a
+  superseded active) or `rejected`. `author_user_id` + `proposed_by_ai` record
+  who wrote it; `note` is the proposal message. Approving a proposed version
+  archives the prior active one.
 - **PersonalAccessToken** — Sanctum's API token (one per machine/agent). The MCP
   server authenticates each request from the `Authorization: Bearer` token and
   resolves the tenant (`tokenable` = the User); `name` is the machine label
@@ -144,10 +145,12 @@ These are the rules the column list alone won't tell you:
   add a lease / heartbeat / auto-reclaim. The happy flow is expected; if an agent
   crashes mid-task, a human presses **Release** on the board, which returns the
   `*-ing` card to its `ready_*` queue and clears the claim so the loop re-picks it.
-- **Skill resolution is server-side.** `get_skill` resolves the skill for a phase
-  as: a project-specific `SkillBinding` → the user's default binding → the current
-  (highest-version) system skill. So editing a system skill updates every unbound
-  user's loop on their next call, with no client change.
+- **Skill composition is server-side.** `get_skill` composes a phase prompt from
+  the active version of each scope's slot, in order system → team → personal →
+  project (append, or an `overwrite` layer wiping everything above it; the
+  personal layer is dropped when the team forbids it). Named (non-phase) keys
+  don't compose — they resolve to the most-specific scope. So editing the system
+  layer updates every loop on its next call, with no client change.
 - **Every changed file must be covered by a section (the coverage guard).** A
   review built from a GitHub comparison stores its changed files as `review_files`
   (fetched server-side from GitHub — never the AI's claim). Each ReviewSection
@@ -204,10 +207,11 @@ erDiagram
     REVIEW_FILE }o--o{ REVIEW_SECTION : "review_file_section (covered by)"
     REVIEW }o--o{ TASK : "review_task (covers)"
     USER ||--o{ REVIEW : "assigned (nullable)"
-    USER ||--o{ SKILL : "owns forks (nullable)"
-    USER ||--o{ SKILL_BINDING : binds
-    PROJECT ||--o{ SKILL_BINDING : "scopes (nullable)"
-    SKILL ||--o{ SKILL_BINDING : "bound as"
+    SKILL ||--o{ SKILL_VERSION : "versioned by"
+    USER ||--o{ SKILL : "owns personal-scope (polymorphic)"
+    TEAM ||--o{ SKILL : "owns team-scope (polymorphic)"
+    PROJECT ||--o{ SKILL : "owns project-scope (polymorphic)"
+    USER ||--o{ SKILL_VERSION : "authored (nullable)"
     USER ||--o{ PERSONAL_ACCESS_TOKEN : authenticates
     USER ||--o{ GITHUB_CONNECTION : connects
     GITHUB_CONNECTION ||--o{ REPOSITORY : reads
@@ -343,21 +347,24 @@ erDiagram
 
     SKILL {
         bigint id PK
-        string kind "system|user"
-        string key "main|plan|develop|ai_review|merge"
+        string scope "system|team|personal|project"
+        string owner_type "nullable, Team|User|Project; null = system"
+        bigint owner_id "nullable, the owner; null = system"
+        string key "phase (main|plan|develop|ai_review|merge) or a named key"
+        string mode "append|overwrite"
+        string title
+    }
+
+    SKILL_VERSION {
+        bigint id PK
+        bigint skill_id FK
         integer version
         string title
         text body "the prompt"
-        bigint user_id FK "nullable, owner of a fork"
-        integer source_version "nullable, system version a fork came from"
-    }
-
-    SKILL_BINDING {
-        bigint id PK
-        bigint user_id FK
-        bigint project_id FK "nullable, null = user default"
-        string phase "plan|develop|ai_review|merge"
-        bigint skill_id FK
+        string status "proposed|active|archived|rejected"
+        bigint author_user_id FK "nullable, who authored it"
+        boolean proposed_by_ai "an MCP (AI) authored the proposal"
+        text note "nullable, proposal note"
     }
 
     PERSONAL_ACCESS_TOKEN {

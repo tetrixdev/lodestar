@@ -5,25 +5,51 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
- * A versioned prompt that drives one phase of the agent loop. `kind=system`
- * skills are ours (read-only, shipped from code); `kind=user` skills are a
- * user's editable fork. See the migration for the column contract.
+ * A skill SLOT: one addressable layer of a composed prompt, identified by
+ * (scope, owner, key). The prompt text lives in versioned {@see SkillVersion}
+ * rows — exactly one is `active`, and that's the body composition uses.
+ *
+ * For a phase key, the effective prompt is COMPOSED across scopes in order
+ * system → team → personal → project (see {@see self::compose()}): each layer
+ * `append`s by default, or `overwrite`s (discarding everything above it and
+ * starting from its own body). Arbitrary named keys do not compose — they
+ * resolve to the most-specific scope only (see {@see self::resolveNamed()}).
  */
 class Skill extends Model
 {
     protected $guarded = [];
 
-    public const KIND_SYSTEM = 'system';
+    // ── Scopes (the layer an owner contributes) ──────────────────────────────
 
-    public const KIND_USER = 'user';
+    public const SCOPE_SYSTEM = 'system';
+
+    public const SCOPE_TEAM = 'team';
+
+    public const SCOPE_PERSONAL = 'personal';
+
+    public const SCOPE_PROJECT = 'project';
+
+    /** Scopes in composition order: system base → team → personal → project. */
+    public const SCOPES = [self::SCOPE_SYSTEM, self::SCOPE_TEAM, self::SCOPE_PERSONAL, self::SCOPE_PROJECT];
+
+    // ── Compose mode ─────────────────────────────────────────────────────────
+
+    public const MODE_APPEND = 'append';
+
+    public const MODE_OVERWRITE = 'overwrite';
+
+    public const MODES = [self::MODE_APPEND, self::MODE_OVERWRITE];
+
+    // ── Phase keys (these compose; any other key is a named skill) ────────────
 
     /**
-     * The skill keys. The four lifecycle phases plus `main` — the bootstrap
-     * skill an agent loads first (it has no task/working-state; it's fetched
-     * explicitly via get_skill(phase:'main')).
+     * The composing phase keys. `main` is the bootstrap skill an agent loads
+     * first; the other four drive one lifecycle phase each.
      */
     public const PHASES = ['main', 'plan', 'develop', 'ai_review', 'merge'];
 
@@ -35,47 +61,205 @@ class Skill extends Model
         'merge' => 'Merge & deploy',
     ];
 
-    public function user(): BelongsTo
+    /** A phase key composes across scopes; any other key is a named skill. */
+    public static function isPhase(string $key): bool
     {
-        return $this->belongsTo(User::class);
+        return in_array($key, self::PHASES, true);
+    }
+
+    // ── Relationships ─────────────────────────────────────────────────────────
+
+    /** The owner of the slot: a Team, User (personal) or Project. Null = system. */
+    public function owner(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(SkillVersion::class);
+    }
+
+    /** The single live version this slot contributes. */
+    public function activeVersion(): HasOne
+    {
+        return $this->hasOne(SkillVersion::class)->where('status', SkillVersion::STATUS_ACTIVE);
+    }
+
+    /** Proposed (awaiting human approval) versions, newest first. */
+    public function proposedVersions(): HasMany
+    {
+        return $this->versions()->where('status', SkillVersion::STATUS_PROPOSED)->latest('version');
     }
 
     public function isSystem(): bool
     {
-        return $this->kind === self::KIND_SYSTEM;
+        return $this->scope === self::SCOPE_SYSTEM;
     }
 
-    /** The current (highest-version) system skill for a phase, or null. */
-    public static function currentSystem(string $phase): ?self
+    // ── Slot lookup ───────────────────────────────────────────────────────────
+
+    /**
+     * The slot for a (scope, owner, key), with its active version eager-loaded.
+     * $owner is null for the system scope.
+     */
+    public static function slotFor(string $scope, ?Model $owner, string $key): ?self
     {
-        return self::query()
-            ->where('kind', self::KIND_SYSTEM)
-            ->where('key', $phase)
-            ->orderByDesc('version')
-            ->first();
+        $query = self::query()
+            ->where('scope', $scope)
+            ->where('key', $key)
+            ->with('activeVersion');
+
+        if ($owner === null) {
+            $query->whereNull('owner_id');
+        } else {
+            $query->where('owner_type', $owner->getMorphClass())
+                ->where('owner_id', $owner->getKey());
+        }
+
+        return $query->first();
+    }
+
+    // ── Composition (phase keys) ──────────────────────────────────────────────
+
+    /**
+     * The effective prompt for a phase $key, composed for $user working on
+     * $project. Layers apply in order system → team → personal → project; an
+     * `overwrite` layer discards everything accumulated above it. The personal
+     * layer is dropped when the project's team forbids personal instructions.
+     *
+     * @return array{body: string, layers: list<array{scope: string, title: string, mode: string, version: int}>}
+     */
+    public static function compose(User $user, ?Project $project, string $key): array
+    {
+        $team = $project?->team;
+        $allowPersonal = $team === null ? true : (bool) $team->allow_personal_instructions;
+
+        // The candidate slot at each scope, in composition order.
+        $candidates = [self::slotFor(self::SCOPE_SYSTEM, null, $key)];
+        if ($team !== null) {
+            $candidates[] = self::slotFor(self::SCOPE_TEAM, $team, $key);
+        }
+        if ($allowPersonal) {
+            $candidates[] = self::slotFor(self::SCOPE_PERSONAL, $user, $key);
+        }
+        if ($project !== null) {
+            $candidates[] = self::slotFor(self::SCOPE_PROJECT, $project, $key);
+        }
+
+        $bodies = [];
+        $layers = [];
+
+        foreach (array_filter($candidates) as $slot) {
+            $version = $slot->activeVersion;
+            if ($version === null) {
+                continue; // a slot with no active version contributes nothing
+            }
+
+            if ($slot->mode === self::MODE_OVERWRITE) {
+                $bodies = [];   // discard everything above this layer
+                $layers = [];
+            }
+
+            $bodies[] = $version->body;
+            $layers[] = [
+                'scope' => $slot->scope,
+                'title' => $version->title,
+                'mode' => $slot->mode,
+                'version' => $version->version,
+            ];
+        }
+
+        return ['body' => implode("\n\n", $bodies), 'layers' => $layers];
+    }
+
+    // ── Versioning ─────────────────────────────────────────────────────────
+
+    /** The next version number for this slot (1-based, monotonic). */
+    public function nextVersion(): int
+    {
+        return (int) $this->versions()->max('version') + 1;
     }
 
     /**
-     * Resolve which skill $user's loop should run for $phase on $project:
-     * a project-specific binding, else the user's default binding, else the
-     * current system skill. Returns null only if no system skill is seeded.
+     * Record a proposed change to this slot — awaiting a human approver. Used by
+     * anyone who can access the scope but cannot approve it, and by every MCP
+     * (AI) proposal regardless of who owns it.
      */
-    public static function resolve(User $user, ?Project $project, string $phase): ?self
+    public function propose(string $title, string $body, ?User $author, bool $byAi, ?string $note = null): SkillVersion
     {
-        $binding = SkillBinding::query()
-            ->where('user_id', $user->id)
-            ->where('phase', $phase)
-            ->where(function ($q) use ($project) {
-                $q->whereNull('project_id');
-                if ($project) {
-                    $q->orWhere('project_id', $project->id);
-                }
-            })
-            // A project-specific binding (project_id NOT NULL) wins over the default.
-            ->orderByRaw('project_id IS NULL')
-            ->with('skill')
-            ->first();
+        return $this->versions()->create([
+            'version' => $this->nextVersion(),
+            'title' => $title,
+            'body' => $body,
+            'status' => SkillVersion::STATUS_PROPOSED,
+            'author_user_id' => $author?->id,
+            'proposed_by_ai' => $byAi,
+            'note' => $note,
+        ]);
+    }
 
-        return $binding?->skill ?? self::currentSystem($phase);
+    /**
+     * Make $version the live one, archiving whatever was active before it. The
+     * version must belong to this slot. Returns it for chaining.
+     */
+    public function activate(SkillVersion $version): SkillVersion
+    {
+        $this->versions()
+            ->where('status', SkillVersion::STATUS_ACTIVE)
+            ->whereKeyNot($version->id)
+            ->update(['status' => SkillVersion::STATUS_ARCHIVED]);
+
+        $version->update(['status' => SkillVersion::STATUS_ACTIVE]);
+        $this->unsetRelation('activeVersion');
+
+        return $version;
+    }
+
+    /**
+     * Publish a brand-new active version in one step (proposal that lands live
+     * immediately): a self-approved human edit, or the system seeder. Archives
+     * the prior active version.
+     */
+    public function publish(string $title, string $body, ?User $author = null, bool $byAi = false): SkillVersion
+    {
+        $version = $this->versions()->create([
+            'version' => $this->nextVersion(),
+            'title' => $title,
+            'body' => $body,
+            'status' => SkillVersion::STATUS_ACTIVE,
+            'author_user_id' => $author?->id,
+            'proposed_by_ai' => $byAi,
+        ]);
+
+        return $this->activate($version);
+    }
+
+    /**
+     * A named (non-phase) skill resolves to the MOST-SPECIFIC scope only — no
+     * composition: project → personal → team → system. Returns the active
+     * version, or null if no scope defines that key.
+     */
+    public static function resolveNamed(User $user, ?Project $project, string $key): ?SkillVersion
+    {
+        // (scope, owner) candidates, most-specific first.
+        $candidates = [];
+        if ($project !== null) {
+            $candidates[] = [self::SCOPE_PROJECT, $project];
+        }
+        $candidates[] = [self::SCOPE_PERSONAL, $user];
+        if ($project?->team !== null) {
+            $candidates[] = [self::SCOPE_TEAM, $project->team];
+        }
+        $candidates[] = [self::SCOPE_SYSTEM, null];
+
+        foreach ($candidates as [$scope, $owner]) {
+            $slot = self::slotFor($scope, $owner, $key);
+            if ($slot?->activeVersion !== null) {
+                return $slot->activeVersion;
+            }
+        }
+
+        return null;
     }
 }

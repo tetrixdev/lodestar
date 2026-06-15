@@ -66,16 +66,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/github', [GithubConnectionController::class, 'store'])->name('github.store');
     Route::delete('/settings/github/{connection}', [GithubConnectionController::class, 'destroy'])->name('github.destroy');
 
-    // Skills — view the system prompts, duplicate to a fork, edit the fork.
+    // Skills — view the composed effective prompt per phase. Authoring
+    // (propose/approve, versioning, named skills) lands in the P4 overview.
     Route::get('/settings/skills', [SkillController::class, 'index'])->name('skills.index');
-    Route::post('/settings/skills/{skill}/duplicate', [SkillController::class, 'duplicate'])->name('skills.duplicate');
-    Route::get('/settings/skills/{skill}/edit', [SkillController::class, 'edit'])->name('skills.edit');
-    Route::patch('/settings/skills/{skill}', [SkillController::class, 'update'])->name('skills.update');
-    Route::delete('/settings/skills/{skill}', [SkillController::class, 'destroy'])->name('skills.destroy');
-
-    // Skill bindings — choose which skill each loop phase runs (user default).
-    Route::post('/settings/skills/bind', [SkillController::class, 'bind'])->name('skills.bind');
-    Route::delete('/settings/skills/bind/{phase}', [SkillController::class, 'unbind'])->name('skills.unbind');
 
     // Work sessions — a project's running history of what was done.
     Route::get('/projects/{project}/sessions', [WorkSessionController::class, 'index'])->name('work-sessions.index');

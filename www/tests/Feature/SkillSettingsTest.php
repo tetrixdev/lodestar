@@ -14,62 +14,31 @@ class SkillSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_skills_page_lists_the_system_skills(): void
+    public function test_the_skills_page_shows_the_composed_phases(): void
     {
         $this->seed(SystemSkillSeeder::class);
         $user = User::factory()->create();
 
         $this->actingAs($user)->get(route('skills.index'))
             ->assertOk()
-            ->assertSee('Develop a task')
-            ->assertSee('Merge & deploy a task');
+            ->assertSee('Develop')
+            ->assertSee('Merge & deploy')
+            ->assertSee('layered'); // the explainer copy
     }
 
-    public function test_duplicating_a_system_skill_creates_an_editable_fork(): void
+    public function test_a_personal_layer_appears_in_the_composed_prompt(): void
     {
         $this->seed(SystemSkillSeeder::class);
         $user = User::factory()->create();
-        $system = Skill::currentSystem('develop');
 
-        $this->actingAs($user)->post(route('skills.duplicate', $system))->assertRedirect();
-
-        $fork = $user->skills()->sole();
-        $this->assertSame(Skill::KIND_USER, $fork->kind);
-        $this->assertSame('develop', $fork->key);
-        $this->assertSame($system->version, $fork->source_version);
-    }
-
-    public function test_a_user_can_edit_their_fork_but_not_a_system_skill(): void
-    {
-        $this->seed(SystemSkillSeeder::class);
-        $user = User::factory()->create();
-        $system = Skill::currentSystem('develop');
-        $fork = $user->skills()->create([
-            'kind' => Skill::KIND_USER, 'key' => 'develop', 'version' => 1,
-            'title' => 'mine', 'body' => 'x', 'source_version' => 1,
+        $slot = $user->skills()->create([
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop',
+            'mode' => Skill::MODE_APPEND, 'title' => 'My extras',
         ]);
+        $slot->publish('My extras', 'ALWAYS run the linter.', $user);
 
-        $this->actingAs($user)->patch(route('skills.update', $fork), [
-            'title' => 'updated', 'body' => 'new body',
-        ])->assertRedirect();
-        $this->assertSame('updated', $fork->fresh()->title);
-
-        // System skills are read-only.
-        $this->actingAs($user)->patch(route('skills.update', $system), [
-            'title' => 'hacked', 'body' => 'nope',
-        ])->assertForbidden();
-    }
-
-    public function test_a_user_cannot_edit_another_users_fork(): void
-    {
-        $owner = User::factory()->create();
-        $fork = $owner->skills()->create([
-            'kind' => Skill::KIND_USER, 'key' => 'develop', 'version' => 1,
-            'title' => 'theirs', 'body' => 'x', 'source_version' => 1,
-        ]);
-
-        $this->actingAs(User::factory()->create())
-            ->patch(route('skills.update', $fork), ['title' => 'x', 'body' => 'y'])
-            ->assertForbidden();
+        $this->actingAs($user)->get(route('skills.index'))
+            ->assertOk()
+            ->assertSee('ALWAYS run the linter.');
     }
 }

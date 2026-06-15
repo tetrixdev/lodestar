@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * A team that shares projects + a managed skill set. The owner is always also a
@@ -47,6 +48,12 @@ class Team extends Model
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);
+    }
+
+    /** This team's team-scope skill slots. */
+    public function skills(): MorphMany
+    {
+        return $this->morphMany(Skill::class, 'owner');
     }
 
     /** May this user approve team-level skill changes? */

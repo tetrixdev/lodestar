@@ -10,7 +10,6 @@ use App\Mcp\Tools\ClaimTaskTool;
 use App\Mcp\Tools\GetSkillTool;
 use App\Mcp\Tools\ReportTool;
 use App\Models\Skill;
-use App\Models\SkillBinding;
 use App\Models\Task;
 use App\Models\User;
 use Database\Seeders\SystemSkillSeeder;
@@ -162,23 +161,23 @@ class McpLoopToolsTest extends TestCase
         LodestarServer::actingAs($user)
             ->tool(GetSkillTool::class, ['phase' => 'main'])
             ->assertOk()
-            ->assertSee('"kind":"system"')
+            ->assertSee('"composed":true')
+            ->assertSee('"scope":"system"')
             ->assertSee('start here');
     }
 
-    public function test_every_phase_has_a_seeded_system_skill(): void
+    public function test_every_phase_has_a_seeded_active_system_skill(): void
     {
         $this->seed(SystemSkillSeeder::class);
 
         foreach (Skill::PHASES as $phase) {
-            $this->assertNotNull(
-                Skill::currentSystem($phase),
-                "no system skill seeded for phase {$phase}",
-            );
+            $slot = Skill::slotFor(Skill::SCOPE_SYSTEM, null, $phase);
+            $this->assertNotNull($slot, "no system slot seeded for phase {$phase}");
+            $this->assertNotNull($slot->activeVersion, "no active version for phase {$phase}");
         }
     }
 
-    public function test_get_skill_falls_back_to_system_then_prefers_a_fork(): void
+    public function test_get_skill_composes_system_base_then_a_personal_layer(): void
     {
         $this->seed(SystemSkillSeeder::class);
 
@@ -186,26 +185,22 @@ class McpLoopToolsTest extends TestCase
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
 
-        // No binding → the current system develop skill.
+        // No personal layer → just the system develop base.
         LodestarServer::actingAs($user)
             ->tool(GetSkillTool::class, ['task_id' => $task->id])
             ->assertOk()
-            ->assertSee('"kind":"system"')
             ->assertSee('Develop a task');
 
-        // Bind a user fork → get_skill now returns the fork.
-        $fork = Skill::create([
-            'kind' => Skill::KIND_USER, 'key' => 'develop', 'version' => 1,
-            'title' => 'My develop', 'body' => 'custom prompt', 'user_id' => $user->id, 'source_version' => 1,
+        // A personal APPEND layer is composed onto the system base.
+        $slot = $user->skills()->create([
+            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'mode' => Skill::MODE_APPEND, 'title' => 'My extras',
         ]);
-        SkillBinding::create([
-            'user_id' => $user->id, 'project_id' => null, 'phase' => 'develop', 'skill_id' => $fork->id,
-        ]);
+        $slot->publish('My extras', 'ALSO: run the linter.', $user);
 
         LodestarServer::actingAs($user)
             ->tool(GetSkillTool::class, ['task_id' => $task->id])
             ->assertOk()
-            ->assertSee('"kind":"user"')
-            ->assertSee('custom prompt');
+            ->assertSee('Develop a task')        // system base still present (append)
+            ->assertSee('ALSO: run the linter.'); // personal layer appended
     }
 }

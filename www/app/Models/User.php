@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -39,10 +40,10 @@ class User extends Authenticatable
         return $this->hasMany(Project::class);
     }
 
-    /** The user's own (fork) skills. @return HasMany<Skill, $this> */
-    public function skills(): HasMany
+    /** The user's personal-scope skill slots. @return MorphMany<Skill, $this> */
+    public function skills(): MorphMany
     {
-        return $this->hasMany(Skill::class);
+        return $this->morphMany(Skill::class, 'owner');
     }
 
     /** The user's linked GitHub accounts/tokens. @return HasMany<GithubConnection, $this> */
