@@ -29,7 +29,7 @@
     border-radius: 0.5rem;
     background: #fff;
     cursor: grab;
-    touch-action: none; /* let pointer drags pan instead of scrolling */
+    touch-action: none; /* let pointer drags pan / two-finger pinch zoom instead of scrolling */
     user-select: none;
 }
 
@@ -47,6 +47,7 @@
     border-radius: 0 !important;
     width: 100%;
     height: 100%;
+    touch-action: none; /* don't let the browser hijack pinch/scroll over the diagram */
 }
 
 .mermaid-zoom-host svg {

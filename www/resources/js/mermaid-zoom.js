@@ -153,49 +153,128 @@ function enhanceOne(pre) {
     controls.appendChild(mkBtn('&#x2922;', 'Fit to view', fit));
     viewport.appendChild(controls);
 
-    // --- drag to pan ---
-    let dragging = false;
-    let lastX = 0;
+    // --- drag to pan + two-finger pinch zoom ---
+    // Track every active pointer (pointerId -> last viewport-local position) so
+    // we can distinguish one-finger pan from a two-finger pinch. Positions are
+    // kept in viewport-local CSS pixels (matching zoomAt's coordinate space).
+    const pointers = new Map();
+    let dragging = false; // single-pointer pan in progress
+    let lastX = 0; // last single-pointer position (viewport-local)
     let lastY = 0;
+    // Pinch state: previous pinch distance + midpoint, refreshed every move so
+    // the zoom is applied incrementally (newDist/prevDist) for smoothness.
+    let pinchDist = 0;
+    let pinchMidX = 0;
+    let pinchMidY = 0;
+
+    const localPoint = (e) => {
+        const rect = viewport.getBoundingClientRect();
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    };
+
+    // (Re)seed single-pointer pan from the one remaining pointer. Called both on
+    // pointerdown and when a pinch drops back to a single pointer, so resuming a
+    // drag never jumps.
+    const startPan = (id) => {
+        const p = pointers.get(id);
+        if (!p) return;
+        dragging = true;
+        lastX = p.x;
+        lastY = p.y;
+        viewport.classList.add('is-grabbing');
+    };
+
+    // Seed pinch state from the two currently-active pointers.
+    const startPinch = () => {
+        dragging = false; // suspend single-finger pan while pinching
+        viewport.classList.remove('is-grabbing');
+        const [a, b] = [...pointers.values()];
+        pinchDist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        pinchMidX = (a.x + b.x) / 2;
+        pinchMidY = (a.y + b.y) / 2;
+    };
 
     viewport.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        dragging = true;
-        lastX = e.clientX;
-        lastY = e.clientY;
-        viewport.classList.add('is-grabbing');
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        const p = localPoint(e);
+        pointers.set(e.pointerId, p);
         viewport.setPointerCapture(e.pointerId);
+        if (pointers.size === 1) {
+            startPan(e.pointerId);
+        } else if (pointers.size === 2) {
+            startPinch();
+        }
+        // 3+ pointers: ignore the extra; pinch keeps using the first two.
     });
+
     viewport.addEventListener('pointermove', (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        const p = localPoint(e);
+        pointers.set(e.pointerId, p);
+
+        if (pointers.size >= 2) {
+            // Pinch: scale by the change in distance between the first two
+            // pointers and zoom toward their current midpoint, then pan by the
+            // midpoint's movement so a two-finger drag also translates.
+            const [a, b] = [...pointers.values()];
+            const dist = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+            const midX = (a.x + b.x) / 2;
+            const midY = (a.y + b.y) / 2;
+            zoomAt(dist / pinchDist, midX, midY);
+            state.tx += midX - pinchMidX;
+            state.ty += midY - pinchMidY;
+            apply();
+            pinchDist = dist;
+            pinchMidX = midX;
+            pinchMidY = midY;
+            return;
+        }
+
         if (!dragging) return;
-        state.tx += e.clientX - lastX;
-        state.ty += e.clientY - lastY;
-        lastX = e.clientX;
-        lastY = e.clientY;
+        state.tx += p.x - lastX;
+        state.ty += p.y - lastY;
+        lastX = p.x;
+        lastY = p.y;
         apply();
     });
-    const endDrag = (e) => {
-        if (!dragging) return;
-        dragging = false;
-        viewport.classList.remove('is-grabbing');
+
+    const endPointer = (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        pointers.delete(e.pointerId);
         try {
             viewport.releasePointerCapture(e.pointerId);
         } catch (err) {
             /* pointer may already be released */
         }
+        if (pointers.size === 1) {
+            // Dropped from pinch back to one finger: resume pan from the
+            // survivor without jumping.
+            startPan([...pointers.keys()][0]);
+        } else if (pointers.size === 0) {
+            dragging = false;
+            viewport.classList.remove('is-grabbing');
+        } else if (pointers.size >= 2) {
+            // Still multi-touch (a 3rd finger lifted): re-seed pinch baseline.
+            startPinch();
+        }
     };
-    viewport.addEventListener('pointerup', endDrag);
-    viewport.addEventListener('pointercancel', endDrag);
+    viewport.addEventListener('pointerup', endPointer);
+    viewport.addEventListener('pointercancel', endPointer);
 
-    // --- wheel zoom toward cursor ---
+    // --- wheel zoom toward cursor (also trackpad pinch) ---
+    // A trackpad pinch is delivered as wheel events with ctrlKey === true and a
+    // small deltaY; a regular scroll wheel has ctrlKey === false. Both map to the
+    // same toward-cursor zoom, so no special-casing is needed — we just zoom on
+    // every wheel and always preventDefault so the page/modal never scrolls and
+    // the browser's native ctrl+wheel page-zoom is suppressed over the diagram.
     viewport.addEventListener(
         'wheel',
         (e) => {
-            e.preventDefault(); // don't scroll the modal/page while zooming
+            e.preventDefault(); // don't scroll the modal/page (or page-zoom on ctrl) while zooming
             const rect = viewport.getBoundingClientRect();
             const cx = e.clientX - rect.left;
             const cy = e.clientY - rect.top;
-            // Smooth, direction-aware factor; deltaY<0 = scroll up = zoom in.
+            // Smooth, direction-aware factor; deltaY<0 = scroll up / pinch out = zoom in.
             const factor = Math.exp(-e.deltaY * 0.0015);
             zoomAt(factor, cx, cy);
         },
