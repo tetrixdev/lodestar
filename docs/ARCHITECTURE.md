@@ -37,8 +37,9 @@ signed-in user.
   - `index()` lists a project's reviews; `show()` renders the **walkthrough** —
     the review's ordered sections, the linked tasks, and the assignee chip.
   - `assign()` / `unassign()` are the **atomic self-assignment** endpoints.
-  - `updateSection()` persists a section's sign-off / note (called from the
-    walkthrough via `fetch`), **gated** on the caller holding the review.
+  - `updateSection()` persists a section's reviewed-marker / decision / note
+    (called from the walkthrough via `fetch`), **gated** on the caller holding the
+    review. The walkthrough page matches the playbooks pages at `max-w-7xl`.
   - `file()` serves the **changed-file viewer** — a per-mode HTML fragment the
     modal injects. `diff` renders the stored unified patch (no GitHub call);
     `full` fetches the head blob and renders the whole file with changed lines
@@ -200,9 +201,17 @@ sign-off, so losing the claim (someone releases / reassigns) locks the screen
 read-only. A review is linked to the Tasks it covers via the `review_task`
 pivot; the walkthrough lists them and each board card links back to its review.
 
-Beyond sign-off, each section also carries a human **decision** (approve /
-request changes), and the AI's concerns are first-class **findings** the human
-triages (approve / dismiss / must_fix). Once every section is decided the human
+Each section's controls model three independent things, and **all autosave** (no
+save buttons): a neutral **"I've reviewed this section"** checkbox (maps to
+`status` open↔signed_off — a "been through it" marker, not a satisfaction
+statement, which drives the progress bar), an **Approve / Request-changes
+decision**, and an always-available **comment** (useful alongside an approval too)
+that debounces on input and flushes on blur. Every change PATCHes immediately, so
+a refresh shows the persisted state.
+
+Beyond the reviewed-marker, each section's **decision** (approve / request
+changes) drives the outcome, and the AI's concerns are first-class **findings**
+the human triages (approve / dismiss / must_fix). Once every section is decided the human
 **concludes** the review (`reviews.conclude`, gated on the hold): the verdict
 drives the linked task(s) — *approve* → `human_review → approved`; *changes* →
 `human_review → ready_for_dev` with the compiled rework brief (changes_requested
@@ -334,6 +343,25 @@ caxy/php-htmldiff is used** — the dependency boundary is contained to this met
 touches the html-diff library. (The runtime `sebastian/diff` dependency was
 dropped when `renderFullFile` moved to `LineDiff`; it stays available
 transitively via phpunit for tests.)
+
+**Mermaid in rendered markdown (`App\Support\Markdown` + client `renderMermaid`).**
+Markdown is rendered to display HTML through `Markdown::render()` — the single
+surface `<x-markdown>` calls — which runs `Str::markdown()` and then
+`promoteMermaid()`: it rewrites the `<pre><code class="language-mermaid">…</code></pre>`
+block the engine emits for a ```mermaid fence into a `<pre class="mermaid">…</pre>`
+container holding the **HTML-decoded** source (mermaid needs the raw `-->` arrows,
+not the escaped entities). Client-side, `resources/js/app.js` initializes mermaid
+with `startOnLoad: false` and exposes `window.renderMermaid(rootEl)`, which runs
+`mermaid.run()` over not-yet-processed `pre.mermaid` blocks under a root. It fires
+on `DOMContentLoaded` for server-rendered page markdown, and the file modal calls
+it (via `$nextTick`) after injecting fetched HTML through `x-html`. **Rich-diff +
+mermaid:** an HTML-diff over a rendered diagram would weave `<ins>`/`<del>` through
+the diagram source and render as garbage, so `renderRichMarkdown()` lifts each
+mermaid block out of *both* the base and head HTML (replacing it with a positional
+placeholder that diffs as unchanged), runs caxy over the remaining prose, then
+swaps each placeholder back for the **head** version's diagram container. Net: the
+prose around a diagram still rich-diffs; the diagram itself renders clean as its
+current (head) version with no diff marks on it.
 
 3. **The secrets endpoint (BUILT — out-of-MCP by design).** A project declares a
    manifest of required env **keys** (`ProjectSecretRequirement`, approver-managed);

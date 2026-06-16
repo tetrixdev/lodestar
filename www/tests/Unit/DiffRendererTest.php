@@ -115,4 +115,21 @@ class DiffRendererTest extends TestCase
 
         $this->assertNull((new DiffRenderer)->renderRichMarkdown(null, $huge));
     }
+
+    public function test_rich_markdown_renders_mermaid_as_a_diagram_not_a_diff(): void
+    {
+        // Prose changes around a stable mermaid block: the prose diffs, the
+        // diagram renders clean (no ins/del woven through its source).
+        $base = "# Doc\n\nold intro\n\n```mermaid\nerDiagram\n  A ||--o{ B : has\n```\n";
+        $head = "# Doc\n\nnew intro\n\n```mermaid\nerDiagram\n  A ||--o{ B : has\n```\n";
+
+        $html = (new DiffRenderer)->renderRichMarkdown($base, $head);
+
+        // The diagram became a mermaid container, not a code block, and carries
+        // no diff marks; the prose around it still rich-diffs.
+        $this->assertStringContainsString('<pre class="mermaid">', $html);
+        $this->assertStringNotContainsString('language-mermaid', $html);
+        $this->assertDoesNotMatchRegularExpression('/<pre class="mermaid">[^<]*<(ins|del)/', $html);
+        $this->assertStringContainsString('<ins', $html); // prose diff still works
+    }
 }

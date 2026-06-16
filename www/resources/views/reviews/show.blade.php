@@ -424,6 +424,9 @@
                         this.body = '<div class="p-6 text-center text-sm text-red-500">Could not load this file.</div>';
                     } finally {
                         this.loading = false;
+                        // The fetched fragment (preview / rich diff) may contain mermaid
+                        // blocks injected via x-html — render them once the DOM updates.
+                        this.$nextTick(() => window.renderMermaid?.($el));
                     }
                 },
             }));

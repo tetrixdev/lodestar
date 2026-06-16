@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Support\Markdown;
 use Caxy\HtmlDiff\HtmlDiff;
 use Illuminate\Support\Str;
 
@@ -140,20 +141,73 @@ class DiffRenderer
         $baseHtml = $baseContent === null || $baseContent === '' ? '' : Str::markdown($baseContent);
         $headHtml = $headContent === null || $headContent === '' ? '' : Str::markdown($headContent);
 
-        // Added file: nothing to diff against → the clean rendered document.
+        // Added file: nothing to diff against → the clean rendered document
+        // (mermaid promoted to a diagram container).
         if ($baseHtml === '') {
-            return $headHtml;
+            return Markdown::promoteMermaid($headHtml);
         }
-        // Removed file: render the base as wholly deleted.
+        // Removed file: render the base as wholly deleted. Promote first so a
+        // deleted file's diagram still renders (struck through by the prose styling).
         if ($headHtml === '') {
-            return '<del class="diffdel">'.$baseHtml.'</del>';
+            return '<del class="diffdel">'.Markdown::promoteMermaid($baseHtml).'</del>';
         }
 
+        // HtmlDiff over a rendered mermaid diagram would produce garbage (it would
+        // weave <ins>/<del> through the diagram source). So we lift each mermaid
+        // block out of BOTH sides before diffing, leaving a stable placeholder that
+        // diffs as unchanged, then swap the placeholder back for the HEAD version's
+        // diagram container after the prose diff is built. Net effect: prose around
+        // the diagram is rich-diffed as before; the diagram itself renders clean as
+        // its head version, with no diff marks on it.
+        [$baseStripped, $baseBlocks] = $this->extractMermaid($baseHtml);
+        [$headStripped, $headBlocks] = $this->extractMermaid($headHtml);
+
         try {
-            return (new HtmlDiff($baseHtml, $headHtml))->build();
+            $diffed = (new HtmlDiff($baseStripped, $headStripped))->build();
         } catch (\Throwable) {
             return null;
         }
+
+        // Restore each placeholder. Prefer the head diagram (the current state); if
+        // a placeholder only existed on the base side (a diagram removed in head),
+        // fall back to the base block so it still renders rather than vanishing.
+        return preg_replace_callback(
+            '/'.preg_quote(self::MERMAID_PLACEHOLDER_PREFIX, '/').'(\d+)__/',
+            fn (array $m) => Markdown::promoteMermaid($headBlocks[(int) $m[1]] ?? $baseBlocks[(int) $m[1]] ?? ''),
+            $diffed,
+        ) ?? $diffed;
+    }
+
+    /** Placeholder token swapped in for a mermaid block during the rich diff. */
+    private const MERMAID_PLACEHOLDER_PREFIX = '__LODESTAR_MERMAID_';
+
+    /**
+     * Replace each mermaid `<pre><code class="language-mermaid">…</code></pre>` in
+     * $html with an indexed placeholder, returning [strippedHtml, blocksByIndex].
+     * Blocks are indexed positionally so base/head placeholders line up: the Nth
+     * mermaid block on each side shares index N and so diffs as unchanged.
+     *
+     * @return array{0:string,1:array<int,string>}
+     */
+    private function extractMermaid(string $html): array
+    {
+        $blocks = [];
+        $i = 0;
+        $stripped = preg_replace_callback(
+            '#<pre><code class="language-mermaid">.*?</code></pre>#s',
+            function (array $m) use (&$blocks, &$i) {
+                $blocks[$i] = $m[0];
+                $token = self::MERMAID_PLACEHOLDER_PREFIX.$i.'__';
+                $i++;
+
+                // Wrap in <p> so the placeholder is a block-level node HtmlDiff
+                // treats atomically, not text spliced into a neighbouring paragraph.
+                return '<p>'.$token.'</p>';
+            },
+            $html,
+        ) ?? $html;
+
+        return [$stripped, $blocks];
     }
 
     /** True when $content has more than FULL_FILE_LINE_LIMIT lines. */

@@ -1,7 +1,30 @@
 import Alpine from 'alpinejs';
 import Sortable from 'sortablejs';
+import mermaid from 'mermaid';
 
 window.Alpine = Alpine;
+
+// Mermaid renders `<pre class="mermaid">` blocks the <x-markdown> component emits
+// from ```mermaid fences (see components/markdown.blade.php). We drive rendering
+// ourselves rather than startOnLoad because diagrams also arrive via x-html (the
+// file modal) after page load.
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+
+/**
+ * Render every not-yet-processed mermaid block under `root` (defaults to the
+ * whole document). Safe to call repeatedly — mermaid.run() with the
+ * `.mermaid:not([data-processed])` selector skips already-rendered diagrams,
+ * and a parse error is swallowed so one bad diagram can't blank the surface.
+ */
+window.renderMermaid = function (root) {
+    const scope = root || document;
+    const nodes = scope.querySelectorAll('pre.mermaid:not([data-processed="true"])');
+    if (nodes.length === 0) return;
+    mermaid.run({ nodes }).catch(() => {});
+};
+
+// Render any mermaid present in server-rendered page markdown on first load.
+document.addEventListener('DOMContentLoaded', () => window.renderMermaid());
 
 /**
  * Kanban intra-status reordering. Lifecycle moves between statuses go through
