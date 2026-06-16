@@ -35,10 +35,22 @@
     <div x-show="open" x-cloak class="border-t border-gray-100">
         <ul class="divide-y divide-gray-50 font-mono text-xs">
             @foreach ($review->files as $f)
-                @php $covering = $coverMap[$f->path] ?? []; @endphp
-                <li class="flex items-center gap-2 px-4 py-1.5 {{ $covering ? '' : 'bg-red-50/60' }}">
+                @php
+                    $covering = $coverMap[$f->path] ?? [];
+                    $isMarkdown = in_array(strtolower(pathinfo($f->path, PATHINFO_EXTENSION)), ['md', 'markdown'], true);
+                @endphp
+                <li class="flex items-center gap-2 px-4 py-1.5 hover:bg-gray-50 cursor-pointer {{ $covering ? '' : 'bg-red-50/60' }}"
+                    role="button" tabindex="0"
+                    @click="$dispatch('open-file', { id: {{ $f->id }}, path: @js($f->path), status: @js($f->status), additions: {{ (int) $f->additions }}, deletions: {{ (int) $f->deletions }}, markdown: {{ $isMarkdown ? 'true' : 'false' }} })"
+                    @keydown.enter="$dispatch('open-file', { id: {{ $f->id }}, path: @js($f->path), status: @js($f->status), additions: {{ (int) $f->additions }}, deletions: {{ (int) $f->deletions }}, markdown: {{ $isMarkdown ? 'true' : 'false' }} })">
                     <span class="shrink-0 w-16 text-[10px] uppercase tracking-wide rounded px-1 py-0.5 text-center {{ $statusColor[$f->status] ?? 'text-gray-600 bg-gray-100' }}">{{ $f->status }}</span>
                     <span class="flex-1 truncate text-gray-700" title="{{ $f->path }}">{{ $f->path }}</span>
+                    @if ($f->additions || $f->deletions)
+                        <span class="shrink-0 text-[10px] font-medium tabular-nums">
+                            <span class="text-emerald-600">+{{ $f->additions }}</span>
+                            <span class="text-red-600">−{{ $f->deletions }}</span>
+                        </span>
+                    @endif
                     @if ($covering)
                         <span class="shrink-0 flex items-center gap-1">
                             @foreach ($covering as $n)

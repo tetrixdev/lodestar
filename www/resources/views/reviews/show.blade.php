@@ -279,6 +279,47 @@
             @endif
 
         </div>
+
+        {{-- Changed-file viewer modal: opened by the file tree's `open-file` event;
+             fetches a server-rendered fragment per mode and injects it. --}}
+        <div x-data="fileModal()" x-on:open-file.window="open($event.detail)"
+             x-on:keydown.escape.window="close()">
+            <div x-show="shown" x-cloak class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8"
+                 x-transition.opacity>
+                <div class="absolute inset-0 bg-gray-900/40" @click="close()"></div>
+                <div class="relative bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+                    <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-200">
+                        <span class="shrink-0 w-16 text-[10px] uppercase tracking-wide rounded px-1 py-0.5 text-center"
+                              :class="{
+                                  'text-emerald-700 bg-emerald-50': file.status === 'added',
+                                  'text-amber-700 bg-amber-50': file.status === 'modified',
+                                  'text-red-700 bg-red-50': file.status === 'removed',
+                                  'text-violet-700 bg-violet-50': file.status === 'renamed',
+                              }" x-text="file.status"></span>
+                        <code class="flex-1 truncate text-sm text-gray-800" :title="file.path" x-text="file.path"></code>
+                        <span class="shrink-0 text-xs font-medium tabular-nums">
+                            <span class="text-emerald-600" x-text="`+${file.additions}`"></span>
+                            <span class="text-red-600" x-text="`−${file.deletions}`"></span>
+                        </span>
+                        <button @click="close()" class="shrink-0 text-gray-400 hover:text-gray-700 text-lg leading-none">&times;</button>
+                    </header>
+
+                    <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-100">
+                        <template x-for="m in modes" :key="m.key">
+                            <button @click="setMode(m.key)"
+                                    class="text-xs font-medium rounded-md px-2.5 py-1 border"
+                                    :class="mode === m.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                                    x-text="m.label"></button>
+                        </template>
+                    </div>
+
+                    <div class="overflow-auto flex-1">
+                        <div x-show="loading" class="p-6 text-center text-sm text-gray-400">Loading…</div>
+                        <div x-show="!loading" x-html="body"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -288,6 +329,51 @@
             const canSignOff = {{ $isAssignee ? 'true' : 'false' }};
 
             Alpine.data('walkthrough', (signedCount, total, decisions) => ({ signedCount, total, decisions }));
+
+            const filesBase = '{{ url('/reviews/'.$review->id.'/files') }}';
+            Alpine.data('fileModal', () => ({
+                shown: false,
+                loading: false,
+                body: '',
+                mode: 'diff',
+                file: { id: null, path: '', status: '', additions: 0, deletions: 0, markdown: false },
+                get modes() {
+                    const m = [
+                        { key: 'diff', label: 'Diff' },
+                        { key: 'full', label: 'Full file' },
+                    ];
+                    // Preview is markdown-only.
+                    if (this.file.markdown) m.push({ key: 'preview', label: 'Preview' });
+                    return m;
+                },
+                open(detail) {
+                    this.file = detail;
+                    this.mode = 'diff';
+                    this.shown = true;
+                    this.load();
+                },
+                close() { this.shown = false; this.body = ''; },
+                setMode(mode) {
+                    if (mode === this.mode) return;
+                    this.mode = mode;
+                    this.load();
+                },
+                async load() {
+                    if (!this.file.id) return;
+                    this.loading = true;
+                    this.body = '';
+                    try {
+                        const res = await fetch(`${filesBase}/${this.file.id}?mode=${this.mode}`, {
+                            headers: { 'Accept': 'text/html' },
+                        });
+                        this.body = res.ok ? await res.text() : '<div class="p-6 text-center text-sm text-red-500">Could not load this file.</div>';
+                    } catch (e) {
+                        this.body = '<div class="p-6 text-center text-sm text-red-500">Could not load this file.</div>';
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+            }));
 
             Alpine.data('section', (id, signedOff, note, decision, open) => ({
                 id, signedOff, note, decision, open, savedNote: note, saving: false, canSignOff,
