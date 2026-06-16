@@ -105,6 +105,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/projects/{project}/reviews', [ReviewController::class, 'index'])->name('reviews.index');
     Route::get('/reviews/{review}', [ReviewController::class, 'show'])->name('reviews.show');
+    // Server-rendered file viewer fragment (modal fetches this). Scoped so the
+    // file must belong to the review in the URL.
+    Route::get('/reviews/{review}/files/{file}', [ReviewController::class, 'file'])
+        ->scopeBindings()->name('reviews.files.show');
     Route::post('/reviews/{review}/assign', [ReviewController::class, 'assign'])->name('reviews.assign');
     Route::post('/reviews/{review}/unassign', [ReviewController::class, 'unassign'])->name('reviews.unassign');
     Route::patch('/reviews/{review}/sections/{section}', [ReviewController::class, 'updateSection'])->name('reviews.sections.update');

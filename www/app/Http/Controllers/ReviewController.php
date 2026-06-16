@@ -6,9 +6,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Review;
+use App\Models\ReviewFile;
 use App\Models\ReviewFinding;
 use App\Models\ReviewSection;
 use App\Models\Task;
+use App\Services\GitHubComparison;
+use App\Support\DiffRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +41,108 @@ class ReviewController extends Controller
         ]);
 
         return view('reviews.show', ['review' => $review]);
+    }
+
+    /**
+     * Server-rendered view of one changed file, in one of three progressively-
+     * disclosed modes (returned as an HTML fragment the modal injects):
+     *  - diff (default): the stored unified `patch` — NO GitHub call.
+     *  - full: the whole head blob with changed lines highlighted inline.
+     *  - preview: markdown files only, rendered via <x-markdown>.
+     * Binary / oversized blobs (or a null patch) fall back to a GitHub link.
+     */
+    public function file(Request $request, Review $review, ReviewFile $file): View
+    {
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
+
+        $mode = $request->query('mode', 'diff');
+        if (! in_array($mode, ['diff', 'full', 'preview'], true)) {
+            $mode = 'diff';
+        }
+
+        $repo = $review->repository?->full_name;
+        $linkSha = $review->head_sha ?: $review->head_ref;
+        $githubUrl = $repo && $linkSha
+            ? "https://github.com/{$repo}/blob/{$linkSha}/{$file->path}"
+            : null;
+
+        $view = fn (array $data) => view('reviews.partials.file-modal', array_merge(
+            ['mode' => $mode, 'file' => $file, 'githubUrl' => $githubUrl,
+                'rows' => null, 'previewContent' => null, 'fallback' => null],
+            $data,
+        ));
+
+        // diff — render the stored patch only. Null patch = binary/oversized.
+        if ($mode === 'diff') {
+            if ($file->patch === null) {
+                return $view(['fallback' => 'No textual diff (binary or too large).']);
+            }
+
+            return $view(['rows' => app(DiffRenderer::class)->renderPatch($file->patch)]);
+        }
+
+        // full / preview both need the blob; for a removed file the head blob is
+        // gone, so read the base side instead.
+        $removed = $file->status === 'removed';
+        $sha = $removed ? $review->base_sha : $review->head_sha;
+        if (! $repo || ! $sha) {
+            return $view(['fallback' => 'This file can only be viewed on GitHub.']);
+        }
+
+        $blobPath = $removed ? ($file->old_path ?? $file->path) : $file->path;
+
+        try {
+            $blob = app(GitHubComparison::class)->blob(
+                $repo, $sha, $blobPath, $review->repository?->token(),
+            );
+        } catch (\Throwable $e) {
+            return $view(['fallback' => 'Could not load this file from GitHub: '.$e->getMessage()]);
+        }
+
+        if ($blob['too_large']) {
+            return $view(['fallback' => 'File is too large to view inline.']);
+        }
+        if ($blob['binary'] || $blob['content'] === null) {
+            return $view(['fallback' => 'Binary file — view on GitHub.']);
+        }
+
+        if ($mode === 'preview') {
+            return $view(['previewContent' => $blob['content']]);
+        }
+
+        // full file: a removed file is rendered as all-removed (its content is the
+        // base side); otherwise diff base→head and render the whole head file.
+        $renderer = app(DiffRenderer::class);
+        $rows = $removed
+            ? $renderer->renderFullFile($blob['content'], '')
+            : $renderer->renderFullFile($this->baseContentFor($review, $file), $blob['content']);
+
+        return $view(['rows' => $rows]);
+    }
+
+    /**
+     * The base-side content of a (modified/renamed) file, for the full-file diff.
+     * Added files have no base; a fetch failure degrades to "all added" rather
+     * than failing the view.
+     */
+    private function baseContentFor(Review $review, ReviewFile $file): ?string
+    {
+        if ($file->status === 'added' || ! $review->base_sha || ! $review->repository) {
+            return null;
+        }
+
+        try {
+            $blob = app(GitHubComparison::class)->blob(
+                $review->repository->full_name,
+                $review->base_sha,
+                $file->old_path ?? $file->path,
+                $review->repository->token(),
+            );
+
+            return $blob['content'];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** Persist a section's sign-off / comment (called from the walkthrough via fetch). */
