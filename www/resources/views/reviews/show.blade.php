@@ -56,7 +56,7 @@
          x-data="walkthrough({{ $review->sections->where('status', 'signed_off')->count() }}, {{ $review->sections->count() }}, @js($review->decisionSummary()))"
          x-on:signed-changed.window="signedCount = $event.detail"
          x-on:decisions-changed.window="decisions = $event.detail">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
             @if (session('status'))
                 <div class="text-sm bg-blue-50 border border-blue-300 rounded-lg p-3 text-blue-800">
@@ -168,23 +168,31 @@
                             @endif
                         @endif
 
-                        {{-- The changed files this section covers — each opens the viewer. --}}
+                        {{-- The changed files this section covers — each opens the viewer.
+                             Collapsed by default; the header matches the "Changed files"
+                             tree disclosure in file-tree.blade.php. --}}
                         @if ($s->files->isNotEmpty())
-                            <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-3 mb-1">Files in this section</p>
-                            <ul class="divide-y divide-gray-50 rounded-md border border-gray-100 font-mono text-xs">
-                                @foreach ($s->files as $sf)
-                                    @php $sfFull = $filesByPath->get($sf->path) ?? $sf; @endphp
-                                    <x-open-file :file="$sfFull" class="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
-                                        <span class="flex-1 truncate text-gray-700" title="{{ $sf->path }}">{{ $sf->path }}</span>
-                                        @if ($sfFull->additions || $sfFull->deletions)
-                                            <span class="shrink-0 text-[10px] font-medium tabular-nums">
-                                                <span class="text-emerald-600">+{{ $sfFull->additions }}</span>
-                                                <span class="text-red-600">−{{ $sfFull->deletions }}</span>
-                                            </span>
-                                        @endif
-                                    </x-open-file>
-                                @endforeach
-                            </ul>
+                            <div class="mt-3" x-data="{ open: false }">
+                                <button type="button" @click="open = !open"
+                                        class="flex items-center gap-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wide hover:text-gray-600">
+                                    <svg class="size-3 text-gray-400 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+                                    <span>Files in this section ({{ $s->files->count() }})</span>
+                                </button>
+                                <ul x-show="open" x-collapse x-cloak class="mt-1 divide-y divide-gray-50 rounded-md border border-gray-100 font-mono text-xs">
+                                    @foreach ($s->files as $sf)
+                                        @php $sfFull = $filesByPath->get($sf->path) ?? $sf; @endphp
+                                        <x-open-file :file="$sfFull" class="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
+                                            <span class="flex-1 truncate text-gray-700" title="{{ $sf->path }}">{{ $sf->path }}</span>
+                                            @if ($sfFull->additions || $sfFull->deletions)
+                                                <span class="shrink-0 text-[10px] font-medium tabular-nums">
+                                                    <span class="text-emerald-600">+{{ $sfFull->additions }}</span>
+                                                    <span class="text-red-600">−{{ $sfFull->deletions }}</span>
+                                                </span>
+                                            @endif
+                                        </x-open-file>
+                                    @endforeach
+                                </ul>
+                            </div>
                         @endif
                         @if (!empty($s->checks))
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-3 mb-1">What to check</p>
