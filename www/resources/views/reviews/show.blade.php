@@ -337,18 +337,27 @@
                 body: '',
                 mode: 'diff',
                 file: { id: null, path: '', status: '', additions: 0, deletions: 0, markdown: false },
+                // Markdown files lead with the rendered rich diff; code files lead
+                // with the raw unified patch.
+                get defaultMode() { return this.file.markdown ? 'rich' : 'diff'; },
                 get modes() {
-                    const m = [
+                    if (this.file.markdown) {
+                        // Diff = rich rendered diff; Preview = clean rendered head;
+                        // Source = the raw unified patch.
+                        return [
+                            { key: 'rich', label: 'Diff' },
+                            { key: 'preview', label: 'Preview' },
+                            { key: 'diff', label: 'Source' },
+                        ];
+                    }
+                    return [
                         { key: 'diff', label: 'Diff' },
                         { key: 'full', label: 'Full file' },
                     ];
-                    // Preview is markdown-only.
-                    if (this.file.markdown) m.push({ key: 'preview', label: 'Preview' });
-                    return m;
                 },
                 open(detail) {
                     this.file = detail;
-                    this.mode = 'diff';
+                    this.mode = this.defaultMode;
                     this.shown = true;
                     this.load();
                 },
