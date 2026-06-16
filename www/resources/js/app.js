@@ -1,8 +1,13 @@
 import Alpine from 'alpinejs';
+import collapse from '@alpinejs/collapse';
 import Sortable from 'sortablejs';
 import mermaid from 'mermaid';
 
 window.Alpine = Alpine;
+
+// Register the collapse plugin so `x-collapse` animates show/hide transitions.
+// Must run before Alpine.start() (called at the bottom of this file).
+Alpine.plugin(collapse);
 
 // Mermaid renders `<pre class="mermaid">` blocks the <x-markdown> component emits
 // from ```mermaid fences (see components/markdown.blade.php). We drive rendering

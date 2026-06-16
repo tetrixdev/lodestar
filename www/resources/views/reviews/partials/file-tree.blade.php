@@ -32,7 +32,7 @@
         @endif
     </header>
 
-    <div x-show="open" x-cloak class="border-t border-gray-100">
+    <div x-show="open" x-collapse x-cloak class="border-t border-gray-100">
         <ul class="divide-y divide-gray-50 font-mono text-xs">
             @foreach ($review->files as $f)
                 @php $covering = $coverMap[$f->path] ?? []; @endphp
