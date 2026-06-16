@@ -20,7 +20,10 @@ window.renderMermaid = function (root) {
     const scope = root || document;
     const nodes = scope.querySelectorAll('pre.mermaid:not([data-processed="true"])');
     if (nodes.length === 0) return;
-    mermaid.run({ nodes }).catch(() => {});
+    // Surface render errors to the console — a swallowed error here is the usual
+    // reason a diagram silently stays as text. One bad diagram still can't throw
+    // out of here and blank the surface.
+    mermaid.run({ nodes: [...nodes] }).catch((e) => console.error('[mermaid]', e));
 };
 
 // Render any mermaid present in server-rendered page markdown on first load.
