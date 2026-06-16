@@ -340,7 +340,15 @@
                                   'text-red-700 bg-red-50': file.status === 'removed',
                                   'text-violet-700 bg-violet-50': file.status === 'renamed',
                               }" x-text="file.status"></span>
-                        <code class="flex-1 truncate text-sm text-gray-800" :title="file.path" x-text="file.path"></code>
+                        <span class="flex-1 min-w-0 flex items-center gap-1.5">
+                            <template x-if="file.status === 'renamed' && file.oldPath">
+                                <span class="shrink min-w-0 truncate text-xs text-gray-400" :title="file.oldPath">
+                                    <code x-text="file.oldPath"></code>
+                                    <span class="px-0.5">→</span>
+                                </span>
+                            </template>
+                            <code class="shrink-0 max-w-full truncate text-sm text-gray-800" :title="file.path" x-text="file.path"></code>
+                        </span>
                         <span class="shrink-0 text-xs font-medium tabular-nums">
                             <span class="text-emerald-600" x-text="`+${file.additions}`"></span>
                             <span class="text-red-600" x-text="`−${file.deletions}`"></span>
@@ -380,7 +388,7 @@
                 loading: false,
                 body: '',
                 mode: 'diff',
-                file: { id: null, path: '', status: '', additions: 0, deletions: 0, markdown: false },
+                file: { id: null, path: '', oldPath: null, status: '', additions: 0, deletions: 0, markdown: false },
                 // Markdown files lead with the rendered rich diff; code files lead
                 // with the raw unified patch.
                 get defaultMode() { return this.file.markdown ? 'rich' : 'diff'; },
