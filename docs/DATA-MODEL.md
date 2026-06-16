@@ -312,7 +312,9 @@ erDiagram
         string title
         bigint repository_id FK "nullable, the compared repo"
         string base_ref "nullable, e.g. main"
+        string base_sha "nullable, resolved commit of base_ref"
         string head_ref "nullable, e.g. feat/x"
+        string head_sha "nullable, resolved commit of head_ref"
         string status "draft|in_review|done"
         string outcome "nullable, approved|changes_requested"
         bigint assigned_to_user_id FK "nullable, current holder"
@@ -326,6 +328,9 @@ erDiagram
         string status "added|modified|removed|renamed"
         string old_path "nullable, for renames"
         integer position "GitHub ordering"
+        text patch "nullable, unified diff; null for binary/oversized"
+        integer additions "lines added"
+        integer deletions "lines removed"
     }
 
     REVIEW_FILE_SECTION {
