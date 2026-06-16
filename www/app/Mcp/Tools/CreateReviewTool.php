@@ -85,9 +85,13 @@ class CreateReviewTool extends LodestarTool
             'url' => route('reviews.show', $review),
             'repository' => $repository?->full_name,
             'linked_tasks' => $review->tasks()->count(),
-            'files' => count($files),
+            // The full worklist up front (same shape as upsert_review_section /
+            // get_review): coverage.uncovered is every changed file you must
+            // allocate to a section. It shrinks as you add sections; the review
+            // can't reach a human until coverage.complete is true.
+            'coverage' => $review->coverage(),
             'next' => $files !== []
-                ? 'Add sections with upsert_review_section and allocate every changed file (pass its "files"). The review cannot reach a human until coverage is complete.'
+                ? 'Group coverage.uncovered into sections with upsert_review_section (pass each section its "files" + a review mode). Each call returns the remaining uncovered list. The review cannot reach a human until coverage is complete.'
                 : 'Add sections with upsert_review_section.',
         ]);
     }

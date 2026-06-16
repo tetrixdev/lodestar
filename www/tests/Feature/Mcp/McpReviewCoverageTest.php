@@ -48,7 +48,7 @@ class McpReviewCoverageTest extends TestCase
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r',
             'base_ref' => 'main', 'head_ref' => 'feat/x',
-        ])->assertOk()->assertSee('"files":3');
+        ])->assertOk()->assertSee('"total":3'); // create_review now returns coverage (total + uncovered list)
 
         $review = $project->reviews()->sole();
         $this->assertSame(['app/A.php', 'app/B.php', 'docs/C.md'], $review->files()->pluck('path')->all());
@@ -178,7 +178,7 @@ class McpReviewCoverageTest extends TestCase
 
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r', 'base_ref' => 'm', 'head_ref' => 'h',
-        ])->assertOk()->assertSee('"files":250');
+        ])->assertOk()->assertSee('"total":250'); // coverage.total = the full file count
 
         $this->assertSame(250, $project->reviews()->sole()->files()->count());
     }
