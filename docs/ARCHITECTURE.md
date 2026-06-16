@@ -39,6 +39,18 @@ signed-in user.
   - `assign()` / `unassign()` are the **atomic self-assignment** endpoints.
   - `updateSection()` persists a section's sign-off / note (called from the
     walkthrough via `fetch`), **gated** on the caller holding the review.
+  - `file()` serves the **changed-file viewer** — a per-mode HTML fragment the
+    modal injects. `diff` renders the stored unified patch (no GitHub call);
+    `full` fetches the head blob and renders the whole file with changed lines
+    inline; `preview` renders a markdown file clean; and **`rich`** (the default
+    for markdown) renders base→head markdown to HTML with the same engine
+    `<x-markdown>` uses and runs **caxy/php-htmldiff** between them so the
+    document shows inline `<ins>`/`<del>` highlights. Any mode that can't be
+    produced (huge file past the LCS guard, an html-diff throw, an unfetchable /
+    binary blob) **degrades to the raw stored patch** rather than a dead end.
+    The viewer modal is opened from both the changed-files tree **and** each
+    review section's file references via a shared `<x-open-file>` component (the
+    one place the `open-file` Alpine event is dispatched).
 - **TaskController** also has **`release()`** — the human escape hatch that
   returns a stuck working (`*-ing`) card to its `ready_*` queue and clears the
   claim (we chose this over an automatic lease/reaper).
@@ -302,6 +314,26 @@ agent's input crosses into our data writes.
      token is the source.) `GitHubComparison` pages the compare endpoint
      (100/page) and accumulates up to `MAX_FILES` (3000); a diff beyond that
      throws rather than silently under-covering the coverage guard.
+   - **Backfilling old reviews.** Reviews created before patches/SHAs were
+     stored have null `patch` rows and null `base_sha`/`head_sha`, so the viewer
+     can't render their diffs. `php artisan reviews:backfill-patches {review}`
+     resolves+persists the SHAs (if null), re-fetches the comparison, and
+     enriches each **existing** `review_files` row (matched by path) with its
+     patch/additions/deletions. It never adds or removes rows — the file set
+     (and its coverage allocation) is left exactly as it was — and is idempotent.
+
+**Rendering the diff (`App\Support\DiffRenderer`).** Turns diffs into render-ready
+rows for the viewer's Blade partials. `renderPatch()` parses a stored unified
+patch; `renderFullFile()` diffs base→head over the dependency-free
+`App\Support\LineDiff` (an LCS — the same differ the playbook compare uses), with
+a `FULL_FILE_LINE_LIMIT` (~2000) guard that returns null so the controller shows
+the raw patch instead of building an O(m·n) table for a giant file.
+`renderRichMarkdown()` is the one HTML-emitting path: it is **the only place
+caxy/php-htmldiff is used** — the dependency boundary is contained to this method
+(and the `<x-markdown>` `ins`/`del` prose styling), so the rest of the app never
+touches the html-diff library. (The runtime `sebastian/diff` dependency was
+dropped when `renderFullFile` moved to `LineDiff`; it stays available
+transitively via phpunit for tests.)
 
 3. **The secrets endpoint (BUILT — out-of-MCP by design).** A project declares a
    manifest of required env **keys** (`ProjectSecretRequirement`, approver-managed);

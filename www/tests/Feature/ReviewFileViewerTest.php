@@ -61,7 +61,7 @@ class ReviewFileViewerTest extends TestCase
     {
         Http::fake([
             'api.github.com/repos/o/r/contents/ok.txt*' => Http::response([
-                'encoding' => 'base64', 'size' => 5, 'content' => base64_encode("hello"),
+                'encoding' => 'base64', 'size' => 5, 'content' => base64_encode('hello'),
             ], 200),
             'api.github.com/repos/o/r/contents/bin*' => Http::response([
                 'encoding' => 'base64', 'size' => 3, 'content' => base64_encode("\xff\xfe\x00"),
@@ -236,5 +236,88 @@ class ReviewFileViewerTest extends TestCase
             ->get(route('reviews.files.show', [$review, $file]).'?mode=full')
             ->assertOk()
             ->assertSee('https://github.com/o/r/blob/head-sha/a.bin');
+    }
+
+    // --- rich (markdown) mode ------------------------------------------------
+
+    public function test_rich_mode_added_markdown_renders_clean_document(): void
+    {
+        Http::fake([
+            'api.github.com/repos/o/r/contents/*' => Http::response([
+                'encoding' => 'base64', 'size' => 9, 'content' => base64_encode("# Heading\n\nbody text\n"),
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $review = $this->reviewWithFile($user, ['path' => 'README.md', 'status' => 'added']);
+        $file = $review->files()->first();
+
+        $this->actingAs($user)
+            ->get(route('reviews.files.show', [$review, $file]).'?mode=rich')
+            ->assertOk()
+            ->assertSee('<h1>Heading</h1>', false)
+            ->assertDontSee('<ins', false); // an added file is not wholly inserted
+    }
+
+    public function test_rich_mode_modified_markdown_weaves_ins_del(): void
+    {
+        // base fetch (base-sha) + head fetch (head-sha) for a modified file.
+        Http::fake([
+            'api.github.com/repos/o/r/contents/README.md?ref=base-sha' => Http::response([
+                'encoding' => 'base64', 'size' => 9, 'content' => base64_encode("hello world\n"),
+            ], 200),
+            'api.github.com/repos/o/r/contents/README.md?ref=head-sha' => Http::response([
+                'encoding' => 'base64', 'size' => 9, 'content' => base64_encode("hello brave world\n"),
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $review = $this->reviewWithFile($user, ['path' => 'README.md', 'status' => 'modified']);
+        $file = $review->files()->first();
+
+        $this->actingAs($user)
+            ->get(route('reviews.files.show', [$review, $file]).'?mode=rich')
+            ->assertOk()
+            ->assertSee('<ins', false)
+            ->assertSee('brave');
+    }
+
+    public function test_rich_mode_removed_markdown_renders_all_deleted(): void
+    {
+        Http::fake([
+            'api.github.com/repos/o/r/contents/*' => Http::response([
+                'encoding' => 'base64', 'size' => 9, 'content' => base64_encode("# Old doc\n"),
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $review = $this->reviewWithFile($user, ['path' => 'GONE.md', 'status' => 'removed']);
+        $file = $review->files()->first();
+
+        $this->actingAs($user)
+            ->get(route('reviews.files.show', [$review, $file]).'?mode=rich')
+            ->assertOk()
+            ->assertSee('<del', false)
+            ->assertSee('Old doc');
+    }
+
+    public function test_rich_mode_falls_back_to_stored_patch_when_blob_unfetchable(): void
+    {
+        // GitHub blob fetch errors → rich degrades to the raw stored patch
+        // (which the fixture provides), not a GitHub-only dead end.
+        Http::fake(['api.github.com/*' => Http::response(['message' => 'boom'], 500)]);
+
+        $user = User::factory()->create();
+        $review = $this->reviewWithFile($user, [
+            'path' => 'README.md', 'status' => 'modified',
+            'patch' => "@@ -1 +1 @@\n-old\n+new",
+        ]);
+        $file = $review->files()->first();
+
+        $this->actingAs($user)
+            ->get(route('reviews.files.show', [$review, $file]).'?mode=rich')
+            ->assertOk()
+            ->assertSee('new')
+            ->assertSee('old');
     }
 }

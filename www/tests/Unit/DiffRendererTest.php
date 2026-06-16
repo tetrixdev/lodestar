@@ -73,4 +73,46 @@ class DiffRendererTest extends TestCase
         $this->assertNull($rows[0]['new']);
         $this->assertSame(1, $rows[0]['old']);
     }
+
+    public function test_render_full_file_guards_against_huge_files(): void
+    {
+        // Either side over the line limit → null so the controller shows the patch.
+        $huge = str_repeat("x\n", DiffRenderer::FULL_FILE_LINE_LIMIT + 1);
+
+        $this->assertNull((new DiffRenderer)->renderFullFile(null, $huge));
+        $this->assertNull((new DiffRenderer)->renderFullFile($huge, 'one line'));
+    }
+
+    public function test_rich_markdown_added_file_is_the_clean_document(): void
+    {
+        // No base → render the head as-is, with no whole-file <ins> noise.
+        $html = (new DiffRenderer)->renderRichMarkdown(null, "# Title\n\nbody\n");
+
+        $this->assertStringContainsString('<h1>Title</h1>', $html);
+        $this->assertStringNotContainsString('<ins', $html);
+    }
+
+    public function test_rich_markdown_removed_file_is_all_deleted(): void
+    {
+        $html = (new DiffRenderer)->renderRichMarkdown("# Gone\n", null);
+
+        $this->assertStringContainsString('<del', $html);
+        $this->assertStringContainsString('Gone', $html);
+    }
+
+    public function test_rich_markdown_modified_file_shows_inline_ins_and_del(): void
+    {
+        $html = (new DiffRenderer)->renderRichMarkdown("hello world\n", "hello brave world\n");
+
+        // caxy weaves <ins>/<del> into the rendered HTML.
+        $this->assertStringContainsString('<ins', $html);
+        $this->assertStringContainsString('brave', $html);
+    }
+
+    public function test_rich_markdown_guards_against_huge_files(): void
+    {
+        $huge = str_repeat("line\n", DiffRenderer::FULL_FILE_LINE_LIMIT + 1);
+
+        $this->assertNull((new DiffRenderer)->renderRichMarkdown(null, $huge));
+    }
 }
