@@ -1,7 +1,11 @@
 <x-app-layout>
     <x-slot name="header">
-        <div class="flex items-center gap-3">
-            <a href="{{ route('projects.show', $project) }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
+        <div>
+            <x-breadcrumb :trail="[
+                ['label' => 'Projects', 'url' => route('projects.index')],
+                ['label' => $project->name, 'url' => route('projects.show', $project)],
+                ['label' => 'Settings'],
+            ]" />
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $project->name }} — Settings</h2>
         </div>
     </x-slot>
@@ -65,7 +69,7 @@
                 <header>
                     <h3 class="text-lg font-medium text-gray-900">Project approvers</h3>
                     <p class="mt-1 text-sm text-gray-600">
-                        Who may approve this project’s skill changes. The owner always can.
+                        Who may approve this project’s playbook changes. The owner always can.
                     </p>
                 </header>
 

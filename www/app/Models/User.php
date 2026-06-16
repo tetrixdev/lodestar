@@ -40,10 +40,10 @@ class User extends Authenticatable
         return $this->hasMany(Project::class);
     }
 
-    /** The user's personal-scope skill slots. @return MorphMany<Skill, $this> */
-    public function skills(): MorphMany
+    /** The user's personal-scope playbook slots. @return MorphMany<Playbook, $this> */
+    public function playbooks(): MorphMany
     {
-        return $this->morphMany(Skill::class, 'owner');
+        return $this->morphMany(Playbook::class, 'owner');
     }
 
     /** The user's own secret values. @return HasMany<PersonalSecret, $this> */

@@ -46,8 +46,8 @@ signed-in user.
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
   `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
   `queueStateFor()`), the claim/release rules live as guarded conditional-UPDATE
-  helpers on **`Review`** (`claimFor()`, `releaseFor()`), and skill composition
-  lives on **`Skill`** (`compose()`, `resolveNamed()`, `slotFor()`).
+  helpers on **`Review`** (`claimFor()`, `releaseFor()`), and playbook composition
+  lives on **`Playbook`** (`compose()`, `resolveNamed()`, `slotFor()`).
 
 **The MCP server (`app/Mcp/`, laravel/mcp)** — the agent-facing surface, mirror
 of the web UI. `LodestarServer` is registered at `POST /mcp` in `routes/ai.php`
@@ -60,48 +60,48 @@ holds the tenancy helpers):
   access to the board, the exact data the controllers serve to the browser.
 - **Repository tools** — `link_repository`, `unlink_repository` (attach a repo to
   a project through a GitHub connection).
-- **Loop tools** — `claim_task` (atomic claim, by next or by id), `get_skill`
-  (composes the phase prompt — incl. the `main` bootstrap), `propose_skill_change`
-  (proposes a skill version — always `proposed`, never live), `remember` (captures
-  a durable learning as a proposed skill-layer edit, linked to its work-session),
+- **Loop tools** — `claim_task` (atomic claim, by next or by id), `get_playbook`
+  (composes the phase prompt — incl. the `main` bootstrap), `propose_playbook_change`
+  (proposes a playbook version — always `proposed`, never live), `remember` (captures
+  a durable learning as a proposed playbook-layer edit, linked to its work-session),
   `advance_task`
   (legal-transition-only move), `report` (logs a WorkSession).
 
-**Skills (`app/Models/Skill.php`, `SkillVersion`, `SystemSkillSeeder`)** — skills
-are **layered**. A `Skill` is a slot at one scope (`system` / `team` / `project`
-/ `personal`); its prompt text lives in versioned `SkillVersion` rows, one of them
-`active`. A phase prompt is **composed** at run time by `Skill::compose()` across
+**Playbooks (`app/Models/Playbook.php`, `PlaybookVersion`, `SystemPlaybookSeeder`)** — playbooks
+are **layered**. A `Playbook` is a slot at one scope (`system` / `team` / `project`
+/ `personal`); its prompt text lives in versioned `PlaybookVersion` rows, one of them
+`active`. A phase prompt is **composed** at run time by `Playbook::compose()` across
 scopes in order system → team → project → personal — each layer `append`s, or
 `overwrite`s (discarding everything above it). Personal is last so a person always
 has the final say (and can test a change locally), unless the project's team sets
-`allow_personal_instructions = false`, which drops the personal layer. System skills ship
-seeded from code. Five phase keys compose: **`main`** — the bootstrap skill an
-agent loads first (`get_skill(phase:'main')`, no task), carrying the loop +
+`allow_personal_instructions = false`, which drops the personal layer. System playbooks ship
+seeded from code. Five phase keys compose: **`main`** — the bootstrap playbook an
+agent loads first (`get_playbook(phase:'main')`, no task), carrying the loop +
 routing + per-project main instructions; and the four lifecycle phases **`plan` /
 `develop` / `ai_review` / `merge`**. Arbitrary **named** keys don't compose —
 they resolve to the most-specific scope (`resolveNamed()`), loaded on demand. The
-**`ai_review`** skill encodes the structure-first review method (the 5 modes + the
+**`ai_review`** playbook encodes the structure-first review method (the 5 modes + the
 Laravel structure→mode taxonomy + the surface register, ported from the vps-setup
-dev-method). Bodies are delivered at run time via `get_skill`, not as files on the
-developer's machine — so a skill edit reaches every loop on its next call.
+dev-method). Bodies are delivered at run time via `get_playbook`, not as files on the
+developer's machine — so a playbook edit reaches every loop on its next call.
 Authoring is **human-gated propose→approve**: anyone in a scope may propose a
-`SkillVersion` (web or the `propose_skill_change` MCP tool), only an assigned
+`PlaybookVersion` (web or the `propose_playbook_change` MCP tool), only an assigned
 approver makes it `active`, and an AI proposal never goes live (the rule is
-`Skill::submitVersion()`). The filterable Skills overview (`SkillController`,
-`settings/skills` + `settings/skill-show`) shows the composed effective prompt,
+`Playbook::submitVersion()`). The filterable Playbooks overview (`PlaybookController`,
+`settings/playbooks` + `settings/playbook-show`) shows the composed effective prompt,
 every layer, version history, a two-version diff (`App\Support\LineDiff`), and the
 append/overwrite toggle (approver-only, with a warning).
 
 **Agent modes + the work loop + heartbeat.** `main` is orientation only and defines
 two **modes**: *interactive* (a human is driving — work in the human's own checkout,
 never `~/ld-agent`) and *background worker* (work ONLY under `~/ld-agent/<slug>/`).
-Mode is set by the entry skill (the `work`/worker prompt declares background and
+Mode is set by the entry playbook (the `work`/worker prompt declares background and
 overrides the interactive default), not by the token — the same MCP token serves
 both. A background worker isolates its runtime from the human's via
 `COMPOSE_PROJECT_NAME=<slug>-agent` (separate containers/volumes/DB) and bootstraps
 its `.env` from the human's checkout or `.env.example` + `key:generate`, halting and
 reporting if a real secret is genuinely missing (project-managed secrets are task
-#54). The seeded system **`work`** skill holds the **sequential** loop: claim the
+#54). The seeded system **`work`** playbook holds the **sequential** loop: claim the
 next `ready_*` card (`agent_id:"loop"`), spawn ONE worker subagent for it, finish
 before the next — one runtime, no collisions; parallel workers (separate envs) are a
 deferred option. A human starts it with the **loop copy-prompt**
@@ -112,6 +112,15 @@ pinged: it shows "Loop running" / "Agent working" while a reachable card is `*-i
 hovers to show agent → project. NOTE: in headless/routine runs Claude Code only
 exposes *locally* configured MCP servers, so the loop setup must register Lodestar's
 MCP locally (`.mcp.json`/`--mcp-config`), not as a claude.ai connector.
+
+Beside it sits the nav **attention tray** (`<x-attention-tray>`, `App\Support\AttentionTray`)
+— a derived to-do badge of things genuinely waiting on *this* human, never a feed (it
+clears only when the human acts). Three buckets: **playbook proposals** the user may approve
+(otherwise invisible until the Playbooks page), **reviews the user is holding** (a claimed
+review is a commitment — finish or release), and **overdue / due-soon tasks** (the lone
+"urgent"/red bucket; the badge is red if any, else amber). Human-gate cards
+(`plan_review`/`human_review`) are deliberately excluded — the board always has some, so a
+standing badge for them would be wallpaper.
 
 **Auth & tenancy** — standard Breeze auth for the web; **Sanctum** for MCP.
 Agents authenticate with a per-machine personal-access token minted in the web UI
@@ -189,12 +198,12 @@ notes + must_fix findings) written to the task's `rework_notes`. The review's
 `outcome` is recorded and it freezes to `done`. This closes the loop: a human
 review can send work straight back to the developer without leaving the screen.
 
-### The agent loop (claim → skill → work → advance → report)
+### The agent loop (claim → playbook → work → advance → report)
 
 Agents drive the *same* lifecycle the board does, through MCP. The intended
 runner (backlog) is a **main agent that polls the queue and spawns one sub-agent
 per claimable task** — each sub-agent gets a one-line instruction ("load the
-`<phase>` skill for task N"), does the work, and exits. Because every task is one
+`<phase>` playbook for task N"), does the work, and exits. Because every task is one
 claim and each sub-agent is a fresh run, the dev and the AI-review of a task are
 naturally different runs — no agent-identity enforcement is needed.
 
@@ -202,12 +211,12 @@ naturally different runs — no agent-identity enforcement is needed.
 sequenceDiagram
     participant A as Agent (sub-agent)
     participant M as MCP server
-    participant DB as DB (tasks/skills)
+    participant DB as DB (tasks/playbooks)
     A->>M: claim_task(phase?)
     M->>DB: UPDATE ... WHERE status = ready_* (FOR UPDATE SKIP LOCKED)
     alt a queued card existed
         DB-->>A: task (now *-ing, claimed_by set)
-        A->>M: get_skill(task_id)
+        A->>M: get_playbook(task_id)
         M-->>A: resolved phase prompt
         A->>A: do the work
         A->>M: advance_task(task_id, to)  (legal edges only)
@@ -256,18 +265,18 @@ agent's input crosses into our data writes.
      cannot put the board in an illegal state.
    - **Input validation.** Every tool validates its arguments with Laravel
      validation (modes constrained to `ReviewSection::MODES`, statuses to
-     `Task::STATUSES`, phases to `Skill::PHASES`) before any write. Long-form
+     `Task::STATUSES`, phases to `Playbook::PHASES`) before any write. Long-form
      fields are paired with a scannable summary that the UI shows by default
      (`body`/`body_summary`, `plan`/`plan_summary`): a summary is mandatory
      whenever its detail is set (`required_with`), enforced identically at the
      MCP tools (`upsert_task`, `upsert_session`, `report`) and the web form —
      so detail never lands without a TL;DR. Not applied retroactively to rows
      written before the rule.
-   - **Skill delivery.** `get_skill` returns prompt *text* the agent then runs;
+   - **Playbook delivery.** `get_playbook` returns prompt *text* the agent then runs;
      the composition (which scope layers, append vs overwrite) is decided
-     server-side. A malformed system skill is the one thing that could mislead
-     every loop at once, so skill bodies are versioned and treated as reviewable
-     logic — every change is a `SkillVersion`, and any prior `active` version
+     server-side. A malformed system playbook is the one thing that could mislead
+     every loop at once, so playbook bodies are versioned and treated as reviewable
+     logic — every change is a `PlaybookVersion`, and any prior `active` version
      stays pinnable for rollback. AI clients may *propose* a version over MCP but
      can never make one `active` (human-gated approval — task #53 P3).
 
@@ -303,7 +312,7 @@ agent's input crosses into our data writes.
    to a file so values never enter the MCP/LLM context. What holds it: values are
    encrypted at rest, the endpoint is tenant-scoped (the project's access rule) and
    only ever returns the **calling** user's own values; the boundary is
-   keep-out-of-context, not process-sandboxing (the skill instructs "don't print
+   keep-out-of-context, not process-sandboxing (the playbook instructs "don't print
    the file").
 
 **Still backlog (not built):** the thin npx client (`connect` + `run`) and the

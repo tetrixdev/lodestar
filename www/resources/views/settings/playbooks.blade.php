@@ -1,8 +1,8 @@
 <x-app-layout>
-    @php $M = \App\Models\Skill::class; @endphp
+    @php $M = \App\Models\Playbook::class; @endphp
 
     <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Skills') }}</h2>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Playbooks') }}</h2>
     </x-slot>
 
     <div class="py-12" x-data="{
@@ -18,11 +18,11 @@
             @if (session('status'))
                 <div class="p-3 bg-green-50 text-green-800 rounded-lg text-sm">
                     @switch(session('status'))
-                        @case('skill-published') Change published — it's live now. @break
-                        @case('skill-proposed') Proposed — an approver will review it. @break
-                        @case('skill-approved') Approved — it's live now. @break
-                        @case('skill-rejected') Proposal rejected. @break
-                        @case('skill-mode-changed') Layer mode changed. @break
+                        @case('playbook-published') Change published — it's live now. @break
+                        @case('playbook-proposed') Proposed — an approver will review it. @break
+                        @case('playbook-approved') Approved — it's live now. @break
+                        @case('playbook-rejected') Proposal rejected. @break
+                        @case('playbook-mode-changed') Layer mode changed. @break
                         @default Saved.
                     @endswitch
                 </div>
@@ -30,7 +30,7 @@
 
             <div class="flex items-center justify-between gap-3">
                 <p class="text-sm text-gray-500">
-                    Skills are <strong>layered</strong>: each phase composes system &rarr; team &rarr; project &rarr;
+                    Playbooks are <strong>layered</strong>: each phase composes system &rarr; team &rarr; project &rarr;
                     personal (personal has the final say).
                 </p>
                 <button type="button" @click="proposeOpen = ! proposeOpen"
@@ -48,7 +48,7 @@
                     seeded and can't be edited here — add a layer above them instead.)
                 </p>
 
-                <form method="POST" action="{{ route('skills.propose') }}" class="space-y-4">
+                <form method="POST" action="{{ route('playbooks.propose') }}" class="space-y-4">
                     @csrf
 
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -88,9 +88,9 @@
 
                         <div>
                             <x-input-label value="Phase or named key" />
-                            <input list="skill-keys" name="key" x-model="key" type="text"
+                            <input list="playbook-keys" name="key" x-model="key" type="text"
                                    class="mt-1 block w-full rounded-md border-gray-300 text-sm" placeholder="develop, or a named key" />
-                            <datalist id="skill-keys">
+                            <datalist id="playbook-keys">
                                 @foreach ($phases as $p)
                                     <option value="{{ $p }}">{{ $phaseLabels[$p] ?? $p }}</option>
                                 @endforeach
@@ -106,12 +106,12 @@
                     </div>
 
                     <div>
-                        <x-input-label for="np-summary" value="Summary (one line — required for named skills, shown in the main catalog)" />
+                        <x-input-label for="np-summary" value="Summary (one line — required for named playbooks, shown in the main catalog)" />
                         <x-text-input id="np-summary" name="summary" type="text"
                                       class="mt-1 block w-full disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
                                       x-bind:disabled="phases.includes(key)"
                                       :value="old('summary')" placeholder="What it's for / when to use it" />
-                        <p x-show="phases.includes(key)" x-cloak class="text-[11px] text-gray-400 mt-1">Not used for phase skills — they compose automatically and aren't listed in the main catalog.</p>
+                        <p x-show="phases.includes(key)" x-cloak class="text-[11px] text-gray-400 mt-1">Not used for phase playbooks — they compose automatically and aren't listed in the main catalog.</p>
                         <x-input-error :messages="$errors->get('summary')" class="mt-1" />
                     </div>
 
@@ -197,7 +197,7 @@
 
             {{-- Filterable layer list --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-4">
-                <h3 class="font-semibold text-gray-800">All skill layers</h3>
+                <h3 class="font-semibold text-gray-800">All playbook layers</h3>
 
                 <form method="GET" class="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                     <x-select name="scope" class="rounded-md border-gray-300 text-sm">
@@ -232,13 +232,13 @@
                     </x-select>
                     <div class="col-span-2 md:col-span-5 flex gap-2">
                         <x-primary-button class="!py-1.5 !text-xs">Filter</x-primary-button>
-                        <a href="{{ route('skills.index') }}" class="text-xs text-gray-500 hover:text-gray-700 self-center">Clear</a>
+                        <a href="{{ route('playbooks.index') }}" class="text-xs text-gray-500 hover:text-gray-700 self-center">Clear</a>
                     </div>
                 </form>
 
                 <div class="divide-y divide-gray-100">
                     @forelse ($slots as $slot)
-                        <a href="{{ route('skills.show', $slot) }}" class="flex items-center justify-between gap-3 py-2.5 hover:bg-gray-50 -mx-2 px-2 rounded">
+                        <a href="{{ route('playbooks.show', $slot) }}" class="flex items-center justify-between gap-3 py-2.5 hover:bg-gray-50 -mx-2 px-2 rounded">
                             <div class="flex items-center gap-2 min-w-0">
                                 <span class="text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ $slot->scope }}</span>
                                 <span class="font-medium text-gray-800 truncate">{{ $slot->key }}</span>
@@ -257,7 +257,7 @@
                             </div>
                         </a>
                     @empty
-                        <p class="text-sm text-gray-400 italic py-2">No skill layers match.</p>
+                        <p class="text-sm text-gray-400 italic py-2">No playbook layers match.</p>
                     @endforelse
                 </div>
             </div>

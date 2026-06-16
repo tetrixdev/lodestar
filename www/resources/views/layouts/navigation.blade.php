@@ -27,6 +27,7 @@
             <!-- Settings Dropdown -->
             <div class="hidden sm:flex sm:items-center sm:ms-6 gap-4">
                 <a href="{{ route('agents.index') }}" title="View connected agents"><x-agent-heartbeat /></a>
+                <x-attention-tray />
                 <x-dropdown align="right" width="48">
                     <x-slot name="trigger">
                         <button class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-gray-500 bg-white hover:text-gray-700 focus:outline-none transition ease-in-out duration-150">
@@ -65,8 +66,8 @@
                             {{ __('GitHub') }}
                         </x-dropdown-link>
 
-                        <x-dropdown-link :href="route('skills.index')">
-                            {{ __('Skills') }}
+                        <x-dropdown-link :href="route('playbooks.index')">
+                            {{ __('Playbooks') }}
                         </x-dropdown-link>
 
                         <x-dropdown-link :href="route('mcp.reference')">
@@ -140,8 +141,8 @@
                     {{ __('GitHub') }}
                 </x-responsive-nav-link>
 
-                <x-responsive-nav-link :href="route('skills.index')">
-                    {{ __('Skills') }}
+                <x-responsive-nav-link :href="route('playbooks.index')">
+                    {{ __('Playbooks') }}
                 </x-responsive-nav-link>
 
                 <!-- Authentication -->

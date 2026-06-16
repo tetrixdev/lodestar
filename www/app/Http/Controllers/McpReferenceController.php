@@ -29,8 +29,8 @@ class McpReferenceController extends Controller
         'add_finding' => 'Reviews',
         'get_review' => 'Reviews',
         'claim_task' => 'The agent loop',
-        'get_skill' => 'The agent loop',
-        'propose_skill_change' => 'The agent loop',
+        'get_playbook' => 'The agent loop',
+        'propose_playbook_change' => 'The agent loop',
         'advance_task' => 'The agent loop',
         'report' => 'The agent loop',
     ];
@@ -42,7 +42,7 @@ class McpReferenceController extends Controller
     private const EXAMPLES = [
         'list_projects' => '{ "projects": [ { "id": 1, "name": "Lodestar", "slug": "lodestar", "repositories": [...] } ], "github_connections": [...] }',
         'upsert_project' => '{ "id": 1, "name": "Lodestar", "slug": "lodestar", "created": false }',
-        'upsert_task' => '{ "id": 53, "title": "Skill governance", "status": "ready_for_planning", "created": false }',
+        'upsert_task' => '{ "id": 53, "title": "Playbook governance", "status": "ready_for_planning", "created": false }',
         'upsert_session' => '{ "id": 12, "title": "Built the board", "created": true }',
         'link_repository' => '{ "linked": "jfbauer/lodestar", "default_branch": "main", "connection": "jfbauer", "project_repos": ["jfbauer/lodestar"] }',
         'unlink_repository' => '{ "unlinked": "jfbauer/lodestar", "project_repos": [] }',
@@ -50,9 +50,9 @@ class McpReferenceController extends Controller
         'upsert_review_section' => '{ "id": 3, "review_id": 7, "position": 1, "created": true, "coverage": { "covered": 4, "total": 9 } }',
         'add_finding' => '{ "id": 5, "section_id": 3, "severity": "major", "finding_count": 2 }',
         'get_review' => '{ "id": 7, "title": "...", "status": "in_review", "coverage": {...}, "files": [...], "tasks": [...] }',
-        'claim_task' => '{ "claimed": true, "task": { "id": 53, "status": "developing", "phase": "develop", "rework_notes": null }, "next": "Call get_skill..." }'."\n".'// or: { "claimed": false, "message": "No task available to claim." }',
-        'get_skill' => '// phase key (composed): { "key": "develop", "composed": true, "body": "...", "layers": [ { "scope": "system", ... } ] }'."\n".'// named key: { "key": "db-recipe", "composed": false, "scope": "project", "version": 2, "title": "...", "body": "..." }',
-        'propose_skill_change' => '{ "skill_id": 4, "version_id": 9, "version": 3, "status": "proposed", "note": "Recorded as a proposal — a human approver must make it live." }',
+        'claim_task' => '{ "claimed": true, "task": { "id": 53, "status": "developing", "phase": "develop", "rework_notes": null }, "next": "Call get_playbook..." }'."\n".'// or: { "claimed": false, "message": "No task available to claim." }',
+        'get_playbook' => '// phase key (composed): { "key": "develop", "composed": true, "body": "...", "layers": [ { "scope": "system", ... } ] }'."\n".'// named key: { "key": "db-recipe", "composed": false, "scope": "project", "version": 2, "title": "...", "body": "..." }',
+        'propose_playbook_change' => '{ "playbook_id": 4, "version_id": 9, "version": 3, "status": "proposed", "note": "Recorded as a proposal — a human approver must make it live." }',
         'advance_task' => '{ "id": 53, "status": "plan_review", "allowed_next": ["ready_for_dev", "ready_for_planning", "cancelled"] }',
         'report' => '{ "id": 12, "project_id": 1, "logged": true }',
     ];

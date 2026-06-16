@@ -23,6 +23,6 @@ class McpReferenceTest extends TestCase
             ->assertSee('Atomically claim')      // its description
             ->assertSee('task_id')               // a parameter (from the schema)
             ->assertSee('Returns')               // example-output label
-            ->assertSee('propose_skill_change'); // the P3 tool is present
+            ->assertSee('propose_playbook_change'); // the P3 tool is present
     }
 }

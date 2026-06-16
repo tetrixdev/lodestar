@@ -4,8 +4,13 @@
     @endphp
     <x-slot name="header">
         <div class="flex items-center justify-between gap-3 flex-wrap">
-            <div class="flex items-center gap-3">
-                <a href="{{ route('reviews.index', $review->project) }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
+            <div>
+                <x-breadcrumb :trail="[
+                    ['label' => 'Projects', 'url' => route('projects.index')],
+                    ['label' => $review->project->name, 'url' => route('projects.show', $review->project)],
+                    ['label' => 'Reviews', 'url' => route('reviews.index', $review->project)],
+                    ['label' => $review->title],
+                ]" />
                 <div>
                     <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $review->title }}</h2>
                     @if ($review->base_ref || $review->head_ref)

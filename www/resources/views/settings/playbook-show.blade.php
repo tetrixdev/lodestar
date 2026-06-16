@@ -1,16 +1,20 @@
 <x-app-layout>
     @php
-        $M = \App\Models\Skill::class;
-        $V = \App\Models\SkillVersion::class;
-        $isPhase = $M::isPhase($skill->key); // phase keys aren't catalogued → summary N/A
+        $M = \App\Models\Playbook::class;
+        $V = \App\Models\PlaybookVersion::class;
+        $isPhase = $M::isPhase($playbook->key); // phase keys aren't catalogued → summary N/A
     @endphp
 
     <x-slot name="header">
-        <div class="flex items-center gap-3">
-            <a href="{{ route('skills.index') }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
+        <div>
+            <x-breadcrumb :trail="[
+                ['label' => 'Settings', 'url' => route('settings.index')],
+                ['label' => 'Playbooks', 'url' => route('playbooks.index')],
+                ['label' => $playbook->scope.' · '.$playbook->key],
+            ]" />
             <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-                <span class="text-gray-400">{{ $skill->scope }}</span> · {{ $skill->key }}
-                @if ($skill->owner)<span class="text-gray-400 text-base">— {{ $skill->owner->name }}</span>@endif
+                <span class="text-gray-400">{{ $playbook->scope }}</span> · {{ $playbook->key }}
+                @if ($playbook->owner)<span class="text-gray-400 text-base">— {{ $playbook->owner->name }}</span>@endif
             </h2>
         </div>
     </x-slot>
@@ -21,11 +25,11 @@
             @if (session('status'))
                 <div class="p-3 bg-green-50 text-green-800 rounded-lg text-sm">
                     @switch(session('status'))
-                        @case('skill-published') Change published — it's live now. @break
-                        @case('skill-proposed') Proposed — an approver will review it. @break
-                        @case('skill-approved') Approved — it's live now. @break
-                        @case('skill-rejected') Proposal rejected. @break
-                        @case('skill-mode-changed') Layer mode changed. @break
+                        @case('playbook-published') Change published — it's live now. @break
+                        @case('playbook-proposed') Proposed — an approver will review it. @break
+                        @case('playbook-approved') Approved — it's live now. @break
+                        @case('playbook-rejected') Proposal rejected. @break
+                        @case('playbook-mode-changed') Layer mode changed. @break
                         @default Done.
                     @endswitch
                 </div>
@@ -33,7 +37,7 @@
 
             {{-- how the active version composes (mode is versioned — change it via a proposal) --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-1">
-                @if ($skill->activeVersion?->mode === $M::MODE_OVERWRITE)
+                @if ($playbook->activeVersion?->mode === $M::MODE_OVERWRITE)
                     <div class="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-300 p-3 text-sm text-amber-800">
                         <span class="text-lg leading-none">&#9888;</span>
                         <p><strong>This layer OVERWRITES.</strong> When composed, it discards everything above it
@@ -49,13 +53,32 @@
             {{-- active version --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Active version</p>
-                @if ($skill->activeVersion)
-                    <p class="text-xs text-gray-500">v{{ $skill->activeVersion->version }} · {{ $skill->activeVersion->title }}</p>
-                    <pre class="whitespace-pre-wrap break-words text-xs text-gray-700 bg-gray-50 rounded-md p-3 max-h-[50vh] overflow-y-auto">{{ $skill->activeVersion->body }}</pre>
+                @if ($playbook->activeVersion)
+                    <p class="text-xs text-gray-500">v{{ $playbook->activeVersion->version }} · {{ $playbook->activeVersion->title }}</p>
+                    <pre class="whitespace-pre-wrap break-words text-xs text-gray-700 bg-gray-50 rounded-md p-3 max-h-[50vh] overflow-y-auto">{{ $playbook->activeVersion->body }}</pre>
                 @else
                     <p class="text-sm text-gray-400 italic">No active version — nothing from this layer composes yet.</p>
                 @endif
             </div>
+
+            {{-- pending proposals — decide on each, independent of the diff tool so a
+                 v1 proposal (only version, nothing to compare against) is approvable too --}}
+            @php $pending = $versions->where('status', $V::STATUS_PROPOSED); @endphp
+            @if ($pending->isNotEmpty())
+                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
+                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+                        Pending proposal{{ $pending->count() > 1 ? 's' : '' }} ({{ $pending->count() }})
+                    </p>
+                    @if ($canApprove)
+                        <p class="text-xs text-gray-500">Review the body below (use <span class="font-medium">Compare &amp; review</span> for a diff against another version), then decide.</p>
+                        @foreach ($pending as $p)
+                            @include('settings.partials.proposal-decision', ['version' => $p, 'isPhase' => $isPhase])
+                        @endforeach
+                    @else
+                        <p class="text-sm text-gray-400 italic">Awaiting an approver for this scope.</p>
+                    @endif
+                </div>
+            @endif
 
             {{-- propose a change (collapsed by default so it's not shown alongside the review) --}}
             @if ($canPropose)
@@ -73,39 +96,39 @@
                         @if ($canApprove) You can approve this scope, so your change goes live immediately.
                         @else Your change is recorded as a proposal for an approver. @endif
                     </p>
-                    <form method="POST" action="{{ route('skills.propose') }}" class="space-y-3">
+                    <form method="POST" action="{{ route('playbooks.propose') }}" class="space-y-3">
                         @csrf
-                        <input type="hidden" name="scope" value="{{ $skill->scope }}">
-                        <input type="hidden" name="key" value="{{ $skill->key }}">
-                        @if ($skill->scope === $M::SCOPE_TEAM)
-                            <input type="hidden" name="team_id" value="{{ $skill->owner_id }}">
-                        @elseif ($skill->scope === $M::SCOPE_PROJECT)
-                            <input type="hidden" name="project_id" value="{{ $skill->owner_id }}">
+                        <input type="hidden" name="scope" value="{{ $playbook->scope }}">
+                        <input type="hidden" name="key" value="{{ $playbook->key }}">
+                        @if ($playbook->scope === $M::SCOPE_TEAM)
+                            <input type="hidden" name="team_id" value="{{ $playbook->owner_id }}">
+                        @elseif ($playbook->scope === $M::SCOPE_PROJECT)
+                            <input type="hidden" name="project_id" value="{{ $playbook->owner_id }}">
                         @endif
                         <div>
                             <x-input-label for="p-title" value="Title" />
                             <x-text-input id="p-title" name="title" type="text" class="mt-1 block w-full"
-                                          :value="old('title', $skill->activeVersion?->title ?? $skill->title)" />
+                                          :value="old('title', $playbook->activeVersion?->title ?? $playbook->title)" />
                             <x-input-error :messages="$errors->get('title')" class="mt-1" />
                         </div>
                         <div>
                             <x-input-label for="p-summary" value="Summary (one line — for the main catalog)" />
                             <x-text-input id="p-summary" name="summary" type="text"
                                           class="mt-1 block w-full disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-                                          :value="old('summary', $skill->activeVersion?->summary)"
+                                          :value="old('summary', $playbook->activeVersion?->summary)"
                                           :disabled="$isPhase" placeholder="What it's for / when to use it" />
                             @if ($isPhase)
-                                <p class="text-[11px] text-gray-400 mt-1">Not used for phase skills — they compose automatically and aren't listed in the main catalog.</p>
+                                <p class="text-[11px] text-gray-400 mt-1">Not used for phase playbooks — they compose automatically and aren't listed in the main catalog.</p>
                             @endif
                             <x-input-error :messages="$errors->get('summary')" class="mt-1" />
                         </div>
                         <div>
                             <x-input-label for="p-body" value="Prompt body (markdown)" />
                             <textarea id="p-body" name="body" rows="8"
-                                      class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $skill->activeVersion?->body) }}</textarea>
+                                      class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $playbook->activeVersion?->body) }}</textarea>
                             <x-input-error :messages="$errors->get('body')" class="mt-1" />
                         </div>
-                        <div x-data="{ mode: '{{ old('mode', $skill->activeVersion?->mode ?? $M::MODE_APPEND) }}' }">
+                        <div x-data="{ mode: '{{ old('mode', $playbook->activeVersion?->mode ?? $M::MODE_APPEND) }}' }">
                             <x-input-label value="How this layer combines" />
                             <x-select name="mode" x-model="mode" class="mt-1 block w-full sm:w-80">
                                 <option value="{{ $M::MODE_APPEND }}">Append — add onto the layers above it</option>
@@ -174,7 +197,7 @@
                                     <span class="text-gray-400">&rarr;</span>
                                     <span class="bg-green-50 text-green-800 px-1">{{ $diffB->summary ?: '—' }}</span>
                                 @else
-                                    <span class="text-gray-600">{{ $diffB->summary ?: '—' }}@if ($isPhase) <span class="text-gray-300">(n/a for phase skills)</span>@endif</span>
+                                    <span class="text-gray-600">{{ $diffB->summary ?: '—' }}@if ($isPhase) <span class="text-gray-300">(n/a for phase playbooks)</span>@endif</span>
                                 @endif
                             </div>
                             <div>
@@ -202,64 +225,9 @@
                         <p class="text-sm text-gray-400 italic">Pick two different versions to see the diff.</p>
                     @endif
 
-                    {{-- decide on the "To" version when it's a proposal you can approve --}}
+                    {{-- decisions live in the "Pending proposals" block above (works for v1 proposals too) --}}
                     @if ($canApprove && $diffB && $diffB->isProposed())
-                        <div class="border-t border-gray-100 pt-3 space-y-3">
-                            <p class="text-xs text-gray-500">Decide on <span class="font-medium">v{{ $diffB->version }}</span> (proposed{{ $diffB->proposed_by_ai ? ', by AI' : '' }}){{ $diffB->note ? ' — '.$diffB->note : '' }}:</p>
-                            <div class="flex flex-wrap items-center gap-2" x-show="!editing">
-                                <form method="POST" action="{{ route('skills.versions.approve', $diffB) }}">
-                                    @csrf
-                                    <button class="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-500">Approve</button>
-                                </form>
-                                <button type="button" @click="editing = true" class="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Approve with edits</button>
-                                <form method="POST" action="{{ route('skills.versions.reject', $diffB) }}">
-                                    @csrf
-                                    <button class="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50">Reject</button>
-                                </form>
-                            </div>
-
-                            {{-- approve-with-edits: publishes your amended body as a new active version, archiving this proposal --}}
-                            <form x-show="editing" x-cloak method="POST" action="{{ route('skills.versions.approveEdits', $diffB) }}" class="space-y-3">
-                                @csrf
-                                <p class="text-xs text-gray-500">Your edits publish a new active version; this proposal is archived as "amended into" it.</p>
-                                <div>
-                                    <x-input-label for="ae-title" value="Title" />
-                                    <x-text-input id="ae-title" name="title" type="text" class="mt-1 block w-full" :value="old('title', $diffB->title)" />
-                                    <x-input-error :messages="$errors->get('title')" class="mt-1" />
-                                </div>
-                                <div>
-                                    <x-input-label for="ae-summary" value="Summary (one line)" />
-                                    <x-text-input id="ae-summary" name="summary" type="text"
-                                                  class="mt-1 block w-full disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-                                                  :value="old('summary', $diffB->summary)" :disabled="$isPhase" />
-                                    @if ($isPhase)
-                                        <p class="text-[11px] text-gray-400 mt-1">Not used for phase skills (not catalogued).</p>
-                                    @endif
-                                </div>
-                                <div x-data="{ mode: '{{ old('mode', $diffB->mode) }}' }">
-                                    <x-input-label value="How this layer combines" />
-                                    <x-select name="mode" x-model="mode" class="mt-1 block w-full sm:w-80">
-                                        <option value="{{ $M::MODE_APPEND }}">Append — add onto the layers above it</option>
-                                        <option value="{{ $M::MODE_OVERWRITE }}">Overwrite — discard everything above it</option>
-                                    </x-select>
-                                    <p x-show="mode === '{{ $M::MODE_OVERWRITE }}'" x-cloak
-                                       class="mt-2 flex items-start gap-2 rounded-md bg-amber-50 border border-amber-300 p-2 text-xs text-amber-800">
-                                        <span class="text-base leading-none">&#9888;</span>
-                                        <span><strong>Overwrite is a full override</strong> — discards everything above this layer.</span>
-                                    </p>
-                                </div>
-                                <div>
-                                    <x-input-label for="ae-body" value="Body (markdown)" />
-                                    <textarea id="ae-body" name="body" rows="10"
-                                              class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $diffB->body) }}</textarea>
-                                    <x-input-error :messages="$errors->get('body')" class="mt-1" />
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <x-primary-button>Publish amended version</x-primary-button>
-                                    <button type="button" @click="editing = false" class="text-sm text-gray-500 hover:text-gray-700">Cancel</button>
-                                </div>
-                            </form>
-                        </div>
+                        <p class="border-t border-gray-100 pt-3 text-xs text-gray-500">Approve, reject or edit <span class="font-medium">v{{ $diffB->version }}</span> in <span class="font-medium">Pending proposals</span> above.</p>
                     @endif
                 @endif
             </div>
@@ -267,7 +235,7 @@
             {{-- version history (read-only log) --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Version history</p>
-                <p class="text-xs text-gray-400">Review proposals in <span class="font-medium">Compare &amp; review</span> above (pick the proposal as “To”).</p>
+                <p class="text-xs text-gray-400">Decide on proposals in <span class="font-medium">Pending proposals</span> above; use <span class="font-medium">Compare &amp; review</span> to diff any two versions.</p>
                 @foreach ($versions as $v)
                     <div class="flex items-center gap-2 text-sm border-b border-gray-100 py-2 last:border-0 min-w-0">
                         <span class="text-gray-700 font-medium">v{{ $v->version }}</span>

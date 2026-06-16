@@ -10,7 +10,7 @@
 Lodestar is the home base for software work: **Projects** hold **Tasks** (kanban
 cards that ride a 13-state lifecycle), **WorkSessions** (a work-log), and
 **Reviews** (a change reviewed against a base, walked through as ordered
-**ReviewSections**). **Skills** are layered prompt slots and **SkillVersions**
+**ReviewSections**). **Playbooks** are layered prompt slots and **PlaybookVersions**
 their versioned bodies — a phase prompt is composed across scopes. Everything is
 **multi-tenant by ownership** — a Project belongs to a User, and everything else
 reaches its owner through that Project; AI agents reach the same data through MCP,
@@ -23,11 +23,11 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   unique `slug`; an optional `description` and `primary_goal`. Its repositories
   are first-class (the `repositories` table via the `project_repository` pivot).
   A project belongs to a **Team** (`team_id`) or is **personal** (`team_id` null).
-- **Team** — a group that shares projects + a managed skill set. `owner_user_id`;
-  `allow_personal_instructions` (when off, the personal skill layer is dropped so
+- **Team** — a group that shares projects + a managed playbook set. `owner_user_id`;
+  `allow_personal_instructions` (when off, the personal playbook layer is dropped so
   changes go through the team). Members + their `can_approve_prompts` rights live
   in the `team_user` pivot (the owner is always a member with approval). The
-  `project_user` pivot does the same for project-level skill approval.
+  `project_user` pivot does the same for project-level playbook approval.
 - **Task** — a kanban card. `status` is one of the **13 lifecycle states** (see
   Invariants); `position` orders cards within a single status; `category` is a
   free-text grouping prefix (e.g. `mcp`, `infra`); `body` is the card detail.
@@ -68,12 +68,12 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   file / route); `checks` is a JSON list of "what to confirm"; `status`
   (`open` / `signed_off`) + `note` carry the human's per-section sign-off.
 
-- **Skill** — a *slot*: one addressable layer of a composed prompt, identified by
+- **Playbook** — a *slot*: one addressable layer of a composed prompt, identified by
   (`scope`, `owner`, `key`). `scope` is `system` (ours, `owner` null), `team`,
   `personal` (owner = a User) or `project`. `key` is a phase (`main` / `plan` /
   `develop` / `ai_review` / `merge`) or an arbitrary named key. The slot is pure
   identity — one per (scope, owner, key); all content lives on its versions.
-- **SkillVersion** — one version of a slot's content. A slot keeps its full
+- **PlaybookVersion** — one version of a slot's content. A slot keeps its full
   history; exactly one version is `active` (the one composition uses). It carries
   `title`, `summary`, `mode` (`append` = add onto the layers above it, or
   `overwrite` = discard them and start from this body) and `body` — so a proposal
@@ -157,7 +157,7 @@ These are the rules the column list alone won't tell you:
   add a lease / heartbeat / auto-reclaim. The happy flow is expected; if an agent
   crashes mid-task, a human presses **Release** on the board, which returns the
   `*-ing` card to its `ready_*` queue and clears the claim so the loop re-picks it.
-- **Skill composition is server-side.** `get_skill` composes a phase prompt from
+- **Playbook composition is server-side.** `get_playbook` composes a phase prompt from
   the active version of each scope's slot, in order system → team → project →
   personal (append, or an `overwrite` layer wiping everything above it). Personal
   is last so a person always has the final say — and can test a change locally —
@@ -221,15 +221,15 @@ erDiagram
     REVIEW_FILE }o--o{ REVIEW_SECTION : "review_file_section (covered by)"
     REVIEW }o--o{ TASK : "review_task (covers)"
     USER ||--o{ REVIEW : "assigned (nullable)"
-    SKILL ||--o{ SKILL_VERSION : "versioned by"
+    PLAYBOOK ||--o{ PLAYBOOK_VERSION : "versioned by"
     PROJECT ||--o{ PROJECT_SECRET_REQUIREMENT : "needs (manifest)"
     USER ||--o{ PERSONAL_SECRET : "owns values"
     PROJECT ||--o{ PERSONAL_SECRET : "scoped to (nullable)"
     PROJECT ||--o{ PROJECT_TOOL : "provides"
-    USER ||--o{ SKILL : "owns personal-scope (polymorphic)"
-    TEAM ||--o{ SKILL : "owns team-scope (polymorphic)"
-    PROJECT ||--o{ SKILL : "owns project-scope (polymorphic)"
-    USER ||--o{ SKILL_VERSION : "authored (nullable)"
+    USER ||--o{ PLAYBOOK : "owns personal-scope (polymorphic)"
+    TEAM ||--o{ PLAYBOOK : "owns team-scope (polymorphic)"
+    PROJECT ||--o{ PLAYBOOK : "owns project-scope (polymorphic)"
+    USER ||--o{ PLAYBOOK_VERSION : "authored (nullable)"
     USER ||--o{ PERSONAL_ACCESS_TOKEN : authenticates
     USER ||--o{ GITHUB_CONNECTION : connects
     GITHUB_CONNECTION ||--o{ REPOSITORY : reads
@@ -363,7 +363,7 @@ erDiagram
         string remember_token "nullable"
     }
 
-    SKILL {
+    PLAYBOOK {
         bigint id PK
         string scope "system|team|personal|project"
         string owner_type "nullable, Team|User|Project; null = system"
@@ -372,12 +372,12 @@ erDiagram
         string title
     }
 
-    SKILL_VERSION {
+    PLAYBOOK_VERSION {
         bigint id PK
-        bigint skill_id FK
+        bigint playbook_id FK
         integer version
         string title
-        string summary "nullable, one-line; named skills appear in the main catalog"
+        string summary "nullable, one-line; named playbooks appear in the main catalog"
         string mode "append|overwrite (how this version composes)"
         text body "the prompt"
         string status "proposed|active|archived|rejected"

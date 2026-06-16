@@ -234,8 +234,8 @@ class Task extends Model
     ];
 
     /**
-     * The phase key (the skill a working state runs) for each `*-ing` state.
-     * `get_skill` uses this to resolve which skill a claimed task needs.
+     * The phase key (the playbook a working state runs) for each `*-ing` state.
+     * `get_playbook` uses this to resolve which playbook a claimed task needs.
      */
     public const PHASE_FOR_WORKING = [
         self::STATUS_PLANNING => 'plan',
@@ -256,7 +256,7 @@ class Task extends Model
         return array_search($workingStatus, self::CLAIM_MAP, true) ?: null;
     }
 
-    /** The skill phase key a `*-ing` task needs, or null if it isn't a working state. */
+    /** The playbook phase key a `*-ing` task needs, or null if it isn't a working state. */
     public static function phaseFor(string $workingStatus): ?string
     {
         return self::PHASE_FOR_WORKING[$workingStatus] ?? null;

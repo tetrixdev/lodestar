@@ -1,8 +1,11 @@
 <x-app-layout>
     <x-slot name="header">
         <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-            <div class="flex items-center gap-3 min-w-0">
-                <a href="{{ route('projects.index') }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
+            <div class="min-w-0">
+                <x-breadcrumb :trail="[
+                    ['label' => 'Projects', 'url' => route('projects.index')],
+                    ['label' => $project->name],
+                ]" />
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight truncate">{{ $project->name }}</h2>
             </div>
             <div class="flex flex-wrap items-center gap-x-4 gap-y-1">

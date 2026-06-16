@@ -15,8 +15,12 @@
     @endphp
 
     <x-slot name="header">
-        <div class="flex items-center gap-3">
-            <a href="{{ route('projects.show', $task->project) }}" class="text-gray-400 hover:text-gray-600">&larr;</a>
+        <div>
+            <x-breadcrumb :trail="[
+                ['label' => 'Projects', 'url' => route('projects.index')],
+                ['label' => $task->project->name, 'url' => route('projects.show', $task->project)],
+                ['label' => '#'.$task->id.' '.$task->title],
+            ]" />
             <h2 class="font-semibold text-xl text-gray-800 leading-tight"><span class="text-gray-400">#{{ $task->id }}</span> {{ $task->title }}</h2>
         </div>
     </x-slot>

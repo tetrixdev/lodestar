@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
- * A team that shares projects + a managed skill set. The owner is always also a
+ * A team that shares projects + a managed playbook set. The owner is always also a
  * member (added on create) with prompt-approval rights.
  */
 class Team extends Model
@@ -50,13 +50,13 @@ class Team extends Model
         return $this->hasMany(Project::class);
     }
 
-    /** This team's team-scope skill slots. */
-    public function skills(): MorphMany
+    /** This team's team-scope playbook slots. */
+    public function playbooks(): MorphMany
     {
-        return $this->morphMany(Skill::class, 'owner');
+        return $this->morphMany(Playbook::class, 'owner');
     }
 
-    /** May this user approve team-level skill changes? */
+    /** May this user approve team-level playbook changes? */
     public function canApprovePrompts(User $user): bool
     {
         $member = $this->members()->where('users.id', $user->id)->first();

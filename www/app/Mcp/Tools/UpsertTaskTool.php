@@ -73,7 +73,7 @@ class UpsertTaskTool extends LodestarTool
             'id' => $schema->integer()->description('Existing task id to update. Omit to create.'),
             'title' => $schema->string()->description('Card title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix, e.g. "mcp", "infra".'),
-            'body' => $schema->string()->description('Full markdown card detail. If you set this you MUST also pass body_summary.'),
+            'body' => $schema->string()->description('Full markdown card detail — the human-readable spec for this work. Structure it skimmably under short headers: **Why** (the goal / problem this solves), **What** (scope — what is in, and what is explicitly out), and **Done when** (acceptance — how we know it works). Link related cards by #id. Keep it tight; the plan is where the file-by-file structure map goes, not here. If you set this you MUST also pass body_summary.'),
             'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the card, shown by default (the full body opens on demand).'),
             'plan' => $schema->string()->description('The planning artifact (markdown). If you set this you MUST also pass plan_summary.'),
             'plan_summary' => $schema->string()->description('Required whenever plan is set: a 1–2 sentence scannable TL;DR of the plan.'),

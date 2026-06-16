@@ -19,6 +19,10 @@ fi
 # Run Laravel production optimizations
 echo "Running Laravel optimizations..."
 php artisan migrate --force --isolated --no-interaction
+# Lodestar customization: upsert the base (system-scope) skills from code on every
+# boot. Idempotent — only republishes a skill whose body actually changed — so a
+# deploy that updated a base skill ships the new version automatically.
+php artisan db:seed --class=SystemPlaybookSeeder --force --no-interaction
 php artisan config:cache --no-interaction
 php artisan route:cache --no-interaction
 php artisan view:cache --no-interaction

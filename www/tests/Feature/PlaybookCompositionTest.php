@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
-use App\Models\Skill;
+use App\Models\Playbook;
 use App\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,17 +13,17 @@ use Tests\TestCase;
 /**
  * The composition engine: a phase prompt is built system → team → personal →
  * project, append by default, an overwrite layer wiping everything above it,
- * and the personal layer dropped when the team forbids it. Named skills don't
+ * and the personal layer dropped when the team forbids it. Named playbooks don't
  * compose — they resolve to the most-specific scope.
  */
-class SkillCompositionTest extends TestCase
+class PlaybookCompositionTest extends TestCase
 {
     use RefreshDatabase;
 
     /** Create a slot at a scope with one active version. */
-    private function slot(string $scope, ?object $owner, string $key, string $mode, string $body): Skill
+    private function slot(string $scope, ?object $owner, string $key, string $mode, string $body): Playbook
     {
-        $slot = Skill::create([
+        $slot = Playbook::create([
             'scope' => $scope,
             'owner_type' => $owner ? $owner->getMorphClass() : null,
             'owner_id' => $owner?->getKey(),
@@ -41,12 +41,12 @@ class SkillCompositionTest extends TestCase
         $team = Team::create(['name' => 'T', 'owner_user_id' => $user->id]);
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p', 'team_id' => $team->id]);
 
-        $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'SYS');
-        $this->slot(Skill::SCOPE_TEAM, $team, 'develop', Skill::MODE_APPEND, 'TEAM');
-        $this->slot(Skill::SCOPE_PROJECT, $project, 'develop', Skill::MODE_APPEND, 'PROJ');
-        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_APPEND, 'ME');
+        $this->slot(Playbook::SCOPE_SYSTEM, null, 'develop', Playbook::MODE_APPEND, 'SYS');
+        $this->slot(Playbook::SCOPE_TEAM, $team, 'develop', Playbook::MODE_APPEND, 'TEAM');
+        $this->slot(Playbook::SCOPE_PROJECT, $project, 'develop', Playbook::MODE_APPEND, 'PROJ');
+        $this->slot(Playbook::SCOPE_PERSONAL, $user, 'develop', Playbook::MODE_APPEND, 'ME');
 
-        $composed = Skill::compose($user, $project, 'develop');
+        $composed = Playbook::compose($user, $project, 'develop');
 
         // Personal is last so the person has the final say.
         $this->assertSame("SYS\n\nTEAM\n\nPROJ\n\nME", $composed['body']);
@@ -59,14 +59,14 @@ class SkillCompositionTest extends TestCase
         $team = Team::create(['name' => 'T', 'owner_user_id' => $user->id]);
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p', 'team_id' => $team->id]);
 
-        $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'SYS');
-        $this->slot(Skill::SCOPE_TEAM, $team, 'develop', Skill::MODE_APPEND, 'TEAM');
+        $this->slot(Playbook::SCOPE_SYSTEM, null, 'develop', Playbook::MODE_APPEND, 'SYS');
+        $this->slot(Playbook::SCOPE_TEAM, $team, 'develop', Playbook::MODE_APPEND, 'TEAM');
         // Project overwrites: system + team discarded, project becomes the base.
-        $this->slot(Skill::SCOPE_PROJECT, $project, 'develop', Skill::MODE_OVERWRITE, 'PROJ-ONLY');
+        $this->slot(Playbook::SCOPE_PROJECT, $project, 'develop', Playbook::MODE_OVERWRITE, 'PROJ-ONLY');
         // Personal appends onto the project base (personal has the final say).
-        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_APPEND, 'ME');
+        $this->slot(Playbook::SCOPE_PERSONAL, $user, 'develop', Playbook::MODE_APPEND, 'ME');
 
-        $composed = Skill::compose($user, $project, 'develop');
+        $composed = Playbook::compose($user, $project, 'develop');
 
         $this->assertSame("PROJ-ONLY\n\nME", $composed['body']);
         $this->assertSame(['project', 'personal'], array_column($composed['layers'], 'scope'));
@@ -77,12 +77,12 @@ class SkillCompositionTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
 
-        $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'SYS');
-        $this->slot(Skill::SCOPE_PROJECT, $project, 'develop', Skill::MODE_APPEND, 'PROJ');
+        $this->slot(Playbook::SCOPE_SYSTEM, null, 'develop', Playbook::MODE_APPEND, 'SYS');
+        $this->slot(Playbook::SCOPE_PROJECT, $project, 'develop', Playbook::MODE_APPEND, 'PROJ');
         // Personal is last and overwrites → nothing above it survives.
-        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_OVERWRITE, 'ONLY-ME');
+        $this->slot(Playbook::SCOPE_PERSONAL, $user, 'develop', Playbook::MODE_OVERWRITE, 'ONLY-ME');
 
-        $composed = Skill::compose($user, $project, 'develop');
+        $composed = Playbook::compose($user, $project, 'develop');
 
         $this->assertSame('ONLY-ME', $composed['body']);
         $this->assertSame(['personal'], array_column($composed['layers'], 'scope'));
@@ -94,10 +94,10 @@ class SkillCompositionTest extends TestCase
         $team = Team::create(['name' => 'T', 'owner_user_id' => $user->id, 'allow_personal_instructions' => false]);
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p', 'team_id' => $team->id]);
 
-        $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'SYS');
-        $this->slot(Skill::SCOPE_PERSONAL, $user, 'develop', Skill::MODE_APPEND, 'ME');
+        $this->slot(Playbook::SCOPE_SYSTEM, null, 'develop', Playbook::MODE_APPEND, 'SYS');
+        $this->slot(Playbook::SCOPE_PERSONAL, $user, 'develop', Playbook::MODE_APPEND, 'ME');
 
-        $composed = Skill::compose($user, $project, 'develop');
+        $composed = Playbook::compose($user, $project, 'develop');
 
         $this->assertSame('SYS', $composed['body']);
         $this->assertSame(['system'], array_column($composed['layers'], 'scope'));
@@ -106,51 +106,51 @@ class SkillCompositionTest extends TestCase
     public function test_only_the_active_version_composes(): void
     {
         $user = User::factory()->create();
-        $slot = $this->slot(Skill::SCOPE_SYSTEM, null, 'plan', Skill::MODE_APPEND, 'V1');
+        $slot = $this->slot(Playbook::SCOPE_SYSTEM, null, 'plan', Playbook::MODE_APPEND, 'V1');
         // A newer ACTIVE version supersedes the old one (now archived).
         $slot->publish('plan', null, 'V2');
         // A proposed version must NOT leak into the composed body.
         $slot->propose('plan', null, 'PROPOSED', $user, byAi: false);
 
-        $composed = Skill::compose($user, null, 'plan');
+        $composed = Playbook::compose($user, null, 'plan');
 
         $this->assertSame('V2', $composed['body']);
     }
 
-    public function test_main_advertises_named_skills_in_its_catalog(): void
+    public function test_main_advertises_named_playbooks_in_its_catalog(): void
     {
         $user = User::factory()->create();
-        $this->slot(Skill::SCOPE_SYSTEM, null, 'main', Skill::MODE_APPEND, 'You are an agent.');
+        $this->slot(Playbook::SCOPE_SYSTEM, null, 'main', Playbook::MODE_APPEND, 'You are an agent.');
 
-        // A named skill with a summary; and a phase skill that must NOT be catalogued.
-        $named = $this->slot(Skill::SCOPE_PERSONAL, $user, 'db-recipe', Skill::MODE_APPEND, 'recipe body');
+        // A named playbook with a summary; and a phase playbook that must NOT be catalogued.
+        $named = $this->slot(Playbook::SCOPE_PERSONAL, $user, 'db-recipe', Playbook::MODE_APPEND, 'recipe body');
         $named->activeVersion()->update(['summary' => 'Migrate the database safely.']);
-        $this->slot(Skill::SCOPE_SYSTEM, null, 'develop', Skill::MODE_APPEND, 'develop body');
+        $this->slot(Playbook::SCOPE_SYSTEM, null, 'develop', Playbook::MODE_APPEND, 'develop body');
 
-        $body = Skill::compose($user, null, 'main')['body'];
+        $body = Playbook::compose($user, null, 'main')['body'];
 
-        $this->assertStringContainsString('Available skills', $body);
+        $this->assertStringContainsString('Available playbooks', $body);
         $this->assertStringContainsString('db-recipe', $body);
         $this->assertStringContainsString('Migrate the database safely.', $body);
         $this->assertStringNotContainsString('develop', $body); // phase keys aren't catalogued
     }
 
-    public function test_named_skill_resolves_to_the_most_specific_scope(): void
+    public function test_named_playbook_resolves_to_the_most_specific_scope(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
 
-        $this->slot(Skill::SCOPE_SYSTEM, null, 'db-recipe', Skill::MODE_APPEND, 'SYS-RECIPE');
-        $this->slot(Skill::SCOPE_PROJECT, $project, 'db-recipe', Skill::MODE_APPEND, 'PROJ-RECIPE');
+        $this->slot(Playbook::SCOPE_SYSTEM, null, 'db-recipe', Playbook::MODE_APPEND, 'SYS-RECIPE');
+        $this->slot(Playbook::SCOPE_PROJECT, $project, 'db-recipe', Playbook::MODE_APPEND, 'PROJ-RECIPE');
 
         // Named keys don't compose: the most-specific present scope wins outright.
-        $this->assertSame('PROJ-RECIPE', Skill::resolveNamed($user, $project, 'db-recipe')->body);
+        $this->assertSame('PROJ-RECIPE', Playbook::resolveNamed($user, $project, 'db-recipe')->body);
 
         // A personal slot wins over the project (personal is most-specific).
-        $this->slot(Skill::SCOPE_PERSONAL, $user, 'db-recipe', Skill::MODE_APPEND, 'MY-RECIPE');
-        $this->assertSame('MY-RECIPE', Skill::resolveNamed($user, $project, 'db-recipe')->body);
+        $this->slot(Playbook::SCOPE_PERSONAL, $user, 'db-recipe', Playbook::MODE_APPEND, 'MY-RECIPE');
+        $this->assertSame('MY-RECIPE', Playbook::resolveNamed($user, $project, 'db-recipe')->body);
 
         // Without the project/personal, it falls back to system.
-        $this->assertSame('SYS-RECIPE', Skill::resolveNamed(User::factory()->create(), null, 'db-recipe')->body);
+        $this->assertSame('SYS-RECIPE', Playbook::resolveNamed(User::factory()->create(), null, 'db-recipe')->body);
     }
 }

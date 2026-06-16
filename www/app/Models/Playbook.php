@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 /**
- * A skill SLOT: one addressable layer of a composed prompt, identified by
- * (scope, owner, key). The prompt text lives in versioned {@see SkillVersion}
+ * A playbook SLOT: one addressable layer of a composed prompt, identified by
+ * (scope, owner, key). The prompt text lives in versioned {@see PlaybookVersion}
  * rows — exactly one is `active`, and that's the body composition uses.
  *
  * For a phase key, the effective prompt is COMPOSED across scopes in order
@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * `allow_personal_instructions = false`. Arbitrary named keys do not compose —
  * they resolve to the most-specific scope only (see {@see self::resolveNamed()}).
  */
-class Skill extends Model
+class Playbook extends Model
 {
     protected $guarded = [];
 
@@ -47,10 +47,10 @@ class Skill extends Model
 
     public const MODES = [self::MODE_APPEND, self::MODE_OVERWRITE];
 
-    // ── Phase keys (these compose; any other key is a named skill) ────────────
+    // ── Phase keys (these compose; any other key is a named playbook) ────────────
 
     /**
-     * The composing phase keys. `main` is the bootstrap skill an agent loads
+     * The composing phase keys. `main` is the bootstrap playbook an agent loads
      * first; the other four drive one lifecycle phase each.
      */
     public const PHASES = ['main', 'plan', 'develop', 'ai_review', 'merge'];
@@ -63,7 +63,7 @@ class Skill extends Model
         'merge' => 'Merge & deploy',
     ];
 
-    /** A phase key composes across scopes; any other key is a named skill. */
+    /** A phase key composes across scopes; any other key is a named playbook. */
     public static function isPhase(string $key): bool
     {
         return in_array($key, self::PHASES, true);
@@ -71,7 +71,7 @@ class Skill extends Model
 
     /**
      * Keys with this prefix are reserved for Lodestar's own (system-seeded)
-     * skills — users can't create them, so we never collide with future
+     * playbooks — users can't create them, so we never collide with future
      * internal keys. Users may still layer on phase keys (that's composition).
      */
     public const RESERVED_KEY_PREFIX = 'ls_';
@@ -91,19 +91,63 @@ class Skill extends Model
 
     public function versions(): HasMany
     {
-        return $this->hasMany(SkillVersion::class);
+        return $this->hasMany(PlaybookVersion::class);
     }
 
     /** The single live version this slot contributes. */
     public function activeVersion(): HasOne
     {
-        return $this->hasOne(SkillVersion::class)->where('status', SkillVersion::STATUS_ACTIVE);
+        return $this->hasOne(PlaybookVersion::class)->where('status', PlaybookVersion::STATUS_ACTIVE);
     }
 
     /** Proposed (awaiting human approval) versions, newest first. */
     public function proposedVersions(): HasMany
     {
-        return $this->versions()->where('status', SkillVersion::STATUS_PROPOSED)->latest('version');
+        return $this->versions()->where('status', PlaybookVersion::STATUS_PROPOSED)->latest('version');
+    }
+
+    /** The newest version on this slot by version number (any status), or null. */
+    public function latestVersion(): ?PlaybookVersion
+    {
+        return $this->versions()->orderByDesc('version')->first();
+    }
+
+    /**
+     * The compare-and-swap token a writer must echo to prove they read current
+     * state before editing: the latest version's content fingerprint, or a stable
+     * "empty slot" token when nothing exists yet (so even a first proposal is a
+     * deliberate act, not a blind write). See {@see propose()} / {@see publish()}.
+     */
+    public function currentHash(): string
+    {
+        // The latest version of ANY status — so every write (proposal or publish)
+        // bumps the token: after you write, the old base_hash is stale and a second
+        // blind write is refused until you re-read. A slot with no versions yet gets
+        // a stable "empty" token so even a first write is a deliberate act.
+        $latest = $this->latestVersion();
+        if ($latest !== null) {
+            return $latest->contentHash();
+        }
+
+        return substr(hash('sha256', 'empty:'.$this->scope.':'.$this->key.':'.($this->owner_id ?? 'null')), 0, 16);
+    }
+
+    /**
+     * Guard a write against a stale read: if the caller supplied a base hash and
+     * the slot has moved on since, refuse — they must re-read. A null hash skips
+     * the check (trusted callers like the seeder).
+     *
+     * @throws \App\Exceptions\StalePlaybookHashException
+     */
+    public function assertFreshHash(?string $expectedHash): void
+    {
+        if ($expectedHash === null) {
+            return;
+        }
+        $current = $this->currentHash();
+        if (! hash_equals($current, $expectedHash)) {
+            throw new \App\Exceptions\StalePlaybookHashException($this, $expectedHash, $current, $this->latestVersion());
+        }
     }
 
     public function isSystem(): bool
@@ -143,7 +187,7 @@ class Skill extends Model
      * last so a person always has the final say, unless the project's team
      * forbids personal instructions (then the personal layer is dropped).
      *
-     * @return array{body: string, layers: list<array{scope: string, title: string, mode: string, version: int}>}
+     * @return array{body: string, layers: list<array{scope: string, title: string, mode: string, version: int, playbook_id: int, hash: string}>}
      */
     public static function compose(User $user, ?Project $project, string $key): array
     {
@@ -182,18 +226,20 @@ class Skill extends Model
                 'title' => $version->title,
                 'mode' => $version->mode,
                 'version' => $version->version,
+                'playbook_id' => $slot->id,
+                'hash' => $slot->currentHash(), // CAS token to propose against this layer
             ];
         }
 
         $body = implode("\n\n", $bodies);
 
-        // The bootstrap skill advertises the named, on-demand skills in scope so
-        // the agent knows what it can pull via get_skill(key:...).
+        // The bootstrap playbook advertises the named, on-demand playbooks in scope so
+        // the agent knows what it can pull via get_playbook(key:...).
         if ($key === 'main') {
             $catalog = self::namedCatalog($user, $project);
             if ($catalog !== []) {
                 $lines = array_map(fn (array $c) => "- `{$c['key']}` — {$c['summary']}", $catalog);
-                $body .= "\n\n## Available skills (load on demand with get_skill key:<key>)\n".implode("\n", $lines);
+                $body .= "\n\n## Available playbooks (load on demand with get_playbook key:<key>)\n".implode("\n", $lines);
             }
         }
 
@@ -201,7 +247,7 @@ class Skill extends Model
     }
 
     /**
-     * The named (non-phase) skills reachable for $user on $project, each resolved
+     * The named (non-phase) playbooks reachable for $user on $project, each resolved
      * to its most-specific scope, as [key, summary] rows for the `main` catalog.
      *
      * @return list<array{key: string, summary: string}>
@@ -213,7 +259,7 @@ class Skill extends Model
         $slots = self::query()
             ->whereNotIn('key', self::PHASES)
             ->with('activeVersion')
-            ->whereHas('versions', fn ($q) => $q->where('status', SkillVersion::STATUS_ACTIVE))
+            ->whereHas('versions', fn ($q) => $q->where('status', PlaybookVersion::STATUS_ACTIVE))
             ->where(function ($q) use ($user, $project, $team) {
                 $q->where(fn ($q) => $q->where('scope', self::SCOPE_SYSTEM)->whereNull('owner_id'))
                     ->orWhere(fn ($q) => $q->where('scope', self::SCOPE_PERSONAL)
@@ -303,15 +349,17 @@ class Skill extends Model
      * anyone who can access the scope but cannot approve it, and by every MCP
      * (AI) proposal regardless of who owns it.
      */
-    public function propose(string $title, ?string $summary, string $body, ?User $author, bool $byAi, ?string $note = null, ?int $workSessionId = null, string $mode = self::MODE_APPEND): SkillVersion
+    public function propose(string $title, ?string $summary, string $body, ?User $author, bool $byAi, ?string $note = null, ?int $workSessionId = null, string $mode = self::MODE_APPEND, ?string $expectedHash = null): PlaybookVersion
     {
+        $this->assertFreshHash($expectedHash);
+
         return $this->versions()->create([
             'version' => $this->nextVersion(),
             'title' => $title,
             'summary' => $summary,
             'mode' => $mode,
             'body' => $body,
-            'status' => SkillVersion::STATUS_PROPOSED,
+            'status' => PlaybookVersion::STATUS_PROPOSED,
             'author_user_id' => $author?->id,
             'proposed_by_ai' => $byAi,
             'note' => $note,
@@ -323,14 +371,14 @@ class Skill extends Model
      * Make $version the live one, archiving whatever was active before it. The
      * version must belong to this slot. Returns it for chaining.
      */
-    public function activate(SkillVersion $version): SkillVersion
+    public function activate(PlaybookVersion $version): PlaybookVersion
     {
         $this->versions()
-            ->where('status', SkillVersion::STATUS_ACTIVE)
+            ->where('status', PlaybookVersion::STATUS_ACTIVE)
             ->whereKeyNot($version->id)
-            ->update(['status' => SkillVersion::STATUS_ARCHIVED]);
+            ->update(['status' => PlaybookVersion::STATUS_ARCHIVED]);
 
-        $version->update(['status' => SkillVersion::STATUS_ACTIVE]);
+        $version->update(['status' => PlaybookVersion::STATUS_ACTIVE]);
         $this->unsetRelation('activeVersion');
 
         return $version;
@@ -342,13 +390,13 @@ class Skill extends Model
      * self-approves to `active`; anyone else's change lands `proposed` for an
      * approver. Used identically by the web form and the MCP tool.
      */
-    public function submitVersion(string $title, ?string $summary, string $body, User $author, bool $byAi, ?string $note = null, string $mode = self::MODE_APPEND): SkillVersion
+    public function submitVersion(string $title, ?string $summary, string $body, User $author, bool $byAi, ?string $note = null, string $mode = self::MODE_APPEND, ?string $expectedHash = null): PlaybookVersion
     {
         if (! $byAi && $this->canBeApprovedBy($author)) {
-            return $this->publish($title, $summary, $body, $author, mode: $mode);
+            return $this->publish($title, $summary, $body, $author, mode: $mode, expectedHash: $expectedHash);
         }
 
-        return $this->propose($title, $summary, $body, $author, $byAi, $note, mode: $mode);
+        return $this->propose($title, $summary, $body, $author, $byAi, $note, mode: $mode, expectedHash: $expectedHash);
     }
 
     /**
@@ -356,15 +404,17 @@ class Skill extends Model
      * immediately): a self-approved human edit, or the system seeder. Archives
      * the prior active version.
      */
-    public function publish(string $title, ?string $summary, string $body, ?User $author = null, bool $byAi = false, string $mode = self::MODE_APPEND): SkillVersion
+    public function publish(string $title, ?string $summary, string $body, ?User $author = null, bool $byAi = false, string $mode = self::MODE_APPEND, ?string $expectedHash = null): PlaybookVersion
     {
+        $this->assertFreshHash($expectedHash);
+
         $version = $this->versions()->create([
             'version' => $this->nextVersion(),
             'title' => $title,
             'summary' => $summary,
             'mode' => $mode,
             'body' => $body,
-            'status' => SkillVersion::STATUS_ACTIVE,
+            'status' => PlaybookVersion::STATUS_ACTIVE,
             'author_user_id' => $author?->id,
             'proposed_by_ai' => $byAi,
         ]);
@@ -373,12 +423,12 @@ class Skill extends Model
     }
 
     /**
-     * A named (non-phase) skill resolves to the MOST-SPECIFIC scope only — no
+     * A named (non-phase) playbook resolves to the MOST-SPECIFIC scope only — no
      * composition: personal → project → team → system (personal wins, mirroring
      * its final say in composition, unless the team locks personal out). Returns
      * the active version, or null if no scope defines that key.
      */
-    public static function resolveNamed(User $user, ?Project $project, string $key): ?SkillVersion
+    public static function resolveNamed(User $user, ?Project $project, string $key): ?PlaybookVersion
     {
         $team = $project?->team;
         $allowPersonal = $team === null ? true : (bool) $team->allow_personal_instructions;

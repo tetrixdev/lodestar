@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Project;
-use App\Models\Skill;
-use App\Models\SkillVersion;
+use App\Models\Playbook;
+use App\Models\PlaybookVersion;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\LineDiff;
@@ -17,16 +17,16 @@ use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
- * The skills page + change control. Skills are layered: a phase prompt is
+ * The playbooks page + change control. Playbooks are layered: a phase prompt is
  * composed across scopes (system → team → project → personal). This page shows
  * the EFFECTIVE composed prompt per phase; the filterable authoring overview
  * (version history, diff) lands in P4.
  *
  * Change control is human-gated: anyone who can reach a scope may PROPOSE a
  * version; only an assigned approver may APPROVE (make it active). An AI (over
- * MCP) can only ever propose. The rule lives on {@see Skill::submitVersion()}.
+ * MCP) can only ever propose. The rule lives on {@see Playbook::submitVersion()}.
  */
-class SkillController extends Controller
+class PlaybookController extends Controller
 {
     /** The overview: the composed effective prompt per phase + a filterable list of every layer you can reach. */
     public function index(Request $request): View
@@ -34,11 +34,11 @@ class SkillController extends Controller
         $user = $request->user();
 
         $filters = $request->validate([
-            'scope' => ['nullable', Rule::in(Skill::SCOPES)],
+            'scope' => ['nullable', Rule::in(Playbook::SCOPES)],
             'key' => ['nullable', 'string'],
             'team_id' => ['nullable', 'integer'],
             'project_id' => ['nullable', 'integer'],
-            'status' => ['nullable', Rule::in(SkillVersion::STATUSES)],
+            'status' => ['nullable', Rule::in(PlaybookVersion::STATUSES)],
             'preview_project' => ['nullable', 'integer'],
         ]);
 
@@ -50,7 +50,7 @@ class SkillController extends Controller
 
         $slots = $this->accessibleSlots($user)
             ->with(['owner', 'activeVersion'])
-            ->withCount(['versions as proposed_count' => fn ($q) => $q->where('status', SkillVersion::STATUS_PROPOSED)])
+            ->withCount(['versions as proposed_count' => fn ($q) => $q->where('status', PlaybookVersion::STATUS_PROPOSED)])
             ->when($filters['scope'] ?? null, fn ($q, $s) => $q->where('scope', $s))
             ->when($filters['key'] ?? null, fn ($q, $k) => $q->where('key', $k))
             ->when($filters['team_id'] ?? null, fn ($q, $id) => $q->where('owner_type', Team::class)->where('owner_id', $id))
@@ -61,64 +61,64 @@ class SkillController extends Controller
 
         // Composed for the previewed project (system → team → project → personal),
         // or just system + personal when no project is chosen.
-        $composed = collect(Skill::PHASES)->mapWithKeys(
-            fn (string $phase) => [$phase => Skill::compose($user, $previewProject, $phase)],
+        $composed = collect(Playbook::PHASES)->mapWithKeys(
+            fn (string $phase) => [$phase => Playbook::compose($user, $previewProject, $phase)],
         );
 
-        return view('settings.skills', [
-            'phases' => Skill::PHASES,
-            'phaseLabels' => Skill::PHASE_LABELS,
+        return view('settings.playbooks', [
+            'phases' => Playbook::PHASES,
+            'phaseLabels' => Playbook::PHASE_LABELS,
             'composed' => $composed,
             'previewProject' => $previewProject,
             'slots' => $slots,
             'filters' => $filters,
-            'scopes' => Skill::SCOPES,
-            'statuses' => SkillVersion::STATUSES,
+            'scopes' => Playbook::SCOPES,
+            'statuses' => PlaybookVersion::STATUSES,
             'teams' => $user->teams()->orderBy('name')->get(),
             'projects' => Project::accessibleBy($user)->orderBy('name')->get(),
         ]);
     }
 
     /** A single layer: its versions, the change-control actions, and a two-version diff. */
-    public function show(Request $request, Skill $skill): View
+    public function show(Request $request, Playbook $playbook): View
     {
         $user = $request->user();
-        abort_unless($skill->isSystem() || $skill->canBeAccessedBy($user), 403);
+        abort_unless($playbook->isSystem() || $playbook->canBeAccessedBy($user), 403);
 
-        $skill->load(['owner', 'versions' => fn ($q) => $q->latest('version'), 'versions.author']);
-        $versions = $skill->versions;
+        $playbook->load(['owner', 'versions' => fn ($q) => $q->latest('version'), 'versions.author']);
+        $versions = $playbook->versions;
 
         // Diff a→b: default to the active version vs the newest proposed (else the two newest).
-        $active = $versions->firstWhere('status', SkillVersion::STATUS_ACTIVE);
-        $proposed = $versions->firstWhere('status', SkillVersion::STATUS_PROPOSED);
+        $active = $versions->firstWhere('status', PlaybookVersion::STATUS_ACTIVE);
+        $proposed = $versions->firstWhere('status', PlaybookVersion::STATUS_PROPOSED);
         $a = $versions->firstWhere('id', (int) $request->query('a')) ?? $active ?? $versions->get(1);
         $b = $versions->firstWhere('id', (int) $request->query('b')) ?? $proposed ?? $versions->first();
 
         $diff = ($a && $b && $a->isNot($b)) ? LineDiff::between($a->body, $b->body) : null;
 
-        return view('settings.skill-show', [
-            'skill' => $skill,
+        return view('settings.playbook-show', [
+            'playbook' => $playbook,
             'versions' => $versions,
-            'canApprove' => $skill->canBeApprovedBy($user),
-            'canPropose' => $skill->canBeAccessedBy($user),
+            'canApprove' => $playbook->canBeApprovedBy($user),
+            'canPropose' => $playbook->canBeAccessedBy($user),
             'diffA' => $a,
             'diffB' => $b,
             'diff' => $diff,
         ]);
     }
 
-    /** Every skill slot the user can reach: system + own personal + their teams' + their projects'. */
+    /** Every playbook slot the user can reach: system + own personal + their teams' + their projects'. */
     private function accessibleSlots(User $user)
     {
         $projectIds = Project::accessibleBy($user)->pluck('id');
 
-        return Skill::query()->where(function ($q) use ($user, $projectIds) {
-            $q->where('scope', Skill::SCOPE_SYSTEM)
-                ->orWhere(fn ($q) => $q->where('scope', Skill::SCOPE_PERSONAL)
+        return Playbook::query()->where(function ($q) use ($user, $projectIds) {
+            $q->where('scope', Playbook::SCOPE_SYSTEM)
+                ->orWhere(fn ($q) => $q->where('scope', Playbook::SCOPE_PERSONAL)
                     ->where('owner_type', User::class)->where('owner_id', $user->id))
-                ->orWhere(fn ($q) => $q->where('scope', Skill::SCOPE_TEAM)
+                ->orWhere(fn ($q) => $q->where('scope', Playbook::SCOPE_TEAM)
                     ->where('owner_type', Team::class)->whereIn('owner_id', $user->teamIds()))
-                ->orWhere(fn ($q) => $q->where('scope', Skill::SCOPE_PROJECT)
+                ->orWhere(fn ($q) => $q->where('scope', Playbook::SCOPE_PROJECT)
                     ->where('owner_type', Project::class)->whereIn('owner_id', $projectIds));
         });
     }
@@ -132,40 +132,40 @@ class SkillController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'scope' => ['required', Rule::in([Skill::SCOPE_PERSONAL, Skill::SCOPE_TEAM, Skill::SCOPE_PROJECT])],
+            'scope' => ['required', Rule::in([Playbook::SCOPE_PERSONAL, Playbook::SCOPE_TEAM, Playbook::SCOPE_PROJECT])],
             'key' => ['required', 'string', 'max:255', $this->notReservedKey()],
             'title' => ['required', 'string', 'max:255'],
             'summary' => $this->summaryRule((string) $request->input('key')),
             'body' => ['required', 'string'],
-            'mode' => ['nullable', Rule::in(Skill::MODES)],
+            'mode' => ['nullable', Rule::in(Playbook::MODES)],
             'note' => ['nullable', 'string'],
-            'team_id' => ['required_if:scope,'.Skill::SCOPE_TEAM, 'integer'],
-            'project_id' => ['required_if:scope,'.Skill::SCOPE_PROJECT, 'integer'],
+            'team_id' => ['required_if:scope,'.Playbook::SCOPE_TEAM, 'integer'],
+            'project_id' => ['required_if:scope,'.Playbook::SCOPE_PROJECT, 'integer'],
         ]);
 
         $owner = $this->resolveOwner($request, $data);
 
-        $slot = Skill::ensureSlot($data['scope'], $owner, $data['key'], $data['title']);
+        $slot = Playbook::ensureSlot($data['scope'], $owner, $data['key'], $data['title']);
         abort_unless($slot->canBeAccessedBy($user), 403);
 
         $version = $slot->submitVersion(
             $data['title'], $data['summary'] ?? null, $data['body'], $user,
-            byAi: false, note: $data['note'] ?? null, mode: $data['mode'] ?? Skill::MODE_APPEND,
+            byAi: false, note: $data['note'] ?? null, mode: $data['mode'] ?? Playbook::MODE_APPEND,
         );
 
-        return back()->with('status', $version->isActive() ? 'skill-published' : 'skill-proposed');
+        return back()->with('status', $version->isActive() ? 'playbook-published' : 'playbook-proposed');
     }
 
     /** Make a proposed version live (archiving the prior active). Approver only. */
-    public function approve(Request $request, SkillVersion $version): RedirectResponse
+    public function approve(Request $request, PlaybookVersion $version): RedirectResponse
     {
-        $slot = $version->skill;
+        $slot = $version->playbook;
         abort_unless($slot->canBeApprovedBy($request->user()), 403);
         abort_unless($version->isProposed(), 422);
 
         $slot->activate($version);
 
-        return back()->with('status', 'skill-approved');
+        return back()->with('status', 'playbook-approved');
     }
 
     /**
@@ -173,48 +173,48 @@ class SkillController extends Controller
      * version (authored by the approver), and archive the original proposal with
      * a note recording it was amended into the new one. Approver only.
      */
-    public function approveWithEdits(Request $request, SkillVersion $version): RedirectResponse
+    public function approveWithEdits(Request $request, PlaybookVersion $version): RedirectResponse
     {
-        $slot = $version->skill;
+        $slot = $version->playbook;
         abort_unless($slot->canBeApprovedBy($request->user()), 403);
         abort_unless($version->isProposed(), 422);
 
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'summary' => $this->summaryRule($slot->key),
-            'mode' => ['nullable', Rule::in(Skill::MODES)],
+            'mode' => ['nullable', Rule::in(Playbook::MODES)],
             'body' => ['required', 'string'],
         ]);
 
-        $new = $slot->publish($data['title'], $data['summary'] ?? null, $data['body'], $request->user(), mode: $data['mode'] ?? Skill::MODE_APPEND);
+        $new = $slot->publish($data['title'], $data['summary'] ?? null, $data['body'], $request->user(), mode: $data['mode'] ?? Playbook::MODE_APPEND);
         $version->update([
-            'status' => SkillVersion::STATUS_ARCHIVED,
+            'status' => PlaybookVersion::STATUS_ARCHIVED,
             'note' => 'Amended into v'.$new->version.' by '.$request->user()->name
                 .($version->note ? ' — '.$version->note : ''),
         ]);
 
-        return back()->with('status', 'skill-approved');
+        return back()->with('status', 'playbook-approved');
     }
 
     /** Reject a proposed version. Approver only. */
-    public function reject(Request $request, SkillVersion $version): RedirectResponse
+    public function reject(Request $request, PlaybookVersion $version): RedirectResponse
     {
-        abort_unless($version->skill->canBeApprovedBy($request->user()), 403);
+        abort_unless($version->playbook->canBeApprovedBy($request->user()), 403);
         abort_unless($version->isProposed(), 422);
 
-        $version->update(['status' => SkillVersion::STATUS_REJECTED]);
+        $version->update(['status' => PlaybookVersion::STATUS_REJECTED]);
 
-        return back()->with('status', 'skill-rejected');
+        return back()->with('status', 'playbook-rejected');
     }
 
     /**
-     * Summary is REQUIRED for named (on-demand) skills — that's the line the
+     * Summary is REQUIRED for named (on-demand) playbooks — that's the line the
      * `main` catalog shows so an agent knows when to pull it — and optional for
      * phase keys (which compose automatically and aren't catalogued).
      */
     private function summaryRule(string $key): array
     {
-        return Skill::isPhase($key)
+        return Playbook::isPhase($key)
             ? ['nullable', 'string', 'max:255']
             : ['required', 'string', 'max:255'];
     }
@@ -223,8 +223,8 @@ class SkillController extends Controller
     private function notReservedKey(): \Closure
     {
         return function (string $attribute, mixed $value, \Closure $fail): void {
-            if (is_string($value) && Skill::isReservedKey($value)) {
-                $fail('Keys starting with "'.Skill::RESERVED_KEY_PREFIX.'" are reserved for Lodestar.');
+            if (is_string($value) && Playbook::isReservedKey($value)) {
+                $fail('Keys starting with "'.Playbook::RESERVED_KEY_PREFIX.'" are reserved for Lodestar.');
             }
         };
     }
@@ -235,12 +235,12 @@ class SkillController extends Controller
         $user = $request->user();
 
         return match ($data['scope']) {
-            Skill::SCOPE_PERSONAL => $user,
-            Skill::SCOPE_TEAM => tap(
+            Playbook::SCOPE_PERSONAL => $user,
+            Playbook::SCOPE_TEAM => tap(
                 Team::findOrFail($data['team_id']),
                 fn (Team $team) => abort_unless($user->isInTeam($team->id), 403),
             ),
-            Skill::SCOPE_PROJECT => Project::accessibleBy($user)->findOrFail($data['project_id']),
+            Playbook::SCOPE_PROJECT => Project::accessibleBy($user)->findOrFail($data['project_id']),
             default => abort(403),
         };
     }

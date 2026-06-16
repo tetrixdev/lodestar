@@ -3,7 +3,7 @@
     // A /loop command to paste into a fresh Claude Code session (Lodestar MCP
     // connected locally). It self-paces: Claude re-runs it until the backlog is dry.
     $loopPrompt = <<<MD
-        /loop Work the Lodestar backlog for project "{$project->name}" (slug: {$project->slug}). Using the Lodestar MCP, load and follow the work skill: call get_skill with key "work" and project "{$project->slug}", then do exactly what it returns — claim each ready task, work it (one subagent per task), report and advance_task. Repeat until nothing is claimable, then stop. Work autonomously; do not ask me questions.
+        /loop Work the Lodestar backlog for project "{$project->name}" (slug: {$project->slug}). Using the Lodestar MCP, load and follow the work playbook: call get_playbook with key "work" and project "{$project->slug}", then do exactly what it returns — claim each ready task, work it (one subagent per task), report and advance_task. Repeat until nothing is claimable, then stop. Work autonomously; do not ask me questions.
         MD;
 @endphp
 

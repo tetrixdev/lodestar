@@ -8,13 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * One version of a {@see Skill} slot's prompt. A slot keeps its full history;
+ * One version of a {@see Playbook} slot's prompt. A slot keeps its full history;
  * exactly one version is `active` (the one composition uses). A `proposed`
  * version awaits a human approver — approving it archives the prior active one.
  * `proposed_by_ai` records that an MCP client (an AI) authored the proposal,
  * which can never go live on its own.
  */
-class SkillVersion extends Model
+class PlaybookVersion extends Model
 {
     protected $guarded = [];
 
@@ -38,9 +38,9 @@ class SkillVersion extends Model
         self::STATUS_REJECTED,
     ];
 
-    public function skill(): BelongsTo
+    public function playbook(): BelongsTo
     {
-        return $this->belongsTo(Skill::class);
+        return $this->belongsTo(Playbook::class);
     }
 
     public function author(): BelongsTo
@@ -62,5 +62,22 @@ class SkillVersion extends Model
     public function isProposed(): bool
     {
         return $this->status === self::STATUS_PROPOSED;
+    }
+
+    /**
+     * A stable content fingerprint of this version — the compare-and-swap token
+     * a writer must echo back to prove they read the current state before editing
+     * (see {@see Playbook::currentHash()}). Covers every field a reader would see.
+     */
+    public function contentHash(): string
+    {
+        return substr(hash('sha256', implode("\x00", [
+            (string) $this->version,
+            (string) $this->status,
+            (string) $this->title,
+            (string) $this->summary,
+            (string) $this->mode,
+            (string) $this->body,
+        ])), 0, 16);
     }
 }

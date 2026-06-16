@@ -28,8 +28,8 @@
                         'desc' => 'Link the accounts and tokens used to read your repositories.',
                     ],
                     [
-                        'href' => route('skills.index'),
-                        'title' => 'Skills',
+                        'href' => route('playbooks.index'),
+                        'title' => 'Playbooks',
                         'desc' => 'View the system prompts that drive each loop phase, and fork them to edit.',
                     ],
                 ];

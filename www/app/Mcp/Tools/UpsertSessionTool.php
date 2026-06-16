@@ -68,7 +68,7 @@ class UpsertSessionTool extends LodestarTool
             'id' => $schema->integer()->description('Existing work-session id to update. Omit to create.'),
             'title' => $schema->string()->description('Session title (required when creating).'),
             'slug' => $schema->string()->description('Optional slug; defaults from the title.'),
-            'body' => $schema->string()->description('Full markdown record of what was done. If you set this you MUST also pass body_summary.'),
+            'body' => $schema->string()->description('Full markdown record of what was done — a log entry, not an essay (1–3 tight paragraphs). Cover: what changed and the outcome; then call out **decisions made**, **open threads** still in flight, and **gotchas the next session must know**. This is the running history a future session reads to orient. If you set this you MUST also pass body_summary.'),
             'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the session.'),
             'occurred_on' => $schema->string()->description('Date the work happened (YYYY-MM-DD).'),
         ];

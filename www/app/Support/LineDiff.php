@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 /**
- * A tiny dependency-free line diff (LCS) for comparing two skill-version bodies.
+ * A tiny dependency-free line diff (LCS) for comparing two playbook-version bodies.
  * Returns a flat list of rows the UI renders: each row is ['op' => same|add|del,
  * 'old' => ?int, 'new' => ?int, 'text' => string].
  */

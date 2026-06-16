@@ -13,7 +13,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Atomically claim a queued (ready_*) task and flip it to its working (*-ing) state — the only way to start work. Claim a SPECIFIC card with task_id, or the next available one (optionally filtered by project and/or phase). Returns the claimed task and the phase to load a skill for, or "no task available".')]
+#[Description('Atomically claim a queued (ready_*) task and flip it to its working (*-ing) state — the only way to start work. Claim a SPECIFIC card with task_id, or the next available one (optionally filtered by project and/or phase). Returns the claimed task and the phase to load a playbook for, or "no task available".')]
 #[Name('claim_task')]
 class ClaimTaskTool extends LodestarTool
 {
@@ -119,7 +119,7 @@ class ClaimTaskTool extends LodestarTool
                 'claimed_by' => $claimed->claimed_by,
                 'rework_notes' => $claimed->rework_notes, // a prior review's change requests, if any
             ],
-            'next' => 'Call get_skill with this task_id to load the phase prompt, then advance_task when done.'
+            'next' => 'Call get_playbook with this task_id to load the phase prompt, then advance_task when done.'
                 .($claimed->rework_notes ? ' This card has rework_notes from a review — address them first.' : ''),
         ]);
     }

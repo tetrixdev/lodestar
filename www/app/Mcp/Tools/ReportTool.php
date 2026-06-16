@@ -61,7 +61,7 @@ class ReportTool extends LodestarTool
             'task_id' => $schema->integer()->description('Task whose project the session is logged on.'),
             'project' => $schema->string()->description('Project id or slug (alternative to task_id).'),
             'title' => $schema->string()->description('Short summary line of what was done.')->required(),
-            'body' => $schema->string()->description('Full markdown detail. If you set this you MUST also pass body_summary.'),
+            'body' => $schema->string()->description('Full markdown detail of the work — a log entry, not an essay. Cover: what changed and the outcome (did the tests pass? did you run it?); then **decisions made**, **open threads**, and **gotchas** the next run needs. For a develop/loop report, name the branch and its merge target (e.g. feat/x → main). If you set this you MUST also pass body_summary.'),
             'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the session.'),
             'occurred_on' => $schema->string()->description('Date the work happened (YYYY-MM-DD). Defaults to today.'),
         ];

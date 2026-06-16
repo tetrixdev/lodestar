@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Mcp\Servers\LodestarServer;
-use App\Mcp\Tools\GetSkillTool;
-use App\Models\Skill;
+use App\Mcp\Tools\GetPlaybookTool;
+use App\Models\Playbook;
 use App\Models\Task;
 use App\Models\User;
-use Database\Seeders\SystemSkillSeeder;
+use Database\Seeders\SystemPlaybookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -17,16 +17,16 @@ class AgentLoopTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_work_skill_is_seeded_and_resolvable_by_get_skill(): void
+    public function test_work_playbook_is_seeded_and_resolvable_by_get_playbook(): void
     {
-        $this->seed(SystemSkillSeeder::class);
+        $this->seed(SystemPlaybookSeeder::class);
         $user = User::factory()->create();
 
-        $this->assertNotNull(Skill::slotFor(Skill::SCOPE_SYSTEM, null, 'work'));
+        $this->assertNotNull(Playbook::slotFor(Playbook::SCOPE_SYSTEM, null, 'work'));
 
-        // It's a named skill (not a phase) — get_skill(key:'work') returns it.
+        // It's a named playbook (not a phase) — get_playbook(key:'work') returns it.
         LodestarServer::actingAs($user)
-            ->tool(GetSkillTool::class, ['key' => 'work'])
+            ->tool(GetPlaybookTool::class, ['key' => 'work'])
             ->assertOk()
             ->assertSee('the loop')
             ->assertSee('claim_task');

@@ -9,10 +9,10 @@ use App\Mcp\Tools\AdvanceTaskTool;
 use App\Mcp\Tools\ClaimTaskTool;
 use App\Mcp\Tools\CreateReviewTool;
 use App\Mcp\Tools\GetReviewTool;
-use App\Mcp\Tools\GetSkillTool;
+use App\Mcp\Tools\GetPlaybookTool;
 use App\Mcp\Tools\LinkRepositoryTool;
 use App\Mcp\Tools\ListProjectsTool;
-use App\Mcp\Tools\ProposeSkillChangeTool;
+use App\Mcp\Tools\ProposePlaybookChangeTool;
 use App\Mcp\Tools\RememberTool;
 use App\Mcp\Tools\ReportTool;
 use App\Mcp\Tools\UnlinkRepositoryTool;
@@ -38,13 +38,13 @@ create_review (hands back a URL a human opens), upsert_review_section, get_revie
 
 Loop tools drive the lifecycle. claim_task atomically takes the next queued
 (ready_*) card and flips it to its working (*-ing) state — that claim is the only
-way to start work. get_skill returns the prompt for a claimed task's phase.
+way to start work. get_playbook returns the prompt for a claimed task's phase.
 advance_task moves a card along a LEGAL transition only (the server rejects
 illegal jumps). report logs a work-session. The human-only gates (plan_review,
 human_review) cannot be claimed — a human moves those in the web UI.
 
-get_skill composes a phase prompt across scopes (system → team → project →
-personal). propose_skill_change proposes a new version of a skill layer; it is
+get_playbook composes a phase prompt across scopes (system → team → project →
+personal). propose_playbook_change proposes a new version of a playbook layer; it is
 ALWAYS recorded as proposed and awaits a human approver — there is no approve
 tool, by design.
 TXT)]
@@ -67,8 +67,8 @@ class LodestarServer extends Server
         GetReviewTool::class,
         // Loop tools
         ClaimTaskTool::class,
-        GetSkillTool::class,
-        ProposeSkillChangeTool::class,
+        GetPlaybookTool::class,
+        ProposePlaybookChangeTool::class,
         RememberTool::class,
         AdvanceTaskTool::class,
         ReportTool::class,

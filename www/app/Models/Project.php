@@ -56,7 +56,7 @@ class Project extends Model
         });
     }
 
-    /** May this user approve project-level skill changes? (owner or an assigned approver) */
+    /** May this user approve project-level playbook changes? (owner or an assigned approver) */
     public function canApprovePrompts(User $user): bool
     {
         if ($this->user_id === $user->id) {
@@ -88,10 +88,10 @@ class Project extends Model
         return $this->belongsToMany(Repository::class, 'project_repository')->withTimestamps();
     }
 
-    /** This project's project-scope skill slots. */
-    public function skills(): MorphMany
+    /** This project's project-scope playbook slots. */
+    public function playbooks(): MorphMany
     {
-        return $this->morphMany(Skill::class, 'owner');
+        return $this->morphMany(Playbook::class, 'owner');
     }
 
     /** The env keys this project needs to run (the secrets manifest). */

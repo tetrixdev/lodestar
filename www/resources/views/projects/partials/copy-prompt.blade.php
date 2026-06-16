@@ -14,8 +14,8 @@
 
         Using the Lodestar MCP:
         1. claim_task with task_id {$task->id} to take it (skip if it's already in progress).
-        2. get_skill with task_id {$task->id} and follow the returned skill exactly.
-        3. report progress and advance_task as the skill directs.
+        2. get_playbook with task_id {$task->id} and follow the returned playbook exactly.
+        3. report progress and advance_task as the playbook directs.
         MD;
 @endphp
 

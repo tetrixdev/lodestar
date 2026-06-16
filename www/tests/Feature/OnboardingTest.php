@@ -58,7 +58,7 @@ class OnboardingTest extends TestCase
             ->assertSee(route('profile.edit'))
             ->assertSee(route('agent-tokens.index'))
             ->assertSee(route('github.index'))
-            ->assertSee(route('skills.index'));
+            ->assertSee(route('playbooks.index'));
     }
 
     public function test_settings_index_requires_auth(): void

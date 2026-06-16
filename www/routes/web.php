@@ -12,7 +12,7 @@ use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SecretController;
 use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\SkillController;
+use App\Http\Controllers\PlaybookController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\WorkSessionController;
@@ -84,18 +84,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/settings/github', [GithubConnectionController::class, 'store'])->name('github.store');
     Route::delete('/settings/github/{connection}', [GithubConnectionController::class, 'destroy'])->name('github.destroy');
 
-    // Skills — view the composed effective prompt per phase, and change control:
+    // Playbooks — view the composed effective prompt per phase, and change control:
     // propose a version (anyone in scope), approve/reject (assigned approvers),
     // toggle a layer's append/overwrite mode (approvers).
     // MCP reference — every tool, its params and example output (read-only).
     Route::get('/settings/mcp', [McpReferenceController::class, 'index'])->name('mcp.reference');
 
-    Route::get('/settings/skills', [SkillController::class, 'index'])->name('skills.index');
-    Route::get('/settings/skills/{skill}', [SkillController::class, 'show'])->name('skills.show');
-    Route::post('/settings/skills/propose', [SkillController::class, 'propose'])->name('skills.propose');
-    Route::post('/settings/skills/versions/{version}/approve', [SkillController::class, 'approve'])->name('skills.versions.approve');
-    Route::post('/settings/skills/versions/{version}/approve-edits', [SkillController::class, 'approveWithEdits'])->name('skills.versions.approveEdits');
-    Route::post('/settings/skills/versions/{version}/reject', [SkillController::class, 'reject'])->name('skills.versions.reject');
+    Route::get('/settings/playbooks', [PlaybookController::class, 'index'])->name('playbooks.index');
+    Route::get('/settings/playbooks/{playbook}', [PlaybookController::class, 'show'])->name('playbooks.show');
+    Route::post('/settings/playbooks/propose', [PlaybookController::class, 'propose'])->name('playbooks.propose');
+    Route::post('/settings/playbooks/versions/{version}/approve', [PlaybookController::class, 'approve'])->name('playbooks.versions.approve');
+    Route::post('/settings/playbooks/versions/{version}/approve-edits', [PlaybookController::class, 'approveWithEdits'])->name('playbooks.versions.approveEdits');
+    Route::post('/settings/playbooks/versions/{version}/reject', [PlaybookController::class, 'reject'])->name('playbooks.versions.reject');
 
     // Work sessions — a project's running history of what was done.
     Route::get('/projects/{project}/sessions', [WorkSessionController::class, 'index'])->name('work-sessions.index');

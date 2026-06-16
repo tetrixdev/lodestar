@@ -7,12 +7,12 @@ namespace Tests\Feature\Mcp;
 use App\Mcp\Servers\LodestarServer;
 use App\Mcp\Tools\AdvanceTaskTool;
 use App\Mcp\Tools\ClaimTaskTool;
-use App\Mcp\Tools\GetSkillTool;
+use App\Mcp\Tools\GetPlaybookTool;
 use App\Mcp\Tools\ReportTool;
-use App\Models\Skill;
+use App\Models\Playbook;
 use App\Models\Task;
 use App\Models\User;
-use Database\Seeders\SystemSkillSeeder;
+use Database\Seeders\SystemPlaybookSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -153,33 +153,33 @@ class McpLoopToolsTest extends TestCase
         $this->assertSame('Built the thing', $project->workSessions()->sole()->title);
     }
 
-    public function test_get_skill_returns_the_main_bootstrap_skill_without_a_task(): void
+    public function test_get_playbook_returns_the_main_bootstrap_playbook_without_a_task(): void
     {
-        $this->seed(SystemSkillSeeder::class);
+        $this->seed(SystemPlaybookSeeder::class);
         $user = User::factory()->create();
 
         LodestarServer::actingAs($user)
-            ->tool(GetSkillTool::class, ['phase' => 'main'])
+            ->tool(GetPlaybookTool::class, ['phase' => 'main'])
             ->assertOk()
             ->assertSee('"composed":true')
             ->assertSee('"scope":"system"')
             ->assertSee('start here');
     }
 
-    public function test_every_phase_has_a_seeded_active_system_skill(): void
+    public function test_every_phase_has_a_seeded_active_system_playbook(): void
     {
-        $this->seed(SystemSkillSeeder::class);
+        $this->seed(SystemPlaybookSeeder::class);
 
-        foreach (Skill::PHASES as $phase) {
-            $slot = Skill::slotFor(Skill::SCOPE_SYSTEM, null, $phase);
+        foreach (Playbook::PHASES as $phase) {
+            $slot = Playbook::slotFor(Playbook::SCOPE_SYSTEM, null, $phase);
             $this->assertNotNull($slot, "no system slot seeded for phase {$phase}");
             $this->assertNotNull($slot->activeVersion, "no active version for phase {$phase}");
         }
     }
 
-    public function test_get_skill_composes_system_base_then_a_personal_layer(): void
+    public function test_get_playbook_composes_system_base_then_a_personal_layer(): void
     {
-        $this->seed(SystemSkillSeeder::class);
+        $this->seed(SystemPlaybookSeeder::class);
 
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
@@ -187,18 +187,18 @@ class McpLoopToolsTest extends TestCase
 
         // No personal layer → just the system develop base.
         LodestarServer::actingAs($user)
-            ->tool(GetSkillTool::class, ['task_id' => $task->id])
+            ->tool(GetPlaybookTool::class, ['task_id' => $task->id])
             ->assertOk()
             ->assertSee('Develop a task');
 
         // A personal APPEND layer is composed onto the system base.
-        $slot = $user->skills()->create([
-            'scope' => Skill::SCOPE_PERSONAL, 'key' => 'develop', 'title' => 'My extras',
+        $slot = $user->playbooks()->create([
+            'scope' => Playbook::SCOPE_PERSONAL, 'key' => 'develop', 'title' => 'My extras',
         ]);
         $slot->publish('My extras', null, 'ALSO: run the linter.', $user);
 
         LodestarServer::actingAs($user)
-            ->tool(GetSkillTool::class, ['task_id' => $task->id])
+            ->tool(GetPlaybookTool::class, ['task_id' => $task->id])
             ->assertOk()
             ->assertSee('Develop a task')        // system base still present (append)
             ->assertSee('ALSO: run the linter.'); // personal layer appended
