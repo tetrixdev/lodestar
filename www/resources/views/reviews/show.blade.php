@@ -129,6 +129,13 @@
                 ];
             @endphp
 
+            {{-- A path → fully-loaded ReviewFile map, so section file references and
+                 a section link that names a changed file can open the same viewer
+                 modal (sections eager-load files as id+path only). --}}
+            @php
+                $filesByPath = $review->files->keyBy('path');
+            @endphp
+
             {{-- sections --}}
             @foreach ($review->sections as $i => $s)
                 <section x-data="section({{ $s->id }}, {{ $s->status === 'signed_off' ? 'true' : 'false' }}, @js($s->note), @js($s->decision), {{ $i === 0 ? 'true' : 'false' }})"
@@ -152,7 +159,32 @@
                         @endif
                         @if ($s->link)
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Open</p>
-                            <a href="{{ $s->link }}" class="text-sm text-indigo-600 hover:underline break-all">{{ $s->link }}</a>
+                            @php $linkFile = $filesByPath->get($s->link); @endphp
+                            @if ($linkFile)
+                                {{-- The link names a changed file → open the viewer modal. --}}
+                                <x-open-file :file="$linkFile" class="inline-flex text-sm text-indigo-600 hover:underline break-all">{{ $s->link }}</x-open-file>
+                            @else
+                                <a href="{{ $s->link }}" class="text-sm text-indigo-600 hover:underline break-all">{{ $s->link }}</a>
+                            @endif
+                        @endif
+
+                        {{-- The changed files this section covers — each opens the viewer. --}}
+                        @if ($s->files->isNotEmpty())
+                            <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-3 mb-1">Files in this section</p>
+                            <ul class="divide-y divide-gray-50 rounded-md border border-gray-100 font-mono text-xs">
+                                @foreach ($s->files as $sf)
+                                    @php $sfFull = $filesByPath->get($sf->path) ?? $sf; @endphp
+                                    <x-open-file :file="$sfFull" class="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
+                                        <span class="flex-1 truncate text-gray-700" title="{{ $sf->path }}">{{ $sf->path }}</span>
+                                        @if ($sfFull->additions || $sfFull->deletions)
+                                            <span class="shrink-0 text-[10px] font-medium tabular-nums">
+                                                <span class="text-emerald-600">+{{ $sfFull->additions }}</span>
+                                                <span class="text-red-600">−{{ $sfFull->deletions }}</span>
+                                            </span>
+                                        @endif
+                                    </x-open-file>
+                                @endforeach
+                            </ul>
                         @endif
                         @if (!empty($s->checks))
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-3 mb-1">What to check</p>
