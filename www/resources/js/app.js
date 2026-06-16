@@ -2,6 +2,7 @@ import Alpine from 'alpinejs';
 import collapse from '@alpinejs/collapse';
 import Sortable from 'sortablejs';
 import mermaid from 'mermaid';
+import { enhanceMermaidZoom } from './mermaid-zoom';
 
 window.Alpine = Alpine;
 
@@ -28,7 +29,13 @@ window.renderMermaid = function (root) {
     // Surface render errors to the console — a swallowed error here is the usual
     // reason a diagram silently stays as text. One bad diagram still can't throw
     // out of here and blank the surface.
-    mermaid.run({ nodes: [...nodes] }).catch((e) => console.error('[mermaid]', e));
+    // After mermaid swaps each <pre> for an <svg>, add pan/zoom controls. The
+    // promise resolves once all nodes are processed; enhanceMermaidZoom is
+    // idempotent (skips diagrams already marked data-zoom-ready).
+    mermaid
+        .run({ nodes: [...nodes] })
+        .then(() => enhanceMermaidZoom(scope))
+        .catch((e) => console.error('[mermaid]', e));
 };
 
 // Render any mermaid present in server-rendered page markdown on first load.
