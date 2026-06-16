@@ -260,18 +260,22 @@
                             <span class="text-xs font-medium rounded-md px-2.5 py-1 {{ $s->decision === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700' }}">{{ str_replace('_', ' ', $s->decision) }}</span>
                         @endif
 
+                        {{-- Comment is always available (a note reads well alongside an
+                             approval too) and autosaves — debounced on input, flushed on
+                             blur. No manual save button. --}}
                         <textarea x-model="note" rows="2" placeholder="Your comment / change request for this section…"
                                   :disabled="!canSignOff"
+                                  @input.debounce.600ms="saveNote()" @blur="saveNote()"
                                   class="mt-3 w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"></textarea>
 
                         <div class="flex items-center justify-between mt-2">
                             <label class="flex items-center gap-2 text-sm select-none" :class="canSignOff ? '' : 'text-gray-400'">
-                                <input type="checkbox" x-model="signedOff" @change="save()" :disabled="!canSignOff"
+                                <input type="checkbox" x-model="signedOff" @change="saveStatus()" :disabled="!canSignOff"
                                        class="rounded text-emerald-500 focus:ring-emerald-500 disabled:cursor-not-allowed">
-                                <span>I'm happy with this section</span>
+                                <span>I've reviewed this section</span>
                             </label>
-                            <button @click="save()" x-show="dirty && canSignOff" x-cloak
-                                    class="text-xs text-indigo-600 hover:underline" x-text="saving ? 'Saving…' : 'Save note'"></button>
+                            <span x-show="justSaved" x-cloak x-transition.opacity.duration.500ms
+                                  class="text-xs text-gray-400">Saved</span>
                         </div>
                     </div>
                 </section>
@@ -425,8 +429,10 @@
             }));
 
             Alpine.data('section', (id, signedOff, note, decision, open) => ({
-                id, signedOff, note, decision, open, savedNote: note, saving: false, canSignOff,
-                get dirty() { return this.note !== this.savedNote; },
+                // Everything autosaves immediately via patch(): the reviewed-checkbox
+                // (status open↔signed_off), the Approve/Request-changes decision, and
+                // the comment (debounced on input + flushed on blur). No manual save.
+                id, signedOff, note, decision, open, savedNote: note, canSignOff, justSaved: false,
                 async patch(body) {
                     const res = await fetch(`${base}/${this.id}`, {
                         method: 'PATCH',
@@ -437,17 +443,22 @@
                     const d = await res.json();
                     this.$dispatch('signed-changed', d.signed_off);
                     this.$dispatch('decisions-changed', d.decisions);
+                    this.flashSaved();
                     return d;
                 },
-                async save() {
+                flashSaved() {
+                    this.justSaved = true;
+                    clearTimeout(this._savedTimer);
+                    this._savedTimer = setTimeout(() => { this.justSaved = false; }, 1500);
+                },
+                async saveStatus() {
                     if (!this.canSignOff) return;
-                    this.saving = true;
-                    try {
-                        const d = await this.patch({ status: this.signedOff ? 'signed_off' : 'open', note: this.note });
-                        if (d) this.savedNote = this.note;
-                    } finally {
-                        this.saving = false;
-                    }
+                    await this.patch({ status: this.signedOff ? 'signed_off' : 'open' });
+                },
+                async saveNote() {
+                    if (!this.canSignOff || this.note === this.savedNote) return;
+                    const d = await this.patch({ note: this.note });
+                    if (d) this.savedNote = this.note;
                 },
                 async setDecision(value) {
                     if (!this.canSignOff) return;
