@@ -6,14 +6,11 @@
     @php
         $T = \App\Models\Task::class;
         $statusLabel = fn ($s) => $T::LABELS[$s] ?? $s;
-        // ONE sizing rule for every pane: reserve ~5 rows (min), then grow freely
-        // with the content. The only ceiling is the screen — a pane scrolls inside
-        // only if it alone would run past the viewport (calc, not an arbitrary rem).
-        // `scrollbar-gutter:stable` always reserves the bar's width, so there's a gap
-        // to the text and no layout shift when a list crosses the scroll threshold;
-        // overflow-x-hidden stops the browser coercing a horizontal bar onto a
-        // vertically-scrolling box.
-        $listClass = 'mt-3 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] min-h-[14rem] max-h-[calc(100vh-9rem)]';
+        // No forced heights — each pane sizes to its content (a long list is tall, a
+        // short one is short). No min padding, no max cap, no internal scroll: if the
+        // whole board outgrows the screen, the page scrolls. Forcing a height (min/
+        // max/calc/flex-fill) is what created the "too tall / empty whitespace" boxes.
+        $listClass = 'mt-3';
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
         $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700';
