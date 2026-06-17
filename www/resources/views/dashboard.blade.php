@@ -14,8 +14,8 @@
         // owns the scroll (flex-1 + min-h-0); panes stretch to their cell (lg:min-h-0)
         // rather than overflowing it. The grid floor keeps panes from collapsing when
         // the screen is short; below that the page (<main>) scrolls.
-        $listClass = 'mt-3 flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]';
-        $barList = 'mt-3 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] max-h-[11rem]';
+        $listClass = 'mt-3 pr-2 flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]';
+        $barList = 'mt-3 pr-2 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] max-h-[11rem]';
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
         $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700 shrink-0';
@@ -53,8 +53,9 @@
             </div>
         </section>
 
-        {{-- Inbox — 2×2 that fills the remaining available height; cells cap pane growth --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 lg:flex-1 lg:min-h-[28rem]">
+        {{-- Inbox row 1 — its own flex sibling so it shares the root's gap evenly with
+             the bars and row 2 (no nested 2×2 grid gap throwing the alignment off). --}}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[14rem]">
 
             {{-- Backlog (new) --}}
             <section class="{{ $pane }}">
@@ -99,6 +100,11 @@
                     @endforelse
                 </div>
             </section>
+
+        </div>
+
+        {{-- Inbox row 2 --}}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[14rem]">
 
             {{-- Reviews waiting — open reviews only (the review is the unit, not its tasks) --}}
             <section class="{{ $pane }}">
