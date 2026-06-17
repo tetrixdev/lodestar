@@ -267,7 +267,9 @@ class ReviewController extends Controller
                 foreach ($review->tasks as $task) {
                     if ($task->status === Task::STATUS_HUMAN_REVIEW
                         && $task->canTransitionTo(Task::STATUS_APPROVED)) {
-                        $task->update(['status' => Task::STATUS_APPROVED]);
+                        // Approval ends the rework cycle — clear the now-stale brief
+                        // (its history still lives on the concluded review).
+                        $task->update(['status' => Task::STATUS_APPROVED, 'rework_notes' => null]);
                         $task->logEvent('review_approved', $review->assignee?->name,
                             "Review #{$review->id} approved.");
                         $moved++;

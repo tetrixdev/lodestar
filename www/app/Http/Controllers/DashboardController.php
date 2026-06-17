@@ -28,8 +28,10 @@ class DashboardController extends Controller
         if ($projectIds->isEmpty()) {
             return view('dashboard', [
                 'onboarding' => $this->onboarding($user),
-                'needsYou' => collect(),
-                'reviews' => collect(),
+                'reviewsToDo' => collect(),
+                'awaitingReview' => collect(),
+                'plansToApprove' => collect(),
+                'toTriage' => collect(),
                 'aiWorking' => collect(),
                 'dueSoon' => collect(),
                 'sessions' => collect(),
@@ -40,18 +42,37 @@ class DashboardController extends Controller
             ->whereIn('project_id', $projectIds)
             ->with('project:id,name');
 
-        // Needs you — cards parked on a human gate.
-        $needsYou = $taskBase()
-            ->whereIn('status', [Task::STATUS_NEW, Task::STATUS_PLAN_REVIEW, Task::STATUS_HUMAN_REVIEW])
+        // ── Your inbox: bucketed by the ACTION each one needs from you ──────────
+
+        // Review changes — open reviews, with their task(s) nested (the review is
+        // the object you act on at the human_review gate, not the bare task).
+        $reviewsToDo = Review::query()
+            ->whereIn('project_id', $projectIds)
+            ->whereIn('status', ['draft', 'in_review'])
+            ->with('project:id,name', 'assignee:id,name', 'tasks:id,title')
+            ->latest()
+            ->get();
+
+        // Safety net: a human_review card should be represented by its open review
+        // above — but if one has none (e.g. set by hand), surface it so nothing that
+        // needs a human can hide.
+        $coveredByOpenReview = $reviewsToDo->flatMap->tasks->pluck('id')->unique();
+        $awaitingReview = $taskBase()
+            ->where('status', Task::STATUS_HUMAN_REVIEW)
+            ->whereNotIn('id', $coveredByOpenReview)
             ->latest('status_changed_at')
             ->get();
 
-        // Reviews to do — open reviews in the user's projects.
-        $reviews = Review::query()
-            ->whereIn('project_id', $projectIds)
-            ->whereIn('status', ['draft', 'in_review'])
-            ->with('project:id,name', 'assignee:id,name')
-            ->latest()
+        // Approve plans — cards waiting at the plan_review gate.
+        $plansToApprove = $taskBase()
+            ->where('status', Task::STATUS_PLAN_REVIEW)
+            ->latest('status_changed_at')
+            ->get();
+
+        // Triage — raw ideas that need you to plan, queue, or drop them.
+        $toTriage = $taskBase()
+            ->where('status', Task::STATUS_NEW)
+            ->latest('status_changed_at')
             ->get();
 
         // AI working now — the *-ing states.
@@ -79,8 +100,10 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'onboarding' => $this->onboarding($user),
-            'needsYou' => $needsYou,
-            'reviews' => $reviews,
+            'reviewsToDo' => $reviewsToDo,
+            'awaitingReview' => $awaitingReview,
+            'plansToApprove' => $plansToApprove,
+            'toTriage' => $toTriage,
             'aiWorking' => $aiWorking,
             'dueSoon' => $dueSoon,
             'sessions' => $sessions,

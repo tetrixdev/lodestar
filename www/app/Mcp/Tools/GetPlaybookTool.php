@@ -59,7 +59,7 @@ class GetPlaybookTool extends LodestarTool
             return Response::json([
                 'key' => $key,
                 'composed' => true,
-                'body' => $composed['body'],
+                'body' => $this->resolveAppUrl($composed['body']),
                 // Each layer carries its playbook_id + hash — the base_hash you must
                 // pass to propose_playbook_change to edit that layer.
                 'layers' => $composed['layers'],
@@ -78,7 +78,7 @@ class GetPlaybookTool extends LodestarTool
             'playbook_id' => $version->playbook->id,
             'version' => $version->version,
             'title' => $version->title,
-            'body' => $version->body,
+            'body' => $this->resolveAppUrl($version->body),
             // The base_hash to pass to propose_playbook_change when editing this layer.
             'hash' => $version->playbook->currentHash(),
         ]);

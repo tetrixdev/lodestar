@@ -13,56 +13,111 @@
 
             @include('partials.onboarding')
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            @php $inboxCount = $reviewsToDo->count() + $awaitingReview->count() + $plansToApprove->count() + $toTriage->count(); @endphp
 
-                {{-- Needs you --}}
-                <section class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                    <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                        <span class="size-2 rounded-full bg-amber-400"></span>
-                        Needs you
-                        <span class="text-gray-400 normal-case">({{ $needsYou->count() }})</span>
-                    </h3>
-                    @forelse ($needsYou as $task)
-                        <a href="{{ route('tasks.show', $task) }}"
-                           class="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded transition">
-                            <div class="min-w-0">
-                                <div class="text-sm font-medium text-gray-800 truncate">{{ $task->title }}</div>
-                                <div class="text-xs text-gray-400 truncate">{{ $task->project->name }}</div>
-                            </div>
-                            <span class="shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-amber-50 text-amber-700">{{ $statusLabel($task->status) }}</span>
-                        </a>
-                    @empty
-                        <p class="text-sm text-gray-400 italic">Nothing needs you — nice.</p>
-                    @endforelse
-                </section>
+            {{-- ── Your inbox: what needs you, by the action it needs ───────────── --}}
+            <section class="space-y-4">
+                <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-700">
+                    Your inbox
+                    <span class="text-gray-400 normal-case">({{ $inboxCount }})</span>
+                </h3>
 
-                {{-- Reviews to do --}}
-                <section class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                    <h3 class="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-700">
-                        <span class="size-2 rounded-full bg-indigo-400"></span>
-                        Reviews to do
-                        <span class="text-gray-400 normal-case">({{ $reviews->count() }})</span>
-                    </h3>
-                    @forelse ($reviews as $review)
-                        <a href="{{ route('reviews.show', $review) }}"
-                           class="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded transition">
-                            <div class="min-w-0">
-                                <div class="text-sm font-medium text-gray-800 truncate">{{ $review->title }}</div>
-                                <div class="text-xs text-gray-400 truncate">
-                                    {{ $review->project->name }}
-                                    @if ($review->assignee)
-                                        · {{ $review->assignee->name }}
-                                    @else
-                                        · unassigned
-                                    @endif
+                @if ($inboxCount === 0)
+                    <div class="bg-white shadow-sm sm:rounded-lg p-6 text-center text-sm text-gray-400 italic">
+                        Inbox zero — nothing is waiting on you.
+                    </div>
+                @endif
+
+                {{-- Review changes — open reviews, with their task(s) nested --}}
+                @if ($reviewsToDo->isNotEmpty() || $awaitingReview->isNotEmpty())
+                    <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
+                        <h4 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                            <span class="size-2 rounded-full bg-indigo-400"></span>
+                            Review changes
+                            <span class="text-gray-400 normal-case">({{ $reviewsToDo->count() + $awaitingReview->count() }})</span>
+                        </h4>
+                        @foreach ($awaitingReview as $task)
+                            <a href="{{ route('tasks.show', $task) }}"
+                               class="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded transition">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-medium text-gray-800 truncate">{{ $task->title }}</div>
+                                    <div class="text-xs text-gray-400 truncate">{{ $task->project->name }}</div>
                                 </div>
+                                <span class="shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-indigo-50 text-indigo-700">Awaiting review</span>
+                            </a>
+                        @endforeach
+                        @foreach ($reviewsToDo as $review)
+                            <div class="border-b border-gray-100 pb-3 last:border-0 last:pb-0 space-y-1">
+                                <div class="flex items-start justify-between gap-3">
+                                    <a href="{{ route('reviews.show', $review) }}" class="min-w-0 hover:underline">
+                                        <div class="text-sm font-medium text-gray-800 truncate">{{ $review->title }}</div>
+                                        <div class="text-xs text-gray-400 truncate">
+                                            {{ $review->project->name }} · {{ $review->assignee?->name ?? 'unassigned' }}
+                                        </div>
+                                    </a>
+                                    <span class="shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-indigo-50 text-indigo-700">{{ ucfirst(str_replace('_', ' ', $review->status)) }}</span>
+                                </div>
+                                @if ($review->tasks->isNotEmpty())
+                                    <div class="flex flex-wrap gap-1.5 pl-0.5">
+                                        @foreach ($review->tasks as $rtask)
+                                            <a href="{{ route('tasks.show', $rtask) }}"
+                                               class="text-[11px] rounded bg-gray-100 text-gray-600 px-1.5 py-0.5 hover:bg-gray-200 truncate max-w-[16rem]">#{{ $rtask->id }} {{ $rtask->title }}</a>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </div>
-                            <span class="shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-indigo-50 text-indigo-700">{{ ucfirst(str_replace('_', ' ', $review->status)) }}</span>
-                        </a>
-                    @empty
-                        <p class="text-sm text-gray-400 italic">No reviews waiting.</p>
-                    @endforelse
-                </section>
+                        @endforeach
+                    </div>
+                @endif
+
+                {{-- Approve plans + Triage, side by side on wider screens --}}
+                @if ($plansToApprove->isNotEmpty() || $toTriage->isNotEmpty())
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                        @if ($plansToApprove->isNotEmpty())
+                            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
+                                <h4 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                    <span class="size-2 rounded-full bg-amber-400"></span>
+                                    Approve plans
+                                    <span class="text-gray-400 normal-case">({{ $plansToApprove->count() }})</span>
+                                </h4>
+                                @foreach ($plansToApprove as $task)
+                                    <a href="{{ route('tasks.show', $task) }}"
+                                       class="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded transition">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-medium text-gray-800 truncate">{{ $task->title }}</div>
+                                            <div class="text-xs text-gray-400 truncate">{{ $task->project->name }}</div>
+                                        </div>
+                                        <span class="shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-amber-50 text-amber-700">Plan ready</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        @endif
+
+                        @if ($toTriage->isNotEmpty())
+                            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
+                                <h4 class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                                    <span class="size-2 rounded-full bg-sky-400"></span>
+                                    Triage
+                                    <span class="text-gray-400 normal-case">({{ $toTriage->count() }})</span>
+                                </h4>
+                                @foreach ($toTriage as $task)
+                                    <a href="{{ route('tasks.show', $task) }}"
+                                       class="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded transition">
+                                        <div class="min-w-0">
+                                            <div class="text-sm font-medium text-gray-800 truncate">{{ $task->title }}</div>
+                                            <div class="text-xs text-gray-400 truncate">{{ $task->project->name }}</div>
+                                        </div>
+                                        <span class="shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-sky-50 text-sky-700">New</span>
+                                    </a>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endif
+            </section>
+
+            {{-- ── Context: what the agents are up to ───────────────────────────── --}}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
                 {{-- AI working now --}}
                 <section class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">

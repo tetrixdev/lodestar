@@ -20,6 +20,7 @@ class UpsertSessionTool extends LodestarTool
         $data = $request->validate([
             'project' => ['required_without:id', 'string'],
             'id' => ['nullable', 'integer'],
+            'task_id' => ['nullable', 'integer'],
             'title' => ['required_without:id', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'body' => ['nullable', 'string'],
@@ -41,6 +42,19 @@ class UpsertSessionTool extends LodestarTool
             $session = $project->workSessions()->make();
         }
 
+        // Link (or relink) the session to a task — must belong to the same project.
+        if (array_key_exists('task_id', $data)) {
+            if ($data['task_id'] === null) {
+                $session->task_id = null;
+            } else {
+                $task = $this->ownedTask($request, (int) $data['task_id']);
+                if (! $task || $task->project_id !== $session->project_id) {
+                    return Response::error('No task with that id belongs to this session\'s project.');
+                }
+                $session->task_id = $task->id;
+            }
+        }
+
         if (array_key_exists('title', $data)) {
             $session->title = $data['title'];
             $session->slug = $data['slug'] ?? Str::slug($data['title']);
@@ -57,6 +71,7 @@ class UpsertSessionTool extends LodestarTool
         return Response::json([
             'id' => $session->id,
             'title' => $session->title,
+            'task_id' => $session->task_id,
             'created' => $session->wasRecentlyCreated,
         ]);
     }
@@ -66,6 +81,7 @@ class UpsertSessionTool extends LodestarTool
         return [
             'project' => $schema->string()->description('Project id or slug (required when creating).'),
             'id' => $schema->integer()->description('Existing work-session id to update. Omit to create.'),
+            'task_id' => $schema->integer()->description('The task this session is about — links it to that card (must be in the same project). Pass null to unlink.'),
             'title' => $schema->string()->description('Session title (required when creating).'),
             'slug' => $schema->string()->description('Optional slug; defaults from the title.'),
             'body' => $schema->string()->description('Full markdown record of what was done — a log entry, not an essay (1–3 tight paragraphs). Cover: what changed and the outcome; then call out **decisions made**, **open threads** still in flight, and **gotchas the next session must know**. This is the running history a future session reads to orient. If you set this you MUST also pass body_summary.'),

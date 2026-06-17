@@ -7,6 +7,7 @@ namespace Tests\Feature\Mcp;
 use App\Mcp\Servers\LodestarServer;
 use App\Mcp\Tools\CreateReviewTool;
 use App\Mcp\Tools\GetReviewTool;
+use App\Mcp\Tools\ReportTool;
 use App\Mcp\Tools\UpsertProjectTool;
 use App\Mcp\Tools\UpsertReviewSectionTool;
 use App\Mcp\Tools\UpsertSessionTool;
@@ -129,6 +130,81 @@ class McpDataToolsTest extends TestCase
             ->assertOk();
 
         $this->assertSame('did-things', $project->workSessions()->sole()->slug);
+    }
+
+    public function test_report_links_the_session_to_its_task(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
+
+        LodestarServer::actingAs($user)
+            ->tool(ReportTool::class, ['task_id' => $task->id, 'title' => 'Built it'])
+            ->assertOk();
+
+        $this->assertSame($task->id, $project->workSessions()->sole()->task_id);
+    }
+
+    public function test_upsert_session_can_link_a_task_in_the_same_project_only(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
+
+        LodestarServer::actingAs($user)
+            ->tool(UpsertSessionTool::class, ['project' => 'p', 'title' => 'S', 'task_id' => $task->id])
+            ->assertOk();
+
+        $session = $project->workSessions()->sole();
+        $this->assertSame($task->id, $session->task_id);
+
+        // A task from another project cannot be linked.
+        $stranger = User::factory()->create();
+        $other = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
+        $foreign = $other->tasks()->create(['title' => 'F', 'status' => Task::STATUS_NEW]);
+
+        LodestarServer::actingAs($user)
+            ->tool(UpsertSessionTool::class, ['id' => $session->id, 'task_id' => $foreign->id])
+            ->assertHasErrors();
+
+        $this->assertSame($task->id, $session->fresh()->task_id);
+    }
+
+    public function test_upsert_task_with_a_plan_enters_at_plan_review(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+
+        // A plan provided on create defaults the entry state to the plan_review gate.
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, [
+                'project' => 'p', 'title' => 'Planned card',
+                'plan' => 'Step 1...', 'plan_summary' => 'A plan.',
+            ])->assertOk();
+
+        $this->assertSame(Task::STATUS_PLAN_REVIEW, $project->tasks()->sole()->status);
+    }
+
+    public function test_plan_gated_entry_states_require_a_plan(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+
+        // ready_for_dev with no plan → rejected (nothing to build from).
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'X', 'status' => Task::STATUS_READY_FOR_DEV])
+            ->assertHasErrors();
+
+        $this->assertSame(0, $project->tasks()->count());
+
+        // With a plan, the explicit ready_for_dev express path is allowed.
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, [
+                'project' => 'p', 'title' => 'Y', 'status' => Task::STATUS_READY_FOR_DEV,
+                'plan' => 'Do it', 'plan_summary' => 'Plan.',
+            ])->assertOk();
+
+        $this->assertSame(Task::STATUS_READY_FOR_DEV, $project->tasks()->sole()->status);
     }
 
     public function test_upsert_task_requires_a_summary_when_detail_is_set(): void

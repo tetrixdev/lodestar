@@ -54,7 +54,15 @@ signed-in user.
     one place the `open-file` Alpine event is dispatched).
 - **TaskController** also has **`release()`** — the human escape hatch that
   returns a stuck working (`*-ing`) card to its `ready_*` queue and clears the
-  claim (we chose this over an automatic lease/reaper).
+  claim. A scheduled **reaper** (`lodestar:reap-stalled-tasks`) now does the same
+  automatically for cards stalled past a lease (see the agent-loop flow).
+- **DashboardController** — the cross-project home, an **inbox bucketed by the
+  action each item needs from you**: *Review changes* (open reviews, their tasks
+  nested — the review is the thing you act on at `human_review`, plus a safety-net
+  row for any `human_review` card that lacks an open review so nothing hides),
+  *Approve plans* (`plan_review`), and *Triage* (`new`); below it, context
+  sections (AI working now, due-soon, recent sessions). It deliberately surfaces
+  the **review**, not the bare task, for the review stage.
 - **Models** (`app/Models/`) — thin Eloquent models; the lifecycle rules live as
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
   `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
@@ -78,7 +86,8 @@ holds the tenancy helpers):
   (proposes a playbook version — always `proposed`, never live), `remember` (captures
   a durable learning as a proposed playbook-layer edit, linked to its work-session),
   `advance_task`
-  (legal-transition-only move), `report` (logs a WorkSession).
+  (legal-transition-only move), `report` (logs a WorkSession, linked to the task
+  it reports on so the work shows on that card).
 
 **Playbooks (`app/Models/Playbook.php`, `PlaybookVersion`, `SystemPlaybookSeeder`)** — playbooks
 are **layered**. A `Playbook` is a slot at one scope (`system` / `team` / `project`
@@ -91,7 +100,11 @@ has the final say (and can test a change locally), unless the project's team set
 seeded from code. Five phase keys compose: **`main`** — the bootstrap playbook an
 agent loads first (`get_playbook(phase:'main')`, no task), carrying the loop +
 routing + per-project main instructions; and the four lifecycle phases **`plan` /
-`develop` / `ai_review` / `merge`**. Arbitrary **named** keys don't compose —
+`develop` / `ai_review` / `merge`**. The `<lodestar-url>`
+placeholder in a delivered body is resolved to this deployment's base URL
+(`config('app.url')`) before `get_playbook` returns it, so links/API paths an
+agent reads are click/curl-ready without the host being hardcoded into the seeds.
+Arbitrary **named** keys don't compose —
 they resolve to the most-specific scope (`resolveNamed()`), loaded on demand. The
 **`ai_review`** playbook encodes the structure-first review method (the 5 modes + the
 Laravel structure→mode taxonomy + the surface register, ported from the vps-setup
@@ -213,10 +226,13 @@ Beyond the reviewed-marker, each section's **decision** (approve / request
 changes) drives the outcome, and the AI's concerns are first-class **findings**
 the human triages (approve / dismiss / must_fix). Once every section is decided the human
 **concludes** the review (`reviews.conclude`, gated on the hold): the verdict
-drives the linked task(s) — *approve* → `human_review → approved`; *changes* →
-`human_review → ready_for_dev` with the compiled rework brief (changes_requested
-notes + must_fix findings) written to the task's `rework_notes`. The review's
-`outcome` is recorded and it freezes to `done`. This closes the loop: a human
+drives the linked task(s) — *approve* → `human_review → approved` (clearing any
+stale `rework_notes` from an earlier round); *changes* → `human_review →
+ready_for_dev` with the compiled rework brief (changes_requested notes + must_fix
+findings) written to the task's `rework_notes`. The review's `outcome` is recorded
+and it freezes to `done`. Re-review creates a **fresh Review** each round (the
+`review_task` pivot is many-to-many), so the rounds accumulate as history — the
+task page lists its linked reviews oldest-first with their outcome. This closes the loop: a human
 review can send work straight back to the developer without leaving the screen.
 
 ### The agent loop (claim → playbook → work → advance → report)
@@ -253,8 +269,20 @@ sequenceDiagram
   not in `CLAIM_MAP`, so the loop literally cannot claim them.
 - **`advance_task`** rejects any move that isn't in `Task::TRANSITIONS` — the same
   guard the board uses — and clears the claim when the card leaves its working
-  state. There is no auto-reaper: a stuck `*-ing` card is freed by a human via
-  the board's **Release** action (`TaskController::release`).
+  state.
+- **Entering a working state is engine-enforced (`claim_task`); leaving it is
+  prompt-driven** — the agent is *told* to `advance_task` + `report` when it
+  finishes (the develop/ai_review/merge playbooks also tell it to re-queue itself
+  with a note if it stops early). A worker that crashes or forgets would otherwise
+  pin a card in `*-ing` forever, so two backstops re-queue it: a human via the
+  board's **Release** action (`TaskController::release`), and an automatic
+  **reaper** — the scheduled `lodestar:reap-stalled-tasks` command re-queues any
+  `*-ing` card whose `status_changed_at` is older than the lease
+  (`config('lodestar.task_lease_minutes')`, default 60) to its `ready_*` state
+  (`Task::queueStateFor()`), releases the claim, and logs a `worker_reaped` event
+  so the revert shows on the card's timeline. The success path stays agent-driven
+  (only the agent knows it actually passed); the reaper only catches the genuinely
+  stalled.
 
 ### Multi-tenancy by ownership
 
@@ -280,10 +308,14 @@ agent's input crosses into our data writes.
    - **Lifecycle integrity.** Agent writes go through the *same* invariants as the
      browser: `advance_task` only allows `Task::TRANSITIONS` edges; `claim_task`
      is the guarded conditional UPDATE (`SKIP LOCKED` on Postgres) so concurrent
-     agents can't double-claim; `upsert_task` can only *create* cards at a backlog
-     state (`new` / `ready_for_planning`) and never moves an existing card's status
-     — every lifecycle move goes through `advance_task`. A buggy or hostile client
-     cannot put the board in an illegal state.
+     agents can't double-claim; `upsert_task` only sets a card's *entry* state on
+     create and never moves an existing card (every lifecycle move goes through
+     `advance_task`). A card created **with a plan** may enter at the `plan_review`
+     gate (the default when a plan is given) or, to skip the gate, at
+     `ready_for_dev`; a bare idea enters at `new` / `ready_for_planning`. The
+     plan-gated entry states require an actual plan (enforced engine-side), and
+     working (`*-ing`) states are never seedable. A buggy or hostile client cannot
+     put the board in an illegal state.
    - **Input validation.** Every tool validates its arguments with Laravel
      validation (modes constrained to `ReviewSection::MODES`, statuses to
      `Task::STATUSES`, phases to `Playbook::PHASES`) before any write. Long-form

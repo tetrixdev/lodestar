@@ -67,4 +67,14 @@ abstract class LodestarTool extends Tool
             ->whereKey($id)
             ->first();
     }
+
+    /**
+     * Replace the `<lodestar-url>` placeholder (as written in playbook bodies)
+     * with this deployment's real base URL, so links and API paths an agent
+     * reads are click/curl-ready without hardcoding the host into the seeds.
+     */
+    protected function resolveAppUrl(string $text): string
+    {
+        return str_replace('<lodestar-url>', rtrim((string) config('app.url'), '/'), $text);
+    }
 }

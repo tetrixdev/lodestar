@@ -27,6 +27,7 @@ class ReportTool extends LodestarTool
             'occurred_on' => ['nullable', 'date'],
         ]);
 
+        $task = null;
         if (! empty($data['task_id'])) {
             $task = $this->ownedTask($request, (int) $data['task_id']);
             if (! $task) {
@@ -41,6 +42,9 @@ class ReportTool extends LodestarTool
         }
 
         $session = $project->workSessions()->create([
+            // Link the session to the task it reports on, so the work shows up on
+            // that card's history (null when reporting against a project only).
+            'task_id' => $task?->id,
             'title' => $data['title'],
             'slug' => Str::slug($data['title']).'-'.now()->format('Ymd-His').'-'.Str::random(4),
             'body' => $data['body'] ?? null,
@@ -51,6 +55,7 @@ class ReportTool extends LodestarTool
         return Response::json([
             'id' => $session->id,
             'project_id' => $project->id,
+            'task_id' => $session->task_id,
             'logged' => true,
         ]);
     }
@@ -58,8 +63,8 @@ class ReportTool extends LodestarTool
     public function schema(JsonSchema $schema): array
     {
         return [
-            'task_id' => $schema->integer()->description('Task whose project the session is logged on.'),
-            'project' => $schema->string()->description('Project id or slug (alternative to task_id).'),
+            'task_id' => $schema->integer()->description('The task this session reports on — the session is linked to it and shows on that card. Always pass this when the work was for a task; use project only for project-level work with no task.'),
+            'project' => $schema->string()->description('Project id or slug (alternative to task_id, for project-level work not tied to a card).'),
             'title' => $schema->string()->description('Short summary line of what was done.')->required(),
             'body' => $schema->string()->description('Full markdown detail of the work — a log entry, not an essay. Cover: what changed and the outcome (did the tests pass? did you run it?); then **decisions made**, **open threads**, and **gotchas** the next run needs. For a develop/loop report, name the branch and its merge target (e.g. feat/x → main). If you set this you MUST also pass body_summary.'),
             'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the session.'),
