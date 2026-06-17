@@ -6,10 +6,15 @@
     @php
         $T = \App\Models\Task::class;
         $statusLabel = fn ($s) => $T::LABELS[$s] ?? $s;
-        // Each list reserves ~5 rows, grows with its content, then scrolls — it
-        // never stretches to fill empty vertical space.
-        $listClass = 'mt-3 overflow-y-auto min-h-[14rem] max-h-[24rem]';
-        $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded transition';
+        // ONE sizing rule for every pane: reserve ~5 rows (min), then grow freely
+        // with the content. The only ceiling is the screen — a pane scrolls inside
+        // only if it alone would run past the viewport (calc, not an arbitrary rem).
+        // `scrollbar-gutter:stable` always reserves the bar's width, so there's a gap
+        // to the text and no layout shift when a list crosses the scroll threshold;
+        // overflow-x-hidden stops the browser coercing a horizontal bar onto a
+        // vertically-scrolling box.
+        $listClass = 'mt-3 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] min-h-[14rem] max-h-[calc(100vh-9rem)]';
+        $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
         $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700';
         $pane = 'bg-white shadow-sm sm:rounded-lg p-5';
@@ -27,7 +32,7 @@
                     Overdue / due soon
                     <span class="text-gray-400 normal-case">({{ $dueSoon->count() }})</span>
                 </h3>
-                <div class="mt-3 overflow-y-auto max-h-44">
+                <div class="{{ $listClass }}">
                     @forelse ($dueSoon as $task)
                         <a href="{{ route('tasks.show', $task) }}" class="{{ $rowClass }}">
                             <div class="min-w-0">
@@ -44,7 +49,7 @@
                 </div>
             </section>
 
-            {{-- Inbox — 2×2; each pane sizes to its content (min ~5 rows, then scrolls) --}}
+            {{-- Inbox — 2×2; every pane uses the same sizing rule --}}
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
                 {{-- Backlog (new) --}}
@@ -150,7 +155,7 @@
                     Recent work sessions
                     <span class="text-gray-400 normal-case">({{ $sessions->count() }})</span>
                 </h3>
-                <div class="mt-3 overflow-y-auto max-h-44">
+                <div class="{{ $listClass }}">
                     @forelse ($sessions as $session)
                         <a href="{{ route('work-sessions.show', $session) }}" class="{{ $rowClass }}">
                             <div class="min-w-0">
