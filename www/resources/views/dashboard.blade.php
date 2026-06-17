@@ -14,13 +14,19 @@
         // owns the scroll (flex-1 + min-h-0); panes stretch to their cell (lg:min-h-0)
         // rather than overflowing it. The grid floor keeps panes from collapsing when
         // the screen is short; below that the page (<main>) scrolls.
-        $listClass = 'mt-3 pr-2 flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]';
-        $barList = 'mt-3 pr-2 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] max-h-[11rem]';
+        // ONE sizing number — 16rem — governs every card. At rest all six regions are
+        // exactly 16rem (≈4 rows) and show the same row count. Inbox panes additionally
+        // grow on tall screens (their row is lg:flex-1, floored at 16rem); the two bars
+        // are fixed h-[16rem] and never grow — the only, intended difference. The inner
+        // scroll list is identical everywhere. Asymmetric card padding (pl-5 pr-2) pulls
+        // the scrollbar to the right edge; pr-2 on the list is the small gap to content.
+        $listClass = 'mt-3 pr-2 flex-1 min-h-0 overflow-y-auto overflow-x-hidden';
+        $barList = $listClass;
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
         $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700 shrink-0';
-        $pane = 'bg-white shadow-sm sm:rounded-lg p-5 flex flex-col overflow-hidden min-h-[14rem] lg:min-h-0';
-        $bar = 'bg-white shadow-sm sm:rounded-lg p-5 flex flex-col shrink-0';
+        $pane = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden min-h-[16rem] lg:min-h-0';
+        $bar = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden shrink-0 h-[16rem]';
     @endphp
 
     {{-- lg+: fills <main> so the 2×2 grows within the available area and scrolls inside.
@@ -55,7 +61,7 @@
 
         {{-- Inbox row 1 — its own flex sibling so it shares the root's gap evenly with
              the bars and row 2 (no nested 2×2 grid gap throwing the alignment off). --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[14rem]">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[16rem]">
 
             {{-- Backlog (new) --}}
             <section class="{{ $pane }}">
@@ -104,7 +110,7 @@
         </div>
 
         {{-- Inbox row 2 --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[14rem]">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[16rem]">
 
             {{-- Reviews waiting — open reviews only (the review is the unit, not its tasks) --}}
             <section class="{{ $pane }}">
