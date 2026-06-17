@@ -26,7 +26,7 @@ class DashboardTest extends TestCase
         $this->actingAs($user)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Inbox zero');
+            ->assertSee('No reviews waiting');
     }
 
     public function test_dashboard_shows_needs_you_review_and_due_soon(): void

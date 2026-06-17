@@ -31,7 +31,7 @@ class DashboardController extends Controller
                 'reviewsToDo' => collect(),
                 'awaitingReview' => collect(),
                 'plansToApprove' => collect(),
-                'toTriage' => collect(),
+                'backlog' => collect(),
                 'aiWorking' => collect(),
                 'dueSoon' => collect(),
                 'sessions' => collect(),
@@ -44,8 +44,8 @@ class DashboardController extends Controller
 
         // ── Your inbox: bucketed by the ACTION each one needs from you ──────────
 
-        // Review changes — open reviews, with their task(s) nested (the review is
-        // the object you act on at the human_review gate, not the bare task).
+        // Reviews waiting — open reviews (the review is the unit you act on at the
+        // human_review gate; tasks are loaded only to dedupe the safety net below).
         $reviewsToDo = Review::query()
             ->whereIn('project_id', $projectIds)
             ->whereIn('status', ['draft', 'in_review'])
@@ -69,8 +69,8 @@ class DashboardController extends Controller
             ->latest('status_changed_at')
             ->get();
 
-        // Triage — raw ideas that need you to plan, queue, or drop them.
-        $toTriage = $taskBase()
+        // Backlog — raw ideas that need you to plan, queue, or drop them.
+        $backlog = $taskBase()
             ->where('status', Task::STATUS_NEW)
             ->latest('status_changed_at')
             ->get();
@@ -103,7 +103,7 @@ class DashboardController extends Controller
             'reviewsToDo' => $reviewsToDo,
             'awaitingReview' => $awaitingReview,
             'plansToApprove' => $plansToApprove,
-            'toTriage' => $toTriage,
+            'backlog' => $backlog,
             'aiWorking' => $aiWorking,
             'dueSoon' => $dueSoon,
             'sessions' => $sessions,

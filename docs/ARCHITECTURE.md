@@ -56,13 +56,14 @@ signed-in user.
   returns a stuck working (`*-ing`) card to its `ready_*` queue and clears the
   claim. A scheduled **reaper** (`lodestar:reap-stalled-tasks`) now does the same
   automatically for cards stalled past a lease (see the agent-loop flow).
-- **DashboardController** — the cross-project home, an **inbox bucketed by the
-  action each item needs from you**: *Review changes* (open reviews, their tasks
-  nested — the review is the thing you act on at `human_review`, plus a safety-net
-  row for any `human_review` card that lacks an open review so nothing hides),
-  *Approve plans* (`plan_review`), and *Triage* (`new`); below it, context
-  sections (AI working now, due-soon, recent sessions). It deliberately surfaces
-  the **review**, not the bare task, for the review stage.
+- **DashboardController** — the cross-project home, a dense single-screen panel:
+  **Overdue / due-soon** full-width on top, then a **2×2 inbox** of *Backlog*
+  (`new`), *Plans to review* (`plan_review`), *Reviews* (open reviews — grouped by
+  review, not per task; the review is the unit you act on at `human_review`, plus a
+  safety-net row for any `human_review` card lacking an open review so nothing
+  hides), and *AI working now* (the `*-ing` states), then **recent work sessions**
+  full-width at the bottom. The four inbox panes show ≥5 rows, grow evenly to fill
+  the viewport, and scroll internally so the page stays one screen.
 - **Models** (`app/Models/`) — thin Eloquent models; the lifecycle rules live as
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
   `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
