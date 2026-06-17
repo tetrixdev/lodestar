@@ -6,32 +6,27 @@
     @php
         $T = \App\Models\Task::class;
         $statusLabel = fn ($s) => $T::LABELS[$s] ?? $s;
-        // Growth ceiling = the AVAILABLE area, not the window. The dashboard fills
-        // <main> (which the app-shell already sized to viewport − nav − header), the
-        // grid fills what's left after the two bars, and grid-rows-2 makes each pane's
-        // cell exactly half of that. So a pane grows up to "half the available space",
-        // derived by the layout — no dvh/calc against the whole window. The inner list
-        // owns the scroll (flex-1 + min-h-0); panes stretch to their cell (lg:min-h-0)
-        // rather than overflowing it. The grid floor keeps panes from collapsing when
-        // the screen is short; below that the page (<main>) scrolls.
-        // ONE sizing number — 16rem — governs every card. At rest all six regions are
-        // exactly 16rem (≈4 rows) and show the same row count. Inbox panes additionally
-        // grow on tall screens (their row is lg:flex-1, floored at 16rem); the two bars
-        // are fixed h-[16rem] and never grow — the only, intended difference. The inner
-        // scroll list is identical everywhere. Asymmetric card padding (pl-5 pr-2) pulls
-        // the scrollbar to the right edge; pr-2 on the list is the small gap to content.
-        $listClass = 'mt-3 pr-2 flex-1 min-h-0 overflow-y-auto overflow-x-hidden';
+        // Cards size to their CONTENT. The ONLY constraint is a max-height on the inner
+        // LIST, and only on lg: a list taller than ~4 rows scrolls; a short/empty one
+        // stays small (no min height, so an empty Overdue/Plans card never wastes a
+        // block of space). One identical card + list class everywhere, so a full Backlog
+        // and a full Sessions show the exact same row count. On mobile the cap is dropped
+        // — everything is content-height and the page scrolls (infinite vertical room, so
+        // no point clamping). Asymmetric card padding (pl-5 pr-2) keeps the scrollbar at
+        // the right edge; the list's pr-2 is the small gap between content and the bar.
+        $listClass = 'mt-3 pr-2 overflow-y-auto overflow-x-hidden lg:max-h-[13rem]';
         $barList = $listClass;
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
         $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700 shrink-0';
-        $pane = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden min-h-[16rem] lg:min-h-0';
-        $bar = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden shrink-0 h-[16rem]';
+        // One card class for every region — bars and panes are now identical.
+        $pane = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden';
+        $bar = $pane;
     @endphp
 
     {{-- lg+: fills <main> so the 2×2 grows within the available area and scrolls inside.
          Mobile: natural flow, the page scrolls. --}}
-    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 lg:h-full lg:min-h-0">
+    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
         @include('partials.onboarding')
 
@@ -61,7 +56,7 @@
 
         {{-- Inbox row 1 — its own flex sibling so it shares the root's gap evenly with
              the bars and row 2 (no nested 2×2 grid gap throwing the alignment off). --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[16rem]">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
             {{-- Backlog (new) --}}
             <section class="{{ $pane }}">
@@ -110,7 +105,7 @@
         </div>
 
         {{-- Inbox row 2 --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-[16rem]">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
             {{-- Reviews waiting — open reviews only (the review is the unit, not its tasks) --}}
             <section class="{{ $pane }}">
