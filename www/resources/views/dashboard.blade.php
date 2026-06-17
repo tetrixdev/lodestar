@@ -6,22 +6,22 @@
     @php
         $T = \App\Models\Task::class;
         $statusLabel = fn ($s) => $T::LABELS[$s] ?? $s;
-        // Each scrollable list: shows ~5 rows minimum, grows to fill its pane on
-        // wide screens, and scrolls inside rather than stretching the page.
-        $listClass = 'mt-3 overflow-y-auto min-h-[14rem] max-h-[55vh] lg:max-h-none lg:flex-1 lg:min-h-0';
+        // Each list reserves ~5 rows, grows with its content, then scrolls — it
+        // never stretches to fill empty vertical space.
+        $listClass = 'mt-3 overflow-y-auto min-h-[14rem] max-h-[24rem]';
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
-        $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700 shrink-0';
-        $pane = 'bg-white shadow-sm sm:rounded-lg p-5 flex flex-col lg:min-h-0';
+        $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700';
+        $pane = 'bg-white shadow-sm sm:rounded-lg p-5';
     @endphp
 
     <div class="py-6">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col gap-4 lg:min-h-[calc(100vh-8rem)]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
             @include('partials.onboarding')
 
             {{-- Overdue / due soon — full width, top --}}
-            <section class="bg-white shadow-sm sm:rounded-lg p-5 flex flex-col shrink-0">
+            <section class="{{ $pane }}">
                 <h3 class="{{ $head }}">
                     <span class="size-2 rounded-full bg-red-400"></span>
                     Overdue / due soon
@@ -44,8 +44,8 @@
                 </div>
             </section>
 
-            {{-- Inbox — 2×2, fills the remaining height; panes grow evenly, scroll inside --}}
-            <div class="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 lg:flex-1 lg:min-h-0">
+            {{-- Inbox — 2×2; each pane sizes to its content (min ~5 rows, then scrolls) --}}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
                 {{-- Backlog (new) --}}
                 <section class="{{ $pane }}">
@@ -91,12 +91,12 @@
                     </div>
                 </section>
 
-                {{-- Reviews waiting (open reviews, grouped — not per task) --}}
+                {{-- Reviews waiting — open reviews only (the review is the unit, not its tasks) --}}
                 <section class="{{ $pane }}">
                     <h3 class="{{ $head }}">
                         <span class="size-2 rounded-full bg-indigo-400"></span>
                         Reviews
-                        <span class="text-gray-400 normal-case">({{ $reviewsToDo->count() + $awaitingReview->count() }})</span>
+                        <span class="text-gray-400 normal-case">({{ $reviewsToDo->count() }})</span>
                     </h3>
                     <div class="{{ $listClass }}">
                         @forelse ($reviewsToDo as $review)
@@ -105,26 +105,14 @@
                                     <div class="text-sm font-medium text-gray-800 truncate">{{ $review->title }}</div>
                                     <div class="text-xs text-gray-400 truncate">
                                         {{ $review->project->name }} · {{ $review->assignee?->name ?? 'unassigned' }}
-                                        @if ($review->tasks->isNotEmpty()) · {{ $review->tasks->count() }} {{ \Illuminate\Support\Str::plural('task', $review->tasks->count()) }}@endif
+                                        @if ($review->tasks_count) · {{ $review->tasks_count }} {{ \Illuminate\Support\Str::plural('task', $review->tasks_count) }}@endif
                                     </div>
                                 </div>
                                 <span class="{{ $badge }} bg-indigo-50 text-indigo-700">{{ ucfirst(str_replace('_', ' ', $review->status)) }}</span>
                             </a>
                         @empty
-                        @endforelse
-                        {{-- Safety net: a human_review card with no open review --}}
-                        @foreach ($awaitingReview as $task)
-                            <a href="{{ route('tasks.show', $task) }}" class="{{ $rowClass }}">
-                                <div class="min-w-0">
-                                    <div class="text-sm font-medium text-gray-800 truncate">{{ $task->title }}</div>
-                                    <div class="text-xs text-gray-400 truncate">{{ $task->project->name }}</div>
-                                </div>
-                                <span class="{{ $badge }} bg-indigo-50 text-indigo-700">Awaiting review</span>
-                            </a>
-                        @endforeach
-                        @if ($reviewsToDo->isEmpty() && $awaitingReview->isEmpty())
                             <p class="text-sm text-gray-400 italic">No reviews waiting.</p>
-                        @endif
+                        @endforelse
                     </div>
                 </section>
 
@@ -156,7 +144,7 @@
             </div>
 
             {{-- Recent work sessions — full width, bottom --}}
-            <section class="bg-white shadow-sm sm:rounded-lg p-5 flex flex-col shrink-0">
+            <section class="{{ $pane }}">
                 <h3 class="{{ $head }}">
                     <span class="size-2 rounded-full bg-emerald-400"></span>
                     Recent work sessions

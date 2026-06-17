@@ -46,7 +46,8 @@ class TeamAccessTest extends TestCase
     public function test_dashboard_surfaces_a_shared_team_projects_work(): void
     {
         ['member' => $member, 'project' => $project] = $this->teamProject();
-        $project->tasks()->create(['title' => 'Needs a human', 'status' => Task::STATUS_HUMAN_REVIEW]);
+        // A plan_review card surfaces in the dashboard's "Plans to review" bucket.
+        $project->tasks()->create(['title' => 'Needs a human', 'status' => Task::STATUS_PLAN_REVIEW]);
 
         $this->actingAs($member)->get('/dashboard')->assertOk()->assertSee('Needs a human');
     }

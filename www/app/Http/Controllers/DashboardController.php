@@ -29,7 +29,6 @@ class DashboardController extends Controller
             return view('dashboard', [
                 'onboarding' => $this->onboarding($user),
                 'reviewsToDo' => collect(),
-                'awaitingReview' => collect(),
                 'plansToApprove' => collect(),
                 'backlog' => collect(),
                 'aiWorking' => collect(),
@@ -44,23 +43,14 @@ class DashboardController extends Controller
 
         // ── Your inbox: bucketed by the ACTION each one needs from you ──────────
 
-        // Reviews waiting — open reviews (the review is the unit you act on at the
-        // human_review gate; tasks are loaded only to dedupe the safety net below).
+        // Reviews waiting — open reviews only (the review is the unit you act on at
+        // the human_review gate; tasks are loaded just for a count on the row).
         $reviewsToDo = Review::query()
             ->whereIn('project_id', $projectIds)
             ->whereIn('status', ['draft', 'in_review'])
-            ->with('project:id,name', 'assignee:id,name', 'tasks:id,title')
+            ->with('project:id,name', 'assignee:id,name')
+            ->withCount('tasks')
             ->latest()
-            ->get();
-
-        // Safety net: a human_review card should be represented by its open review
-        // above — but if one has none (e.g. set by hand), surface it so nothing that
-        // needs a human can hide.
-        $coveredByOpenReview = $reviewsToDo->flatMap->tasks->pluck('id')->unique();
-        $awaitingReview = $taskBase()
-            ->where('status', Task::STATUS_HUMAN_REVIEW)
-            ->whereNotIn('id', $coveredByOpenReview)
-            ->latest('status_changed_at')
             ->get();
 
         // Approve plans — cards waiting at the plan_review gate.
@@ -101,7 +91,6 @@ class DashboardController extends Controller
         return view('dashboard', [
             'onboarding' => $this->onboarding($user),
             'reviewsToDo' => $reviewsToDo,
-            'awaitingReview' => $awaitingReview,
             'plansToApprove' => $plansToApprove,
             'backlog' => $backlog,
             'aiWorking' => $aiWorking,
