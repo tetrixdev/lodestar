@@ -6,26 +6,27 @@
     @php
         $T = \App\Models\Task::class;
         $statusLabel = fn ($s) => $T::LABELS[$s] ?? $s;
-        // The four inbox panes fill the body and scroll inside it (lg+). min-h-0 is
-        // what lets a flex child shrink below its content so the inner list can own
-        // the scroll; scrollbar-gutter:stable reserves the bar's width (gap to text,
-        // no layout shift); overflow-x-hidden stops a coerced horizontal bar. On
-        // mobile there's no fixed height — lists flow naturally and the page scrolls.
-        // min-h-44 (matches the bars) is the floor: panes never squish below ~that,
-        // even on a short screen (the page scrolls instead). On lg they flex-grow past
-        // it to fill the body. The explicit min-height also replaces the flex default
-        // of min-height:auto, so the inner list scrolls instead of inflating the pane.
-        $listClass = 'mt-3 min-h-44 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] lg:flex-1';
-        $barList = 'mt-3 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] max-h-44';
+        // Size each pane by its CONTENT, clamped between a shared floor (min-h ≈ 5
+        // rows) and a shared, screen-relative ceiling (max-h-[60dvh]). Crucially NO
+        // flex-grow / 1fr on pane height — those mean "fill leftover space" and are
+        // exactly what ballooned the panes. The inner list owns the scroll via
+        // flex-1 + min-h-0 INSIDE the already-clamped card (min-h-0 overrides the flex
+        // min-content floor so it can actually scroll); scrollbar-gutter reserves the
+        // bar's width (gap to text, no layout shift); overflow-x-hidden kills the
+        // coerced horizontal bar. Identical list class on panes and bars.
+        $listClass = 'mt-3 flex-1 min-h-0 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]';
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
         $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700 shrink-0';
-        $pane = 'bg-white shadow-sm sm:rounded-lg p-5 flex flex-col lg:min-h-0';
-        $bar = 'bg-white shadow-sm sm:rounded-lg p-5 flex flex-col shrink-0';
+        // Panes: floored at ~5 rows, capped at 60dvh, content-sized between. items-start
+        // on the grid keeps a near-empty pane from inflating to match a tall neighbour.
+        $pane = 'bg-white shadow-sm sm:rounded-lg p-5 flex flex-col overflow-hidden min-h-[19rem] max-h-[60dvh]';
+        // Bars: same ceiling, no floor — an empty full-width bar stays compact.
+        $bar = 'bg-white shadow-sm sm:rounded-lg p-5 flex flex-col overflow-hidden max-h-[60dvh]';
     @endphp
 
     {{-- Fills the app-shell's <main> on lg+ (so panes scroll inside); natural flow on mobile. --}}
-    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 lg:min-h-full">
+    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
 
         @include('partials.onboarding')
 
@@ -36,7 +37,7 @@
                 Overdue / due soon
                 <span class="text-gray-400 normal-case">({{ $dueSoon->count() }})</span>
             </h3>
-            <div class="{{ $barList }}">
+            <div class="{{ $listClass }}">
                 @forelse ($dueSoon as $task)
                     <a href="{{ route('tasks.show', $task) }}" class="{{ $rowClass }}">
                         <div class="min-w-0">
@@ -54,7 +55,7 @@
         </section>
 
         {{-- Inbox — 2×2 that fills the remaining height; each pane scrolls internally --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 lg:flex-1 lg:min-h-0">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
 
             {{-- Backlog (new) --}}
             <section class="{{ $pane }}">
@@ -159,7 +160,7 @@
                 Recent work sessions
                 <span class="text-gray-400 normal-case">({{ $sessions->count() }})</span>
             </h3>
-            <div class="{{ $barList }}">
+            <div class="{{ $listClass }}">
                 @forelse ($sessions as $session)
                     <a href="{{ route('work-sessions.show', $session) }}" class="{{ $rowClass }}">
                         <div class="min-w-0">
