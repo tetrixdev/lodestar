@@ -11,7 +11,11 @@
         // the scroll; scrollbar-gutter:stable reserves the bar's width (gap to text,
         // no layout shift); overflow-x-hidden stops a coerced horizontal bar. On
         // mobile there's no fixed height — lists flow naturally and the page scrolls.
-        $listClass = 'mt-3 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] lg:flex-1 lg:min-h-0';
+        // min-h-44 (matches the bars) is the floor: panes never squish below ~that,
+        // even on a short screen (the page scrolls instead). On lg they flex-grow past
+        // it to fill the body. The explicit min-height also replaces the flex default
+        // of min-height:auto, so the inner list scrolls instead of inflating the pane.
+        $listClass = 'mt-3 min-h-44 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] lg:flex-1';
         $barList = 'mt-3 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable] max-h-44';
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
@@ -21,7 +25,7 @@
     @endphp
 
     {{-- Fills the app-shell's <main> on lg+ (so panes scroll inside); natural flow on mobile. --}}
-    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 lg:h-full lg:min-h-0">
+    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 lg:min-h-full">
 
         @include('partials.onboarding')
 
