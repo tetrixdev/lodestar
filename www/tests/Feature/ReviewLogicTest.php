@@ -225,7 +225,11 @@ class ReviewLogicTest extends TestCase
         $review = $this->review($this->project($owner), 'in_review');
         $this->section($review, 'approved');
         $this->section($review, 'approved');
-        $task = $review->project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
+        // Carries a stale brief from a prior round — approval should clear it.
+        $task = $review->project->tasks()->create([
+            'title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0,
+            'rework_notes' => 'leftover from the last round',
+        ]);
         $review->tasks()->attach($task);
         $review->claimFor($owner->id);
 
@@ -236,6 +240,7 @@ class ReviewLogicTest extends TestCase
         $this->assertSame('approved', $review->fresh()->outcome);
         $this->assertSame('done', $review->fresh()->status);
         $this->assertSame(Task::STATUS_APPROVED, $task->fresh()->status);
+        $this->assertNull($task->fresh()->rework_notes, 'approval clears the stale rework brief');
         $this->assertDatabaseHas('task_events', ['task_id' => $task->id, 'type' => 'review_approved']);
     }
 

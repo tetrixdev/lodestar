@@ -1,7 +1,45 @@
 import Alpine from 'alpinejs';
+import collapse from '@alpinejs/collapse';
 import Sortable from 'sortablejs';
+import mermaid from 'mermaid';
+import { enhanceMermaidZoom } from './mermaid-zoom';
 
 window.Alpine = Alpine;
+
+// Register the collapse plugin so `x-collapse` animates show/hide transitions.
+// Must run before Alpine.start() (called at the bottom of this file).
+Alpine.plugin(collapse);
+
+// Mermaid renders `<pre class="mermaid">` blocks the <x-markdown> component emits
+// from ```mermaid fences (see components/markdown.blade.php). We drive rendering
+// ourselves rather than startOnLoad because diagrams also arrive via x-html (the
+// file modal) after page load.
+mermaid.initialize({ startOnLoad: false, securityLevel: 'strict' });
+
+/**
+ * Render every not-yet-processed mermaid block under `root` (defaults to the
+ * whole document). Safe to call repeatedly — mermaid.run() with the
+ * `.mermaid:not([data-processed])` selector skips already-rendered diagrams,
+ * and a parse error is swallowed so one bad diagram can't blank the surface.
+ */
+window.renderMermaid = function (root) {
+    const scope = root || document;
+    const nodes = scope.querySelectorAll('pre.mermaid:not([data-processed="true"])');
+    if (nodes.length === 0) return;
+    // Surface render errors to the console — a swallowed error here is the usual
+    // reason a diagram silently stays as text. One bad diagram still can't throw
+    // out of here and blank the surface.
+    // After mermaid swaps each <pre> for an <svg>, add pan/zoom controls. The
+    // promise resolves once all nodes are processed; enhanceMermaidZoom is
+    // idempotent (skips diagrams already marked data-zoom-ready).
+    mermaid
+        .run({ nodes: [...nodes] })
+        .then(() => enhanceMermaidZoom(scope))
+        .catch((e) => console.error('[mermaid]', e));
+};
+
+// Render any mermaid present in server-rendered page markdown on first load.
+document.addEventListener('DOMContentLoaded', () => window.renderMermaid());
 
 /**
  * Kanban intra-status reordering. Lifecycle moves between statuses go through

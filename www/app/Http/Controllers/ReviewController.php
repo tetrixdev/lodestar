@@ -6,9 +6,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use App\Models\Review;
+use App\Models\ReviewFile;
 use App\Models\ReviewFinding;
 use App\Models\ReviewSection;
 use App\Models\Task;
+use App\Services\GitHubComparison;
+use App\Support\DiffRenderer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,6 +41,137 @@ class ReviewController extends Controller
         ]);
 
         return view('reviews.show', ['review' => $review]);
+    }
+
+    /**
+     * Server-rendered view of one changed file, in one of several progressively-
+     * disclosed modes (returned as an HTML fragment the modal injects):
+     *  - diff (default for code): the stored unified `patch` — NO GitHub call.
+     *  - rich (default for markdown): the rendered markdown of base→head with
+     *    inline <ins>/<del> highlights (caxy/php-htmldiff). Falls back to `diff`
+     *    when the file is huge or the html-diff throws.
+     *  - full: the whole head blob with changed lines highlighted inline.
+     *  - preview: markdown files only, rendered via <x-markdown>.
+     * Binary / oversized blobs (or a null patch) fall back to a GitHub link.
+     */
+    public function file(Request $request, Review $review, ReviewFile $file): View
+    {
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
+
+        $mode = $request->query('mode', 'diff');
+        if (! in_array($mode, ['diff', 'rich', 'full', 'preview'], true)) {
+            $mode = 'diff';
+        }
+
+        $repo = $review->repository?->full_name;
+        $linkSha = $review->head_sha ?: $review->head_ref;
+        $githubUrl = $repo && $linkSha
+            ? "https://github.com/{$repo}/blob/{$linkSha}/{$file->path}"
+            : null;
+
+        $view = fn (array $data) => view('reviews.partials.file-modal', array_merge(
+            ['mode' => $mode, 'file' => $file, 'githubUrl' => $githubUrl,
+                'rows' => null, 'previewContent' => null, 'richHtml' => null, 'fallback' => null],
+            $data,
+        ));
+
+        // The raw stored patch, rendered as diff rows. Shared by `diff` mode and
+        // as the fallback when a richer mode can't be produced.
+        $renderPatch = fn () => $file->patch === null
+            ? $view(['mode' => 'diff', 'fallback' => 'No textual diff (binary or too large).'])
+            : $view(['mode' => 'diff', 'rows' => app(DiffRenderer::class)->renderPatch($file->patch)]);
+
+        // diff — render the stored patch only. Null patch = binary/oversized.
+        if ($mode === 'diff') {
+            return $renderPatch();
+        }
+
+        // rich / full / preview all need the blob(s); for a removed file the head
+        // blob is gone, so read the base side instead.
+        $removed = $file->status === 'removed';
+        $sha = $removed ? $review->base_sha : $review->head_sha;
+        if (! $repo || ! $sha) {
+            // For markdown rich mode, degrade to the stored patch rather than a
+            // GitHub-only dead end when we can't fetch blobs.
+            return $mode === 'rich' && $file->patch !== null
+                ? $renderPatch()
+                : $view(['fallback' => 'This file can only be viewed on GitHub.']);
+        }
+
+        $blobPath = $removed ? ($file->old_path ?? $file->path) : $file->path;
+
+        try {
+            $blob = app(GitHubComparison::class)->blob(
+                $repo, $sha, $blobPath, $review->repository?->token(),
+            );
+        } catch (\Throwable $e) {
+            return $mode === 'rich' && $file->patch !== null
+                ? $renderPatch()
+                : $view(['fallback' => 'Could not load this file from GitHub: '.$e->getMessage()]);
+        }
+
+        if ($blob['too_large'] || $blob['binary'] || $blob['content'] === null) {
+            if ($mode === 'rich' && $file->patch !== null) {
+                return $renderPatch();
+            }
+
+            return $view(['fallback' => $blob['too_large']
+                ? 'File is too large to view inline.'
+                : 'Binary file — view on GitHub.']);
+        }
+
+        $renderer = app(DiffRenderer::class);
+
+        if ($mode === 'preview') {
+            return $view(['previewContent' => $blob['content']]);
+        }
+
+        if ($mode === 'rich') {
+            // The blob is the head side (or base side for a removed file). Diff
+            // the rendered markdown base→head; null = too large / html-diff threw,
+            // so fall back to the raw patch.
+            $richHtml = $removed
+                ? $renderer->renderRichMarkdown($blob['content'], null)
+                : $renderer->renderRichMarkdown($this->baseContentFor($review, $file), $blob['content']);
+
+            return $richHtml === null
+                ? $renderPatch()
+                : $view(['richHtml' => $richHtml]);
+        }
+
+        // full file: a removed file is rendered as all-removed (its content is the
+        // base side); otherwise diff base→head and render the whole head file.
+        // A null result means the file exceeds the LCS line guard → raw patch.
+        $rows = $removed
+            ? $renderer->renderFullFile($blob['content'], '')
+            : $renderer->renderFullFile($this->baseContentFor($review, $file), $blob['content']);
+
+        return $rows === null ? $renderPatch() : $view(['rows' => $rows]);
+    }
+
+    /**
+     * The base-side content of a (modified/renamed) file, for the full-file diff.
+     * Added files have no base; a fetch failure degrades to "all added" rather
+     * than failing the view.
+     */
+    private function baseContentFor(Review $review, ReviewFile $file): ?string
+    {
+        if ($file->status === 'added' || ! $review->base_sha || ! $review->repository) {
+            return null;
+        }
+
+        try {
+            $blob = app(GitHubComparison::class)->blob(
+                $review->repository->full_name,
+                $review->base_sha,
+                $file->old_path ?? $file->path,
+                $review->repository->token(),
+            );
+
+            return $blob['content'];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** Persist a section's sign-off / comment (called from the walkthrough via fetch). */
@@ -133,7 +267,9 @@ class ReviewController extends Controller
                 foreach ($review->tasks as $task) {
                     if ($task->status === Task::STATUS_HUMAN_REVIEW
                         && $task->canTransitionTo(Task::STATUS_APPROVED)) {
-                        $task->update(['status' => Task::STATUS_APPROVED]);
+                        // Approval ends the rework cycle — clear the now-stale brief
+                        // (its history still lives on the concluded review).
+                        $task->update(['status' => Task::STATUS_APPROVED, 'rework_notes' => null]);
                         $task->logEvent('review_approved', $review->assignee?->name,
                             "Review #{$review->id} approved.");
                         $moved++;

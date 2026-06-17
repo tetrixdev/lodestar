@@ -56,7 +56,7 @@
          x-data="walkthrough({{ $review->sections->where('status', 'signed_off')->count() }}, {{ $review->sections->count() }}, @js($review->decisionSummary()))"
          x-on:signed-changed.window="signedCount = $event.detail"
          x-on:decisions-changed.window="decisions = $event.detail">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
             @if (session('status'))
                 <div class="text-sm bg-blue-50 border border-blue-300 rounded-lg p-3 text-blue-800">
@@ -129,6 +129,13 @@
                 ];
             @endphp
 
+            {{-- A path → fully-loaded ReviewFile map, so section file references and
+                 a section link that names a changed file can open the same viewer
+                 modal (sections eager-load files as id+path only). --}}
+            @php
+                $filesByPath = $review->files->keyBy('path');
+            @endphp
+
             {{-- sections --}}
             @foreach ($review->sections as $i => $s)
                 <section x-data="section({{ $s->id }}, {{ $s->status === 'signed_off' ? 'true' : 'false' }}, @js($s->note), @js($s->decision), {{ $i === 0 ? 'true' : 'false' }})"
@@ -152,7 +159,40 @@
                         @endif
                         @if ($s->link)
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Open</p>
-                            <a href="{{ $s->link }}" class="text-sm text-indigo-600 hover:underline break-all">{{ $s->link }}</a>
+                            @php $linkFile = $filesByPath->get($s->link); @endphp
+                            @if ($linkFile)
+                                {{-- The link names a changed file → open the viewer modal. --}}
+                                <x-open-file :file="$linkFile" class="inline-flex text-sm text-indigo-600 hover:underline break-all">{{ $s->link }}</x-open-file>
+                            @else
+                                <a href="{{ $s->link }}" class="text-sm text-indigo-600 hover:underline break-all">{{ $s->link }}</a>
+                            @endif
+                        @endif
+
+                        {{-- The changed files this section covers — each opens the viewer.
+                             Collapsed by default; the header matches the "Changed files"
+                             tree disclosure in file-tree.blade.php. --}}
+                        @if ($s->files->isNotEmpty())
+                            <div class="mt-3" x-data="{ open: false }">
+                                <button type="button" @click="open = !open"
+                                        class="flex items-center gap-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wide hover:text-gray-600">
+                                    <svg class="size-3 text-gray-400 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+                                    <span>Files in this section ({{ $s->files->count() }})</span>
+                                </button>
+                                <ul x-show="open" x-collapse x-cloak class="mt-1 divide-y divide-gray-50 rounded-md border border-gray-100 font-mono text-xs">
+                                    @foreach ($s->files as $sf)
+                                        @php $sfFull = $filesByPath->get($sf->path) ?? $sf; @endphp
+                                        <x-open-file :file="$sfFull" class="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
+                                            <span class="flex-1 truncate text-gray-700" title="{{ $sf->path }}">{{ $sf->path }}</span>
+                                            @if ($sfFull->additions || $sfFull->deletions)
+                                                <span class="shrink-0 text-[10px] font-medium tabular-nums">
+                                                    <span class="text-emerald-600">+{{ $sfFull->additions }}</span>
+                                                    <span class="text-red-600">−{{ $sfFull->deletions }}</span>
+                                                </span>
+                                            @endif
+                                        </x-open-file>
+                                    @endforeach
+                                </ul>
+                            </div>
                         @endif
                         @if (!empty($s->checks))
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-3 mb-1">What to check</p>
@@ -220,18 +260,22 @@
                             <span class="text-xs font-medium rounded-md px-2.5 py-1 {{ $s->decision === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700' }}">{{ str_replace('_', ' ', $s->decision) }}</span>
                         @endif
 
+                        {{-- Comment is always available (a note reads well alongside an
+                             approval too) and autosaves — debounced on input, flushed on
+                             blur. No manual save button. --}}
                         <textarea x-model="note" rows="2" placeholder="Your comment / change request for this section…"
                                   :disabled="!canSignOff"
+                                  @input.debounce.600ms="saveNote()" @blur="saveNote()"
                                   class="mt-3 w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"></textarea>
 
                         <div class="flex items-center justify-between mt-2">
                             <label class="flex items-center gap-2 text-sm select-none" :class="canSignOff ? '' : 'text-gray-400'">
-                                <input type="checkbox" x-model="signedOff" @change="save()" :disabled="!canSignOff"
+                                <input type="checkbox" x-model="signedOff" @change="saveStatus()" :disabled="!canSignOff"
                                        class="rounded text-emerald-500 focus:ring-emerald-500 disabled:cursor-not-allowed">
-                                <span>I'm happy with this section</span>
+                                <span>I've reviewed this section</span>
                             </label>
-                            <button @click="save()" x-show="dirty && canSignOff" x-cloak
-                                    class="text-xs text-indigo-600 hover:underline" x-text="saving ? 'Saving…' : 'Save note'"></button>
+                            <span x-show="justSaved" x-cloak x-transition.opacity.duration.500ms
+                                  class="text-xs text-gray-400">Saved</span>
                         </div>
                     </div>
                 </section>
@@ -279,6 +323,55 @@
             @endif
 
         </div>
+
+        {{-- Changed-file viewer modal: opened by the file tree's `open-file` event;
+             fetches a server-rendered fragment per mode and injects it. --}}
+        <div x-data="fileModal()" x-on:open-file.window="open($event.detail)"
+             x-on:keydown.escape.window="close()">
+            <div x-show="shown" x-cloak class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8"
+                 x-transition.opacity>
+                <div class="absolute inset-0 bg-gray-900/40" @click="close()"></div>
+                <div class="relative bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[85vh] flex flex-col">
+                    <header class="flex items-center gap-3 px-4 py-3 border-b border-gray-200">
+                        <span class="shrink-0 w-16 text-[10px] uppercase tracking-wide rounded px-1 py-0.5 text-center"
+                              :class="{
+                                  'text-emerald-700 bg-emerald-50': file.status === 'added',
+                                  'text-amber-700 bg-amber-50': file.status === 'modified',
+                                  'text-red-700 bg-red-50': file.status === 'removed',
+                                  'text-violet-700 bg-violet-50': file.status === 'renamed',
+                              }" x-text="file.status"></span>
+                        <span class="flex-1 min-w-0 flex items-center gap-1.5">
+                            <template x-if="file.status === 'renamed' && file.oldPath">
+                                <span class="shrink min-w-0 truncate text-xs text-gray-400" :title="file.oldPath">
+                                    <code x-text="file.oldPath"></code>
+                                    <span class="px-0.5">→</span>
+                                </span>
+                            </template>
+                            <code class="shrink-0 max-w-full truncate text-sm text-gray-800" :title="file.path" x-text="file.path"></code>
+                        </span>
+                        <span class="shrink-0 text-xs font-medium tabular-nums">
+                            <span class="text-emerald-600" x-text="`+${file.additions}`"></span>
+                            <span class="text-red-600" x-text="`−${file.deletions}`"></span>
+                        </span>
+                        <button @click="close()" class="shrink-0 text-gray-400 hover:text-gray-700 text-lg leading-none">&times;</button>
+                    </header>
+
+                    <div class="flex items-center gap-1 px-4 py-2 border-b border-gray-100">
+                        <template x-for="m in modes" :key="m.key">
+                            <button @click="setMode(m.key)"
+                                    class="text-xs font-medium rounded-md px-2.5 py-1 border"
+                                    :class="mode === m.key ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'"
+                                    x-text="m.label"></button>
+                        </template>
+                    </div>
+
+                    <div class="overflow-auto flex-1">
+                        <div x-show="loading" class="p-6 text-center text-sm text-gray-400">Loading…</div>
+                        <div x-show="!loading" x-html="body"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -289,9 +382,68 @@
 
             Alpine.data('walkthrough', (signedCount, total, decisions) => ({ signedCount, total, decisions }));
 
+            const filesBase = '{{ url('/reviews/'.$review->id.'/files') }}';
+            Alpine.data('fileModal', () => ({
+                shown: false,
+                loading: false,
+                body: '',
+                mode: 'diff',
+                file: { id: null, path: '', oldPath: null, status: '', additions: 0, deletions: 0, markdown: false },
+                // Markdown files lead with the rendered rich diff; code files lead
+                // with the raw unified patch.
+                get defaultMode() { return this.file.markdown ? 'rich' : 'diff'; },
+                get modes() {
+                    if (this.file.markdown) {
+                        // Diff = rich rendered diff; Preview = clean rendered head;
+                        // Source = the raw unified patch.
+                        return [
+                            { key: 'rich', label: 'Diff' },
+                            { key: 'preview', label: 'Preview' },
+                            { key: 'diff', label: 'Source' },
+                        ];
+                    }
+                    return [
+                        { key: 'diff', label: 'Diff' },
+                        { key: 'full', label: 'Full file' },
+                    ];
+                },
+                open(detail) {
+                    this.file = detail;
+                    this.mode = this.defaultMode;
+                    this.shown = true;
+                    this.load();
+                },
+                close() { this.shown = false; this.body = ''; },
+                setMode(mode) {
+                    if (mode === this.mode) return;
+                    this.mode = mode;
+                    this.load();
+                },
+                async load() {
+                    if (!this.file.id) return;
+                    this.loading = true;
+                    this.body = '';
+                    try {
+                        const res = await fetch(`${filesBase}/${this.file.id}?mode=${this.mode}`, {
+                            headers: { 'Accept': 'text/html' },
+                        });
+                        this.body = res.ok ? await res.text() : '<div class="p-6 text-center text-sm text-red-500">Could not load this file.</div>';
+                    } catch (e) {
+                        this.body = '<div class="p-6 text-center text-sm text-red-500">Could not load this file.</div>';
+                    } finally {
+                        this.loading = false;
+                        // The fetched fragment (preview / rich diff) may contain mermaid
+                        // blocks injected via x-html — render them once the DOM updates.
+                        this.$nextTick(() => window.renderMermaid?.(this.$el));
+                    }
+                },
+            }));
+
             Alpine.data('section', (id, signedOff, note, decision, open) => ({
-                id, signedOff, note, decision, open, savedNote: note, saving: false, canSignOff,
-                get dirty() { return this.note !== this.savedNote; },
+                // Everything autosaves immediately via patch(): the reviewed-checkbox
+                // (status open↔signed_off), the Approve/Request-changes decision, and
+                // the comment (debounced on input + flushed on blur). No manual save.
+                id, signedOff, note, decision, open, savedNote: note, canSignOff, justSaved: false,
                 async patch(body) {
                     const res = await fetch(`${base}/${this.id}`, {
                         method: 'PATCH',
@@ -302,17 +454,22 @@
                     const d = await res.json();
                     this.$dispatch('signed-changed', d.signed_off);
                     this.$dispatch('decisions-changed', d.decisions);
+                    this.flashSaved();
                     return d;
                 },
-                async save() {
+                flashSaved() {
+                    this.justSaved = true;
+                    clearTimeout(this._savedTimer);
+                    this._savedTimer = setTimeout(() => { this.justSaved = false; }, 1500);
+                },
+                async saveStatus() {
                     if (!this.canSignOff) return;
-                    this.saving = true;
-                    try {
-                        const d = await this.patch({ status: this.signedOff ? 'signed_off' : 'open', note: this.note });
-                        if (d) this.savedNote = this.note;
-                    } finally {
-                        this.saving = false;
-                    }
+                    await this.patch({ status: this.signedOff ? 'signed_off' : 'open' });
+                },
+                async saveNote() {
+                    if (!this.canSignOff || this.note === this.savedNote) return;
+                    const d = await this.patch({ note: this.note });
+                    if (d) this.savedNote = this.note;
                 },
                 async setDecision(value) {
                     if (!this.canSignOff) return;

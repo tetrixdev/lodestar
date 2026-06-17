@@ -10,3 +10,7 @@ Artisan::command('inspire', function () {
 
 // Self-heal the dev Vite server (see EnsureViteRunning) — local only, every minute.
 Schedule::command('dev:ensure-vite')->everyMinute()->withoutOverlapping();
+
+// Liveness backstop for the agent loop: re-queue tasks whose worker died or
+// forgot to advance out of a working (*-ing) state (see ReapStalledTasks).
+Schedule::command('lodestar:reap-stalled-tasks')->everyFiveMinutes()->withoutOverlapping();

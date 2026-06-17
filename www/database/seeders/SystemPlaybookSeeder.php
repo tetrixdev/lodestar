@@ -153,6 +153,19 @@ class SystemPlaybookSeeder extends Seeder
                 - VERIFY BEFORE YOU CLAIM. Don't say "done" or "try it" until you've run the
                   real thing (or the real command shape) and seen it behave.
 
+                LINKING THE HUMAN TO THINGS (interactive):
+                - Whenever you refer the human to a Lodestar object — a task, review,
+                  playbook layer, project, work-session or team — give it as a MARKDOWN
+                  LINK with a readable label, never a bare id or raw URL, so they can
+                  click straight through. The `<lodestar-url>` below is replaced
+                  with this deployment's real base URL before you see it:
+                  - Task           -> `<lodestar-url>/tasks/<id>`  e.g. `[#67 Rework Playbooks screen](<lodestar-url>/tasks/67)`
+                  - Review         -> `<lodestar-url>/reviews/<id>`
+                  - Playbook layer -> `<lodestar-url>/settings/playbooks/<id>` (overview: `/settings/playbooks`)
+                  - Project        -> `<lodestar-url>/projects/<slug-or-id>` (board/Gantt: `.../gantt`)
+                  - Work-session   -> `<lodestar-url>/sessions/<id>`
+                  - Team           -> `<lodestar-url>/teams/<id>`
+
                 GROUND RULES:
                 - The server is the source of truth (legal transitions, atomic claims,
                   review coverage). Trust its rejections — the message is the rule, not an
@@ -214,8 +227,15 @@ class SystemPlaybookSeeder extends Seeder
                 4. **Push the branch** so the review can compare it on GitHub.
 
                 When tests are green, the docs mirror reality, and the branch is pushed,
-                advance the task to `ready_for_ai_review` and report a work-session that
-                names the branch and its merge target (e.g. feat/x → main).
+                advance the task to `ready_for_ai_review` and `report` a work-session
+                LINKED TO THIS TASK (pass task_id) that names the branch and its merge
+                target (e.g. feat/x → main).
+
+                IF YOU STOP BEFORE FINISHING (blocked, out of scope, ran out of room):
+                advance the task back to `ready_for_dev` and `report` a session (task_id)
+                explaining where you left off, so the next run can pick it up. Never
+                leave the card sitting in `developing` — a card with no live worker in a
+                working state is the one thing the loop cannot recover on its own.
                 MD],
 
             'ai_review' => ['AI-review a task', <<<'MD'
@@ -245,6 +265,8 @@ class SystemPlaybookSeeder extends Seeder
                    Use the section `note` only for section-level commentary.
                 6. Sound? advance_task to `human_review` and hand back the review URL.
                    Needs rework? advance_task back to `ready_for_dev` with the reasons.
+                7. `report` a work-session LINKED TO THIS TASK (pass task_id) noting the
+                   review URL and your verdict, so the review run shows on the card too.
 
                 Bias toward passing to `human_review` with your concerns recorded as
                 findings — the human triages them. Reserve sending a card back to dev for
@@ -286,12 +308,18 @@ class SystemPlaybookSeeder extends Seeder
             'merge' => ['Merge & deploy a task', <<<'MD'
                 You are shipping an approved Lodestar task. The human has signed off.
 
-                Merge the change (merge-commit, never squash unless asked), run the full
-                test suite once more, and deploy per the project's process. Confirm the
-                deploy is healthy.
+                Merge the change (merge-commit, never squash unless asked) and run the
+                full test suite once more. Cut a release (tag / GitHub release) only if
+                the project's history warrants it.
 
-                Report a work-session with what shipped, then advance the task to `done`.
-                If anything blocks the merge, advance back to `approved` and report why.
+                Deployment is project-specific and often already automated (e.g. CI
+                builds an image on merge to the default branch). Run an explicit deploy
+                step ONLY if the project defines one; if you do, confirm it is healthy.
+                Otherwise treat merge-to-main as the ship and don't hand-roll a deploy.
+
+                `report` a work-session LINKED TO THIS TASK (pass task_id) with what
+                shipped, then advance the task to `done`. If anything blocks the merge,
+                advance back to `approved` and report why.
                 MD],
 
             'work' => ['Work the backlog (the loop)', <<<'MD'

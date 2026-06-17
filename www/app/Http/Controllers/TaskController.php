@@ -24,7 +24,8 @@ class TaskController extends Controller
 
         $task->load([
             'project',
-            'reviews',
+            // Oldest first, so the rounds read as a history (round 1 → round 2 → …).
+            'reviews' => fn ($q) => $q->orderBy('reviews.id'),
             'workSessions' => fn ($q) => $q->latest(),
             'comments.user',
             'events',

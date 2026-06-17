@@ -13,3 +13,91 @@
 [x-cloak] {
     display: none !important;
 }
+
+/* ---------------------------------------------------------------------------
+ * Mermaid pan/zoom (see resources/js/mermaid-zoom.js).
+ * The viewport clips an over-sized, transform-positioned <svg>; a small control
+ * cluster sits in the corner. Class names are explicit (not JS-built Tailwind
+ * utilities) so they survive the production CSS purge.
+ * ------------------------------------------------------------------------- */
+.mermaid-viewport {
+    position: relative;
+    overflow: hidden;
+    max-height: 70vh;
+    min-height: 8rem;
+    border: 1px solid rgb(229 231 235); /* gray-200 */
+    border-radius: 0.5rem;
+    background: #fff;
+    cursor: grab;
+    touch-action: none; /* let pointer drags pan / two-finger pinch zoom instead of scrolling */
+    user-select: none;
+}
+
+.mermaid-viewport.is-grabbing {
+    cursor: grabbing;
+}
+
+/* The wrapped <pre> is now just a transparent transform host: strip the prose
+ * pre styling (bg / padding / overflow / margin) the markdown component applies. */
+.mermaid-zoom-host {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    width: 100%;
+    height: 100%;
+    touch-action: none; /* don't let the browser hijack pinch/scroll over the diagram */
+}
+
+.mermaid-zoom-host svg {
+    cursor: inherit;
+}
+
+.mermaid-zoom-controls {
+    position: absolute;
+    bottom: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 1px;
+    background: rgb(229 231 235); /* gray-200 — shows as thin dividers */
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.1), 0 1px 3px rgb(0 0 0 / 0.08);
+    z-index: 2;
+}
+
+.mermaid-zoom-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    background: #fff;
+    color: rgb(55 65 81); /* gray-700 */
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.1s ease;
+}
+
+.mermaid-zoom-btn:first-child {
+    border-top-left-radius: 0.4375rem;
+    border-top-right-radius: 0.4375rem;
+}
+
+.mermaid-zoom-btn:last-child {
+    border-bottom-left-radius: 0.4375rem;
+    border-bottom-right-radius: 0.4375rem;
+}
+
+.mermaid-zoom-btn:hover {
+    background: rgb(243 244 246); /* gray-100 */
+    color: rgb(17 24 39); /* gray-900 */
+}
+
+.mermaid-zoom-btn:active {
+    background: rgb(229 231 235); /* gray-200 */
+}

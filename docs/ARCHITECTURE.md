@@ -37,11 +37,33 @@ signed-in user.
   - `index()` lists a project's reviews; `show()` renders the **walkthrough** —
     the review's ordered sections, the linked tasks, and the assignee chip.
   - `assign()` / `unassign()` are the **atomic self-assignment** endpoints.
-  - `updateSection()` persists a section's sign-off / note (called from the
-    walkthrough via `fetch`), **gated** on the caller holding the review.
+  - `updateSection()` persists a section's reviewed-marker / decision / note
+    (called from the walkthrough via `fetch`), **gated** on the caller holding the
+    review. The walkthrough page matches the playbooks pages at `max-w-7xl`.
+  - `file()` serves the **changed-file viewer** — a per-mode HTML fragment the
+    modal injects. `diff` renders the stored unified patch (no GitHub call);
+    `full` fetches the head blob and renders the whole file with changed lines
+    inline; `preview` renders a markdown file clean; and **`rich`** (the default
+    for markdown) renders base→head markdown to HTML with the same engine
+    `<x-markdown>` uses and runs **caxy/php-htmldiff** between them so the
+    document shows inline `<ins>`/`<del>` highlights. Any mode that can't be
+    produced (huge file past the LCS guard, an html-diff throw, an unfetchable /
+    binary blob) **degrades to the raw stored patch** rather than a dead end.
+    The viewer modal is opened from both the changed-files tree **and** each
+    review section's file references via a shared `<x-open-file>` component (the
+    one place the `open-file` Alpine event is dispatched).
 - **TaskController** also has **`release()`** — the human escape hatch that
   returns a stuck working (`*-ing`) card to its `ready_*` queue and clears the
-  claim (we chose this over an automatic lease/reaper).
+  claim. A scheduled **reaper** (`lodestar:reap-stalled-tasks`) now does the same
+  automatically for cards stalled past a lease (see the agent-loop flow).
+- **DashboardController** — the cross-project home, a dense single-screen panel:
+  **Overdue / due-soon** full-width on top, then a **2×2 inbox** of *Backlog*
+  (`new`), *Plans to review* (`plan_review`), *Reviews* (open reviews — grouped by
+  review, not per task; the review is the unit you act on at `human_review`, plus a
+  safety-net row for any `human_review` card lacking an open review so nothing
+  hides), and *AI working now* (the `*-ing` states), then **recent work sessions**
+  full-width at the bottom. The four inbox panes show ≥5 rows, grow evenly to fill
+  the viewport, and scroll internally so the page stays one screen.
 - **Models** (`app/Models/`) — thin Eloquent models; the lifecycle rules live as
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
   `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
@@ -65,7 +87,8 @@ holds the tenancy helpers):
   (proposes a playbook version — always `proposed`, never live), `remember` (captures
   a durable learning as a proposed playbook-layer edit, linked to its work-session),
   `advance_task`
-  (legal-transition-only move), `report` (logs a WorkSession).
+  (legal-transition-only move), `report` (logs a WorkSession, linked to the task
+  it reports on so the work shows on that card).
 
 **Playbooks (`app/Models/Playbook.php`, `PlaybookVersion`, `SystemPlaybookSeeder`)** — playbooks
 are **layered**. A `Playbook` is a slot at one scope (`system` / `team` / `project`
@@ -78,7 +101,11 @@ has the final say (and can test a change locally), unless the project's team set
 seeded from code. Five phase keys compose: **`main`** — the bootstrap playbook an
 agent loads first (`get_playbook(phase:'main')`, no task), carrying the loop +
 routing + per-project main instructions; and the four lifecycle phases **`plan` /
-`develop` / `ai_review` / `merge`**. Arbitrary **named** keys don't compose —
+`develop` / `ai_review` / `merge`**. The `<lodestar-url>`
+placeholder in a delivered body is resolved to this deployment's base URL
+(`config('app.url')`) before `get_playbook` returns it, so links/API paths an
+agent reads are click/curl-ready without the host being hardcoded into the seeds.
+Arbitrary **named** keys don't compose —
 they resolve to the most-specific scope (`resolveNamed()`), loaded on demand. The
 **`ai_review`** playbook encodes the structure-first review method (the 5 modes + the
 Laravel structure→mode taxonomy + the surface register, ported from the vps-setup
@@ -188,14 +215,25 @@ sign-off, so losing the claim (someone releases / reassigns) locks the screen
 read-only. A review is linked to the Tasks it covers via the `review_task`
 pivot; the walkthrough lists them and each board card links back to its review.
 
-Beyond sign-off, each section also carries a human **decision** (approve /
-request changes), and the AI's concerns are first-class **findings** the human
-triages (approve / dismiss / must_fix). Once every section is decided the human
+Each section's controls model three independent things, and **all autosave** (no
+save buttons): a neutral **"I've reviewed this section"** checkbox (maps to
+`status` open↔signed_off — a "been through it" marker, not a satisfaction
+statement, which drives the progress bar), an **Approve / Request-changes
+decision**, and an always-available **comment** (useful alongside an approval too)
+that debounces on input and flushes on blur. Every change PATCHes immediately, so
+a refresh shows the persisted state.
+
+Beyond the reviewed-marker, each section's **decision** (approve / request
+changes) drives the outcome, and the AI's concerns are first-class **findings**
+the human triages (approve / dismiss / must_fix). Once every section is decided the human
 **concludes** the review (`reviews.conclude`, gated on the hold): the verdict
-drives the linked task(s) — *approve* → `human_review → approved`; *changes* →
-`human_review → ready_for_dev` with the compiled rework brief (changes_requested
-notes + must_fix findings) written to the task's `rework_notes`. The review's
-`outcome` is recorded and it freezes to `done`. This closes the loop: a human
+drives the linked task(s) — *approve* → `human_review → approved` (clearing any
+stale `rework_notes` from an earlier round); *changes* → `human_review →
+ready_for_dev` with the compiled rework brief (changes_requested notes + must_fix
+findings) written to the task's `rework_notes`. The review's `outcome` is recorded
+and it freezes to `done`. Re-review creates a **fresh Review** each round (the
+`review_task` pivot is many-to-many), so the rounds accumulate as history — the
+task page lists its linked reviews oldest-first with their outcome. This closes the loop: a human
 review can send work straight back to the developer without leaving the screen.
 
 ### The agent loop (claim → playbook → work → advance → report)
@@ -232,8 +270,20 @@ sequenceDiagram
   not in `CLAIM_MAP`, so the loop literally cannot claim them.
 - **`advance_task`** rejects any move that isn't in `Task::TRANSITIONS` — the same
   guard the board uses — and clears the claim when the card leaves its working
-  state. There is no auto-reaper: a stuck `*-ing` card is freed by a human via
-  the board's **Release** action (`TaskController::release`).
+  state.
+- **Entering a working state is engine-enforced (`claim_task`); leaving it is
+  prompt-driven** — the agent is *told* to `advance_task` + `report` when it
+  finishes (the develop/ai_review/merge playbooks also tell it to re-queue itself
+  with a note if it stops early). A worker that crashes or forgets would otherwise
+  pin a card in `*-ing` forever, so two backstops re-queue it: a human via the
+  board's **Release** action (`TaskController::release`), and an automatic
+  **reaper** — the scheduled `lodestar:reap-stalled-tasks` command re-queues any
+  `*-ing` card whose `status_changed_at` is older than the lease
+  (`config('lodestar.task_lease_minutes')`, default 60) to its `ready_*` state
+  (`Task::queueStateFor()`), releases the claim, and logs a `worker_reaped` event
+  so the revert shows on the card's timeline. The success path stays agent-driven
+  (only the agent knows it actually passed); the reaper only catches the genuinely
+  stalled.
 
 ### Multi-tenancy by ownership
 
@@ -259,10 +309,14 @@ agent's input crosses into our data writes.
    - **Lifecycle integrity.** Agent writes go through the *same* invariants as the
      browser: `advance_task` only allows `Task::TRANSITIONS` edges; `claim_task`
      is the guarded conditional UPDATE (`SKIP LOCKED` on Postgres) so concurrent
-     agents can't double-claim; `upsert_task` can only *create* cards at a backlog
-     state (`new` / `ready_for_planning`) and never moves an existing card's status
-     — every lifecycle move goes through `advance_task`. A buggy or hostile client
-     cannot put the board in an illegal state.
+     agents can't double-claim; `upsert_task` only sets a card's *entry* state on
+     create and never moves an existing card (every lifecycle move goes through
+     `advance_task`). A card created **with a plan** may enter at the `plan_review`
+     gate (the default when a plan is given) or, to skip the gate, at
+     `ready_for_dev`; a bare idea enters at `new` / `ready_for_planning`. The
+     plan-gated entry states require an actual plan (enforced engine-side), and
+     working (`*-ing`) states are never seedable. A buggy or hostile client cannot
+     put the board in an illegal state.
    - **Input validation.** Every tool validates its arguments with Laravel
      validation (modes constrained to `ReviewSection::MODES`, statuses to
      `Task::STATUSES`, phases to `Playbook::PHASES`) before any write. Long-form
@@ -302,6 +356,45 @@ agent's input crosses into our data writes.
      token is the source.) `GitHubComparison` pages the compare endpoint
      (100/page) and accumulates up to `MAX_FILES` (3000); a diff beyond that
      throws rather than silently under-covering the coverage guard.
+   - **Backfilling old reviews.** Reviews created before patches/SHAs were
+     stored have null `patch` rows and null `base_sha`/`head_sha`, so the viewer
+     can't render their diffs. `php artisan reviews:backfill-patches {review}`
+     resolves+persists the SHAs (if null), re-fetches the comparison, and
+     enriches each **existing** `review_files` row (matched by path) with its
+     patch/additions/deletions. It never adds or removes rows — the file set
+     (and its coverage allocation) is left exactly as it was — and is idempotent.
+
+**Rendering the diff (`App\Support\DiffRenderer`).** Turns diffs into render-ready
+rows for the viewer's Blade partials. `renderPatch()` parses a stored unified
+patch; `renderFullFile()` diffs base→head over the dependency-free
+`App\Support\LineDiff` (an LCS — the same differ the playbook compare uses), with
+a `FULL_FILE_LINE_LIMIT` (~2000) guard that returns null so the controller shows
+the raw patch instead of building an O(m·n) table for a giant file.
+`renderRichMarkdown()` is the one HTML-emitting path: it is **the only place
+caxy/php-htmldiff is used** — the dependency boundary is contained to this method
+(and the `<x-markdown>` `ins`/`del` prose styling), so the rest of the app never
+touches the html-diff library. (The runtime `sebastian/diff` dependency was
+dropped when `renderFullFile` moved to `LineDiff`; it stays available
+transitively via phpunit for tests.)
+
+**Mermaid in rendered markdown (`App\Support\Markdown` + client `renderMermaid`).**
+Markdown is rendered to display HTML through `Markdown::render()` — the single
+surface `<x-markdown>` calls — which runs `Str::markdown()` and then
+`promoteMermaid()`: it rewrites the `<pre><code class="language-mermaid">…</code></pre>`
+block the engine emits for a ```mermaid fence into a `<pre class="mermaid">…</pre>`
+container holding the **HTML-decoded** source (mermaid needs the raw `-->` arrows,
+not the escaped entities). Client-side, `resources/js/app.js` initializes mermaid
+with `startOnLoad: false` and exposes `window.renderMermaid(rootEl)`, which runs
+`mermaid.run()` over not-yet-processed `pre.mermaid` blocks under a root. It fires
+on `DOMContentLoaded` for server-rendered page markdown, and the file modal calls
+it (via `$nextTick`) after injecting fetched HTML through `x-html`. **Rich-diff +
+mermaid:** an HTML-diff over a rendered diagram would weave `<ins>`/`<del>` through
+the diagram source and render as garbage, so `renderRichMarkdown()` lifts each
+mermaid block out of *both* the base and head HTML (replacing it with a positional
+placeholder that diffs as unchanged), runs caxy over the remaining prose, then
+swaps each placeholder back for the **head** version's diagram container. Net: the
+prose around a diagram still rich-diffs; the diagram itself renders clean as its
+current (head) version with no diff marks on it.
 
 3. **The secrets endpoint (BUILT — out-of-MCP by design).** A project declares a
    manifest of required env **keys** (`ProjectSecretRequirement`, approver-managed);

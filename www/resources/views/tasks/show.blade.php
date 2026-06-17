@@ -249,11 +249,19 @@
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Linked reviews</p>
                 @forelse ($task->reviews as $review)
-                    @php $cov = $review->coverage(); @endphp
+                    @php
+                        $cov = $review->coverage();
+                        [$outcomeLabel, $outcomeClass] = match ($review->outcome) {
+                            'approved' => ['approved', 'bg-emerald-100 text-emerald-700'],
+                            'changes_requested' => ['changes requested', 'bg-amber-100 text-amber-700'],
+                            default => [$review->status ?? 'open', 'bg-gray-100 text-gray-600'],
+                        };
+                    @endphp
                     <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                         <a href="{{ route('reviews.show', $review) }}" class="text-indigo-600 hover:underline truncate">{{ $review->title }}</a>
-                        <span class="shrink-0 text-xs text-gray-500">
-                            {{ $review->status ?? 'open' }} · {{ $cov['covered'] }}/{{ $cov['total'] }} files covered
+                        <span class="flex shrink-0 items-center gap-2 text-xs text-gray-500">
+                            <span class="rounded px-1.5 py-0.5 font-medium {{ $outcomeClass }}">{{ $outcomeLabel }}</span>
+                            <span>{{ $cov['covered'] }}/{{ $cov['total'] }} files</span>
                         </span>
                     </div>
                 @empty

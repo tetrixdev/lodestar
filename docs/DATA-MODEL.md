@@ -1,11 +1,13 @@
 # Data model — Lodestar
 
-> **How to read:** the **Tables** and **Invariants** below are the summary you
-> read first; the **Diagram** at the end is the exact picture — every migrated
-> app table with its fields and types. This file **mirrors the built schema**:
-> every table that exists in `www/database/migrations/`. A test
-> (`tests/Feature/SchemaMirrorTest.php`) parses the diagram and asserts it
-> matches the live schema, so this doc cannot silently drift.
+> **How to read:** the **Tables** and **Invariants** are the summary you read
+> first; the **Field reference** is the exact, per-column picture of every app
+> table; the **Diagram** is the relationship overview (and renders as an ER
+> diagram in the UI). This file **mirrors the built schema**: every table that
+> exists in `www/database/migrations/`. A test
+> (`tests/Feature/SchemaMirrorTest.php`) parses the Field-reference tables and
+> asserts they match the live schema column-for-column, so this doc cannot
+> silently drift.
 
 Lodestar is the home base for software work: **Projects** hold **Tasks** (kanban
 cards that ride a 13-state lifecycle), **WorkSessions** (a work-log), and
@@ -197,6 +199,314 @@ These are the rules the column list alone won't tell you:
   exactly this rework loop). Both the conclude action and per-finding triage are
   gated on holding the review.
 
+## Field reference
+
+The **per-table column reference** — the exact, column-for-column picture of
+every app table. **This is the source of truth the drift test checks**: the
+`### \`table_name\`` heading is the live table name, and the **Field** column
+lists every real column (the test asserts both directions — nothing missing,
+nothing phantom). The **Diagram** below is the relationship overview, kept in
+sync as a convenience but the tables here are authoritative.
+
+Three things are **deliberately** omitted from every table (same omissions the
+diagram lists) and ignored by the drift test: **timestamps**
+(`created_at` / `updated_at`, on every table); **indexes / FK indexes** (the
+load-bearing ones are stated in *Invariants*); and **`unsigned`** integer
+qualifiers (this app runs on Postgres, which has no unsigned int type, so
+`unsignedBigInteger` etc. show as their base type). Type / Constraints columns
+are informational — the test checks Field **names** only.
+
+### `projects`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| user_id | bigint | FK → users | The owning account. `(user_id, slug)` is unique, so a slug is unique per user, not globally. |
+| name | string | not null | The project's display name. |
+| slug | string | not null · unique per user | URL/identity slug, unique within the owner's projects. |
+| description | text | nullable | Optional longer description of the project. |
+| primary_goal | text | nullable | The project's headline goal — what the stack of tasks is driving toward. |
+| team_id | bigint | FK → teams · nullable | The owning team, or null for a **personal** project (owner-only access). |
+
+### `teams`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| name | string | not null | The team's display name. |
+| owner_user_id | bigint | FK → users | The team owner (always a member, always able to approve prompts). |
+| allow_personal_instructions | boolean | not null · default true | When false, the personal playbook layer is dropped from composition so changes route through the team. |
+
+### `team_user`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| team_id | bigint | FK → teams | The team. Pivot keeps the singular Laravel name. |
+| user_id | bigint | FK → users | The member. |
+| role | string | not null · default `member` | `owner` or `member`. |
+| can_approve_prompts | boolean | not null · default false | Whether this member may approve proposed playbook versions for the team. |
+
+### `project_user`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The project. |
+| user_id | bigint | FK → users | The member. |
+| can_approve_prompts | boolean | not null · default false | Whether this member may approve project-scope playbook versions. |
+
+### `tasks`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The owning project (the tenant root). |
+| title | string | not null | The card title. |
+| category | string | nullable | Free-text grouping prefix (e.g. `mcp`, `infra`). |
+| body | text | nullable | The card detail, markdown. |
+| status | string | not null | One of the **13 lifecycle states** (see Invariants). |
+| position | integer | not null · default 0 | Orders cards **within a single status** (not across the board). |
+| status_changed_at | timestamp | nullable | When the card last entered its current status (the "Nh in status" timer); stamped automatically on every status change. |
+| claimed_by | string | nullable | The agent currently holding a working (`*-ing`) card; set by the atomic claim, cleared when the card moves on. |
+| claimed_at | timestamp | nullable | When the card was claimed. |
+| priority | string | not null · default `normal` | `low` / `normal` / `high` / `urgent`. |
+| start_date | date | nullable | Gantt start date. |
+| due_date | date | nullable | Deadline. |
+| branch | string | nullable | The development branch for the card. |
+| plan | text | nullable | The planning artifact (markdown), produced in the plan phase. |
+| rework_notes | text | nullable | What a review sent back — the change request brief written on `changes_requested`. |
+| body_summary | text | nullable | TL;DR of `body`; required when `body` is set. |
+| plan_summary | text | nullable | TL;DR of `plan`; required when `plan` is set. |
+
+### `work_sessions`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The owning project. |
+| title | string | not null | The session title. |
+| slug | string | not null | URL/identity slug. |
+| body | text | nullable | The work-log entry, markdown. |
+| occurred_on | date | nullable | The date the work actually happened. |
+| task_id | bigint | FK → tasks · nullable | The task this session logs against, if any. |
+| body_summary | text | nullable | TL;DR of `body`; required when `body` is set. |
+
+> Named `work_sessions` so it never collides with Laravel's framework `sessions` table.
+
+### `reviews`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The owning project. |
+| title | string | not null | The review's display title. |
+| base_ref | string | nullable | The base of the comparison (e.g. `main`). |
+| head_ref | string | nullable | The head of the comparison (e.g. `feat/x`). |
+| status | string | not null · default `draft` | `draft` / `in_review` / `done`. |
+| intro | text | nullable | The review preamble. |
+| assigned_to_user_id | bigint | FK → users · nullable | The human currently holding the review (atomic self-assign before sign-off). |
+| repository_id | bigint | FK → repositories · nullable | The repository the comparison runs within. |
+| outcome | string | nullable | `approved` / `changes_requested`, set when the human concludes the review. |
+| base_sha | string | nullable | The resolved commit SHA of `base_ref`. |
+| head_sha | string | nullable | The resolved commit SHA of `head_ref`. |
+
+### `review_files`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| review_id | bigint | FK → reviews | The owning review. |
+| path | string | not null | The changed file's path. |
+| status | string | not null | `added` / `modified` / `removed` / `renamed`, per the GitHub compare API. |
+| old_path | string | nullable | The previous path, for renames. |
+| position | integer | not null · default 0 | GitHub's own ordering, so the UI file-tree matches GitHub. |
+| patch | text | nullable | The unified diff; null for binary / oversized files. |
+| additions | integer | not null · default 0 | Lines added. |
+| deletions | integer | not null · default 0 | Lines removed. |
+
+> The set of `review_files` is the **ground truth** the coverage guard checks against — fetched server-side from GitHub, never supplied by the AI.
+
+### `review_file_section`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| review_file_id | bigint | FK → review_files | The changed file. Pivot keeps the singular name. |
+| review_section_id | bigint | FK → review_sections | A section that covers the file. Unique `(review_file_id, review_section_id)`; a file may be covered by several sections and must be covered by at least one. |
+
+### `review_sections`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| review_id | bigint | FK → reviews | The owning review. |
+| position | integer | not null · default 0 | Orders the sections in the walkthrough (top-to-bottom). |
+| title | string | not null | The section title. |
+| mode | string | not null | The review mode: `skip` / `behavioural` / `direct` / `direct_doc` / `mirror_guard`. |
+| context | text | nullable | Rebuilds the reviewer's knowledge for this step. |
+| link | string | nullable | What to open (a doc / file / route). |
+| checks | jsonb | nullable | A JSON list of "what to confirm". |
+| status | string | not null · default `open` | `open` / `signed_off` — the human's per-section sign-off. |
+| note | text | nullable | The human's comment / change request for the section. |
+| decision | string | nullable | The human verdict: `approved` / `changes_requested`, distinct from sign-off; drives the review outcome. |
+
+### `review_task`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| review_id | bigint | FK → reviews | The review. Pivot keeps the singular name. |
+| task_id | bigint | FK → tasks | A task the review covers. Unique `(review_id, task_id)`; both sides cascade-delete. |
+
+### `review_findings`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| review_section_id | bigint | FK → review_sections | The section the finding was raised within. |
+| title | string | not null | The finding's headline. |
+| detail | text | nullable | The realistic scenario + impact — what makes a review a conversation, not a checklist. |
+| severity | string | not null · default `minor` | `info` / `minor` / `major` / `critical`. |
+| status | string | not null · default `open` | Human triage: `open` / `must_fix` / `approved` / `dismissed`. `must_fix` findings feed the rework brief. |
+| position | integer | not null · default 0 | Orders findings within a section. |
+
+### `users`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key — the ownership root every tenant reaches through. |
+| name | string | not null | Display name. |
+| email | string | not null · unique | Login email. |
+| email_verified_at | timestamp | nullable | When the email was verified. |
+| password | string | not null | Hashed password. |
+| remember_token | string | nullable | Laravel "remember me" token. |
+
+### `playbooks`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| key | string | not null | A phase (`main` / `plan` / `develop` / `ai_review` / `merge`) or an arbitrary named key. |
+| title | string | not null | The slot's display title. |
+| scope | string | not null | `system` (ours, owner null) / `team` / `personal` / `project`. |
+| owner_type | string | nullable | The polymorphic owner class (`Team` / `User` / `Project`); null = system. |
+| owner_id | bigint | nullable | The polymorphic owner id; null = system. One slot per `(scope, owner, key)`. |
+
+> The slot is pure identity — all content lives on its versions.
+
+### `playbook_versions`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| playbook_id | bigint | FK → playbooks | The slot this version belongs to. |
+| version | integer | not null | The version number within the slot's history. |
+| title | string | not null | The version's title (a proposal changes title/summary/mode/body together). |
+| body | text | not null | The prompt body. |
+| status | string | not null · default `proposed` | `proposed` (awaiting a human approver) / `active` / `archived` (a superseded active) / `rejected`. |
+| author_user_id | bigint | FK → users · nullable | Who authored the version. |
+| proposed_by_ai | boolean | not null · default false | Whether an MCP (AI) caller authored the proposal. |
+| note | text | nullable | The proposal message. |
+| work_session_id | bigint | FK → work_sessions · nullable | The session the version was proposed from. |
+| summary | string | nullable | One-line summary; named playbooks appear in the main catalog by it. |
+| mode | string | not null · default `append` | `append` (add onto the layers above) or `overwrite` (discard them and start from this body). |
+
+> Exactly one version per slot is `active` (the one composition uses); approving a proposed version archives the prior active one.
+
+### `project_secret_requirements`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The project that needs the key. |
+| key | string | not null | The env key the project needs (the manifest entry — just the name, not sensitive). |
+| description | string | nullable | What the key is for. |
+| is_secret | boolean | not null · default true | Whether the value is sensitive. |
+
+### `personal_secrets`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| user_id | bigint | FK → users | The owning user. |
+| project_id | bigint | FK → projects · nullable | null = applies to any project; a project-scoped row overrides the global one there. |
+| key | string | not null | The env key this value is for. |
+| value | text | not null · **encrypted at rest** | The user's value; delivered only via the out-of-MCP secrets endpoint, never through an MCP tool. |
+
+### `project_tools`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The owning project. |
+| kind | string | not null | `program` (install/verify) or `command` (a reusable script written into the workspace `bin/`). |
+| name | string | not null | The tool / command name. |
+| description | string | nullable | What it is / does. |
+| check | text | nullable | For a program: the presence-detection command. |
+| run | text | not null | For a program: the install command; for a command: the script body. |
+| last_status | string | nullable | Agent-reported: `ok` / `missing` / `error` / `unknown`. |
+| last_checked_at | timestamp | nullable | When the agent last verified the tool. |
+
+> Approver-managed (it runs shell on the agent's machine); fetched via the out-of-MCP tools manifest.
+
+### `github_connections`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| user_id | bigint | FK → users | The owning user; a user may link several. |
+| label | string | not null | "work" / "personal" — a human label for the account. |
+| github_login | string | nullable | The resolved GitHub account login. |
+| token | text | not null · **encrypted** | The GitHub token, stored encrypted. |
+
+### `repositories`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| github_connection_id | bigint | FK → github_connections | The connection the repo is read through. |
+| full_name | string | not null | "owner/name". |
+| default_branch | string | nullable | The repo's default branch. |
+
+### `project_repository`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The project. Pivot keeps the singular name. |
+| repository_id | bigint | FK → repositories | A repository in the project's stack. Unique `(project_id, repository_id)`; both sides cascade-delete. |
+
+### `task_comments`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| task_id | bigint | FK → tasks | The task being commented on. |
+| user_id | bigint | FK → users · nullable | Set for human comments; null for an agent's comment. |
+| author | string | not null | Display label (the human's name, or an agent id) so an agent's note renders sensibly. |
+| body | text | not null | The comment body — the async thread between a human and an agent. |
+
+### `task_dependencies`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| task_id | bigint | FK → tasks | The dependent task. Unique `(task_id, depends_on_task_id)`. |
+| depends_on_task_id | bigint | FK → tasks | The blocker. Drives the Gantt's dependency lines and a "blocked" indicator. |
+
+### `task_events`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| task_id | bigint | FK → tasks | The task this activity belongs to. |
+| type | string | not null | `status_changed` / `claimed` / `released` / `review_created` / `commented` / … |
+| actor | string | nullable | Who did it — a human name or an agent id. |
+| description | text | nullable | A human-readable line for the timeline. |
+
+> Append-only; rendered as a timeline on the task detail page.
+
 ## Diagram
 
 Every migrated app table in full (fields + types). Types are the migration types
@@ -312,7 +622,9 @@ erDiagram
         string title
         bigint repository_id FK "nullable, the compared repo"
         string base_ref "nullable, e.g. main"
+        string base_sha "nullable, resolved commit of base_ref"
         string head_ref "nullable, e.g. feat/x"
+        string head_sha "nullable, resolved commit of head_ref"
         string status "draft|in_review|done"
         string outcome "nullable, approved|changes_requested"
         bigint assigned_to_user_id FK "nullable, current holder"
@@ -326,6 +638,9 @@ erDiagram
         string status "added|modified|removed|renamed"
         string old_path "nullable, for renames"
         integer position "GitHub ordering"
+        text patch "nullable, unified diff; null for binary/oversized"
+        integer additions "lines added"
+        integer deletions "lines removed"
     }
 
     REVIEW_FILE_SECTION {

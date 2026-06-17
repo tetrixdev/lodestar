@@ -41,6 +41,8 @@ class CreateReviewTool extends LodestarTool
         // and reads GitHub through that repo's connection token.
         $files = [];
         $repository = null;
+        $baseSha = null;
+        $headSha = null;
         if (! empty($data['base_ref']) && ! empty($data['head_ref'])) {
             $repository = $this->resolveRepository($project, $data['repo'] ?? null);
             if (! $repository) {
@@ -50,7 +52,12 @@ class CreateReviewTool extends LodestarTool
                 );
             }
             try {
-                $files = app(GitHubComparison::class)->files(
+                $comparison = app(GitHubComparison::class);
+                // Pin both refs to commit SHAs so the file viewer can fetch the
+                // exact blobs the diff was taken against, even as the ref moves.
+                $baseSha = $comparison->resolveSha($repository->full_name, $data['base_ref'], $repository->token());
+                $headSha = $comparison->resolveSha($repository->full_name, $data['head_ref'], $repository->token());
+                $files = $comparison->files(
                     $repository->full_name, $data['base_ref'], $data['head_ref'], $repository->token()
                 );
             } catch (Throwable $e) {
@@ -58,12 +65,14 @@ class CreateReviewTool extends LodestarTool
             }
         }
 
-        $review = DB::transaction(function () use ($project, $data, $repository, $files) {
+        $review = DB::transaction(function () use ($project, $data, $repository, $files, $baseSha, $headSha) {
             $review = $project->reviews()->create([
                 'title' => $data['title'],
                 'repository_id' => $repository?->id,
                 'base_ref' => $data['base_ref'] ?? null,
+                'base_sha' => $baseSha,
                 'head_ref' => $data['head_ref'] ?? null,
+                'head_sha' => $headSha,
                 'intro' => $data['intro'] ?? null,
                 'status' => 'draft',
             ]);
