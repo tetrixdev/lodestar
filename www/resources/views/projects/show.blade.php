@@ -154,11 +154,11 @@
                 </div>
             </div>
 
-            {{-- board: 5 phase columns. The 5-up layout engages at the "half of 2K"
-                 width (board: = 1278px, defined in app.css) — the same width the
-                 max-w-7xl container caps at — so a 2K monitor split in half shows all
-                 five phase columns side by side. Below that: 2 columns (md), then 1. --}}
-            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-2 board:grid-cols-5 gap-4 items-start">
+            {{-- board: 5 phase columns. The 5-up layout engages at lg (1024px) so a
+                 laptop or a 2K monitor split in half (~1270–1278px) comfortably shows
+                 all five phase columns side by side. Below that: 2 columns (md), then 1.
+                 Stock Tailwind breakpoints only — no custom breakpoint to mis-compile. --}}
+            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
                 @foreach ($phases as $phaseKey => $phase)
                     @php
                         $phaseStatuses = $phase['statuses'];

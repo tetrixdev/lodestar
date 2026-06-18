@@ -141,7 +141,12 @@ class ProjectManagementTest extends TestCase
             ->get("/projects/{$project->id}")
             ->assertOk()
             ->assertSee('Visible card')
-            ->assertSee('Timeline');
+            ->assertSee('Timeline')
+            // The 5-up board must gate on a STOCK Tailwind breakpoint so it actually
+            // compiles and ships. lg (1024px) guarantees 5 columns at ~1270–1278px
+            // (a 2K monitor split in half). A custom @theme breakpoint silently
+            // failed to compile here, leaving the gate stuck at the stock xl (1280px).
+            ->assertSee('lg:grid-cols-5', false);
     }
 
     // ── gantt / timeline ─────────────────────────────────────────────────────
