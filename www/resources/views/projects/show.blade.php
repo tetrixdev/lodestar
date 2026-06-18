@@ -72,7 +72,7 @@
                 '{{ csrf_token() }}'
             ));
          ">
-        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             @if ($project->primary_goal)
                 <p class="text-gray-600">{{ $project->primary_goal }}</p>
@@ -154,8 +154,11 @@
                 </div>
             </div>
 
-            {{-- board: 5 phase columns --}}
-            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-start">
+            {{-- board: 5 phase columns. The 5-up layout engages at the "half of 2K"
+                 width (board: = 1278px, defined in app.css) — the same width the
+                 max-w-7xl container caps at — so a 2K monitor split in half shows all
+                 five phase columns side by side. Below that: 2 columns (md), then 1. --}}
+            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-2 board:grid-cols-5 gap-4 items-start">
                 @foreach ($phases as $phaseKey => $phase)
                     @php
                         $phaseStatuses = $phase['statuses'];

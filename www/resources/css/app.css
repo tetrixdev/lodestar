@@ -7,6 +7,14 @@
 
 @theme {
     --font-sans: 'Figtree', ui-sans-serif, system-ui, sans-serif;
+
+    /* "Half of 2K" laptop breakpoint (≈ half of a 2560px display).
+     * A 2K monitor split in half gives a ~1278px usable viewport (the window
+     * is 1280px but a vertical scrollbar eats a couple of pixels), which lands
+     * just BELOW Tailwind's built-in xl (1280px) — so xl-gated layouts never
+     * engage there. This breakpoint fires at that real half-2K width instead,
+     * matching the max-w-7xl (1280px) content cap used across the app. */
+    --breakpoint-board: 1278px;
 }
 
 /* Hide Alpine-cloaked elements until Alpine initialises them. */
