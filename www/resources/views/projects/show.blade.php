@@ -72,7 +72,7 @@
                 '{{ csrf_token() }}'
             ));
          ">
-        <div class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
             @if ($project->primary_goal)
                 <p class="text-gray-600">{{ $project->primary_goal }}</p>
@@ -155,7 +155,7 @@
             </div>
 
             {{-- board: 5 phase columns --}}
-            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 items-start">
+            <div x-ref="board" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
                 @foreach ($phases as $phaseKey => $phase)
                     @php
                         $phaseStatuses = $phase['statuses'];
