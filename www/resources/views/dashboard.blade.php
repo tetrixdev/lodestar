@@ -6,27 +6,28 @@
     @php
         $T = \App\Models\Task::class;
         $statusLabel = fn ($s) => $T::LABELS[$s] ?? $s;
-        // Cards size to their CONTENT. The ONLY constraint is a max-height on the inner
-        // LIST, and only on lg: a list taller than ~4 rows scrolls; a short/empty one
-        // stays small (no min height, so an empty Overdue/Plans card never wastes a
-        // block of space). One identical card + list class everywhere, so a full Backlog
-        // and a full Sessions show the exact same row count. On mobile the cap is dropped
-        // — everything is content-height and the page scrolls (infinite vertical room, so
-        // no point clamping). Asymmetric card padding (pl-5 pr-2) keeps the scrollbar at
-        // the right edge; the list's pr-2 is the small gap between content and the bar.
-        $listClass = 'mt-3 pr-2 overflow-y-auto overflow-x-hidden lg:max-h-[13rem]';
+        // Pure flexbox, no fixed heights anywhere. The app shell makes <main> the
+        // scrollable body below a fixed nav + header. Here the dashboard fills <main>
+        // (lg:h-full) and its four rows are each lg:flex-1 — so they grow EQUALLY to
+        // fill the height. Inside every card the header is fixed (shrink-0) and the
+        // list grows (lg:flex-1) and scrolls (min-h-0). On mobile every lg: rule is off
+        // → everything is plain content height and the page scrolls (no point filling
+        // a stacked column). Asymmetric padding (pl-5 pr-2) + the list's pr-2 keep the
+        // scrollbar at the right edge with a small gap to the content.
+        $listClass = 'mt-3 pr-2 overflow-y-auto overflow-x-hidden lg:flex-1 lg:min-h-0';
         $barList = $listClass;
         $rowClass = 'flex items-center justify-between gap-3 border-b border-gray-100 py-2 last:border-0 hover:bg-gray-50 rounded transition';
         $badge = 'shrink-0 text-[11px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5';
         $head = 'flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-700 shrink-0';
-        // One card class for every region — bars and panes are now identical.
-        $pane = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden';
-        $bar = $pane;
+        // Card shell. A pane sits in a 2-col grid row (the ROW carries lg:flex-1); a bar
+        // is a direct flex child of the body, so it carries lg:flex-1 itself.
+        $pane = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden lg:min-h-0';
+        $bar = 'bg-white shadow-sm sm:rounded-lg pl-5 pr-2 py-5 flex flex-col overflow-hidden lg:flex-1 lg:min-h-0';
     @endphp
 
     {{-- lg+: fills <main> so the 2×2 grows within the available area and scrolls inside.
          Mobile: natural flow, the page scrolls. --}}
-    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
+    <div class="flex flex-col gap-4 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 lg:h-full lg:min-h-0">
 
         @include('partials.onboarding')
 
@@ -56,7 +57,7 @@
 
         {{-- Inbox row 1 — its own flex sibling so it shares the root's gap evenly with
              the bars and row 2 (no nested 2×2 grid gap throwing the alignment off). --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-0">
 
             {{-- Backlog (new) --}}
             <section class="{{ $pane }}">
@@ -105,7 +106,7 @@
         </div>
 
         {{-- Inbox row 2 --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:flex-1 lg:min-h-0">
 
             {{-- Reviews waiting — open reviews only (the review is the unit, not its tasks) --}}
             <section class="{{ $pane }}">
