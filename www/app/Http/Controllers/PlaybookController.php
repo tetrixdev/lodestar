@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\Project;
 use App\Models\Playbook;
 use App\Models\PlaybookVersion;
+use App\Models\Project;
 use App\Models\Team;
 use App\Models\User;
 use App\Support\LineDiff;
@@ -18,9 +18,10 @@ use Illuminate\View\View;
 
 /**
  * The playbooks page + change control. Playbooks are layered: a phase prompt is
- * composed across scopes (system → team → project → personal). This page shows
- * the EFFECTIVE composed prompt per phase; the filterable authoring overview
- * (version history, diff) lands in P4.
+ * composed across scopes (system → team → project → personal). The overview is a
+ * SINGLE context-scoped list: pick a context (just you, or a project) and see,
+ * per phase, the layers that compose there plus a preview of the composed prompt.
+ * A layer's own page ({@see show()}) carries version history and the two-version diff.
  *
  * Change control is human-gated: anyone who can reach a scope may PROPOSE a
  * version; only an assigned approver may APPROVE (make it active). An AI (over
@@ -28,52 +29,82 @@ use Illuminate\View\View;
  */
 class PlaybookController extends Controller
 {
-    /** The overview: the composed effective prompt per phase + a filterable list of every layer you can reach. */
+    /**
+     * The overview: ONE context-scoped list. You pick a context (just you, or a
+     * project) and the page shows, per phase, exactly the layers that compose in
+     * that context — each with a preview of its body and a preview of the whole
+     * composed prompt — plus the named playbooks reachable there. No separate
+     * "effective prompts" grid and "all layers" filter: the context IS the filter.
+     */
     public function index(Request $request): View
     {
         $user = $request->user();
 
-        $filters = $request->validate([
-            'scope' => ['nullable', Rule::in(Playbook::SCOPES)],
-            'key' => ['nullable', 'string'],
-            'team_id' => ['nullable', 'integer'],
-            'project_id' => ['nullable', 'integer'],
-            'status' => ['nullable', Rule::in(PlaybookVersion::STATUSES)],
-            'preview_project' => ['nullable', 'integer'],
+        $data = $request->validate([
+            'context' => ['nullable', 'integer'], // a project id, or absent = "just me"
         ]);
 
-        // Preview composition as it would run on a chosen project (adds the
-        // team + project layers), else the plain system + personal view.
-        $previewProject = ($filters['preview_project'] ?? null)
-            ? Project::accessibleBy($user)->with('team')->find($filters['preview_project'])
+        // The context is a project the user can reach (adds its team + project
+        // layers), or null = the plain system + personal view ("just me").
+        $contextProject = ($data['context'] ?? null)
+            ? Project::accessibleBy($user)->with('team')->find($data['context'])
             : null;
 
-        $slots = $this->accessibleSlots($user)
+        // Every layer the user can reach (system + own personal + their teams' +
+        // their projects'), keyed for quick lookup while building the per-phase view.
+        $accessible = $this->accessibleSlots($user)
             ->with(['owner', 'activeVersion'])
             ->withCount(['versions as proposed_count' => fn ($q) => $q->where('status', PlaybookVersion::STATUS_PROPOSED)])
-            ->when($filters['scope'] ?? null, fn ($q, $s) => $q->where('scope', $s))
-            ->when($filters['key'] ?? null, fn ($q, $k) => $q->where('key', $k))
-            ->when($filters['team_id'] ?? null, fn ($q, $id) => $q->where('owner_type', Team::class)->where('owner_id', $id))
-            ->when($filters['project_id'] ?? null, fn ($q, $id) => $q->where('owner_type', Project::class)->where('owner_id', $id))
-            ->when($filters['status'] ?? null, fn ($q, $st) => $q->whereHas('versions', fn ($v) => $v->where('status', $st)))
-            ->orderBy('key')->orderBy('scope')
             ->get();
 
-        // Composed for the previewed project (system → team → project → personal),
-        // or just system + personal when no project is chosen.
-        $composed = collect(Playbook::PHASES)->mapWithKeys(
-            fn (string $phase) => [$phase => Playbook::compose($user, $previewProject, $phase)],
-        );
+        $team = $contextProject?->team;
+        $allowPersonal = $team === null ? true : (bool) $team->allow_personal_instructions;
+
+        // Which (scope, owner) layers actually apply in this context, in compose order.
+        $applies = function (Playbook $slot) use ($user, $team, $contextProject, $allowPersonal): bool {
+            return match ($slot->scope) {
+                Playbook::SCOPE_SYSTEM => true,
+                Playbook::SCOPE_TEAM => $team !== null && (int) $slot->owner_id === $team->id,
+                Playbook::SCOPE_PROJECT => $contextProject !== null && (int) $slot->owner_id === $contextProject->id,
+                Playbook::SCOPE_PERSONAL => $allowPersonal && (int) $slot->owner_id === $user->id,
+                default => false,
+            };
+        };
+        $scopeOrder = array_flip(Playbook::SCOPES); // system → team → project → personal
+
+        // Per phase: the composed prompt + the in-context layer rows (for the list).
+        $phases = collect(Playbook::PHASES)->map(function (string $phase) use ($accessible, $applies, $scopeOrder, $user, $contextProject) {
+            $layers = $accessible
+                ->where('key', $phase)
+                ->filter($applies)
+                ->sortBy(fn (Playbook $s) => $scopeOrder[$s->scope])
+                ->values();
+
+            return [
+                'key' => $phase,
+                'label' => Playbook::PHASE_LABELS[$phase] ?? $phase,
+                'layers' => $layers,
+                'composed' => Playbook::compose($user, $contextProject, $phase),
+            ];
+        });
+
+        // Named (non-phase) playbooks reachable in this context — most-specific scope per key.
+        $namedRank = [Playbook::SCOPE_PROJECT => 0, Playbook::SCOPE_PERSONAL => 1, Playbook::SCOPE_TEAM => 2, Playbook::SCOPE_SYSTEM => 3];
+        $named = $accessible
+            ->reject(fn (Playbook $s) => Playbook::isPhase($s->key))
+            ->filter($applies)
+            ->groupBy('key')
+            ->map(fn ($group) => $group->sortBy(fn (Playbook $s) => $namedRank[$s->scope])->first())
+            ->sortKeys()
+            ->values();
 
         return view('settings.playbooks', [
-            'phases' => Playbook::PHASES,
+            'phases' => $phases,
+            'phaseKeys' => Playbook::PHASES,
             'phaseLabels' => Playbook::PHASE_LABELS,
-            'composed' => $composed,
-            'previewProject' => $previewProject,
-            'slots' => $slots,
-            'filters' => $filters,
-            'scopes' => Playbook::SCOPES,
-            'statuses' => PlaybookVersion::STATUSES,
+            'named' => $named,
+            'contextProject' => $contextProject,
+            'allowPersonal' => $allowPersonal,
             'teams' => $user->teams()->orderBy('name')->get(),
             'projects' => Project::accessibleBy($user)->orderBy('name')->get(),
         ]);

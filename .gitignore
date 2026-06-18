@@ -1,3 +1,5 @@
 .env
 .vscode/
 .idea/
+# Background-worker compose override (agent workspace only)
+compose.agent.yml

@@ -114,10 +114,16 @@ developer's machine — so a playbook edit reaches every loop on its next call.
 Authoring is **human-gated propose→approve**: anyone in a scope may propose a
 `PlaybookVersion` (web or the `propose_playbook_change` MCP tool), only an assigned
 approver makes it `active`, and an AI proposal never goes live (the rule is
-`Playbook::submitVersion()`). The filterable Playbooks overview (`PlaybookController`,
-`settings/playbooks` + `settings/playbook-show`) shows the composed effective prompt,
-every layer, version history, a two-version diff (`App\Support\LineDiff`), and the
-append/overwrite toggle (approver-only, with a warning).
+`Playbook::submitVersion()`). The Playbooks overview (`PlaybookController`,
+`settings/playbooks` + `settings/playbook-show`) is a **single context-scoped list**:
+one picker chooses the context (just-me, or a project — folding in that project's team
+& project layers), and the page then shows, per phase, the layers composing in that
+context plus an on-demand **preview** of the composed prompt (rendered markdown or raw),
+followed by the named playbooks reachable there — so the chosen context *is* the filter,
+not a separate effective-prompts grid + filter form. A layer's own page carries its
+active body (markdown/raw), version history, a two-version diff (`App\Support\LineDiff`),
+and the append/overwrite toggle (approver-only, with a warning). The whole screen is
+mobile-first (rows/headers wrap and stack at ~360px, prompts scroll inside their card).
 
 **Agent modes + the work loop + heartbeat.** `main` is orientation only and defines
 two **modes**: *interactive* (a human is driving — work in the human's own checkout,
