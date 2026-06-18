@@ -15,18 +15,34 @@ class PlaybookSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_overview_shows_effective_phases_and_the_layer_list(): void
+    public function test_overview_shows_a_phase_card_per_phase_and_the_context_picker(): void
     {
         $this->seed(SystemPlaybookSeeder::class);
         $user = User::factory()->create();
 
         $this->actingAs($user)->get(route('playbooks.index'))
             ->assertOk()
-            ->assertSee('Effective prompts')
-            ->assertSee('All playbook layers')
+            ->assertSee('Showing playbooks for')          // the single context picker
+            ->assertSee('Just me')                        // the default "just me" context option
             ->assertSee('Propose a change / add a layer') // the create/propose affordance
-            ->assertSee('Develop')          // a phase label
-            ->assertSee('develop');         // a system layer row (key)
+            ->assertSee('Develop')                        // a phase card label
+            ->assertSee('Preview prompt')                 // each composed phase is previewable
+            ->assertSee('Named playbooks');               // the named-playbook group
+    }
+
+    public function test_overview_previewable_prompt_shows_the_composed_body(): void
+    {
+        // The composed prompt text is rendered on the page (previewable), not just
+        // a list of scope badges.
+        $user = User::factory()->create();
+        $slot = $user->playbooks()->create([
+            'scope' => Playbook::SCOPE_PERSONAL, 'key' => 'develop', 'title' => 'Mine',
+        ]);
+        $slot->publish('Mine', null, 'RUN THE LINTER FIRST', $user);
+
+        $this->actingAs($user)->get(route('playbooks.index'))
+            ->assertOk()
+            ->assertSee('RUN THE LINTER FIRST'); // the actual composed body is previewable inline
     }
 
     public function test_a_user_can_add_a_personal_layer_from_the_overview_form(): void
@@ -48,7 +64,31 @@ class PlaybookSettingsTest extends TestCase
         $this->assertStringContainsString('ALWAYS run the linter.', Playbook::compose($user, null, 'develop')['body']);
     }
 
-    public function test_overview_filters_by_scope(): void
+    public function test_overview_scopes_the_list_to_the_chosen_context(): void
+    {
+        // The context picker IS the filter: a project layer only appears when that
+        // project's context is selected, not in the "just me" view.
+        $this->seed(SystemPlaybookSeeder::class);
+        $user = User::factory()->create();
+        $team = Team::create(['name' => 'Acme', 'owner_user_id' => $user->id]);
+        $project = $user->projects()->create(['name' => 'Rocket', 'slug' => 'rocket', 'team_id' => $team->id]);
+        $projSlot = $project->playbooks()->create([
+            'scope' => Playbook::SCOPE_PROJECT, 'key' => 'develop', 'title' => 'Rocket dev',
+        ]);
+        $projSlot->publish('Rocket dev', null, 'body', $user);
+
+        // "Just me" context: the project layer's row is not listed.
+        $this->actingAs($user)->get(route('playbooks.index'))
+            ->assertOk()
+            ->assertDontSee(route('playbooks.show', $projSlot));
+
+        // That project's context: the project layer's row appears.
+        $this->actingAs($user)->get(route('playbooks.index', ['context' => $project->id]))
+            ->assertOk()
+            ->assertSee(route('playbooks.show', $projSlot));
+    }
+
+    public function test_a_named_playbook_is_listed_in_its_named_group(): void
     {
         $this->seed(SystemPlaybookSeeder::class);
         $user = User::factory()->create();
@@ -56,14 +96,12 @@ class PlaybookSettingsTest extends TestCase
             'scope' => Playbook::SCOPE_PERSONAL, 'key' => 'my-recipe',
             'title' => 'My recipe',
         ]);
-        $slot->publish('My recipe', null, 'body', $user);
-        $systemSlot = Playbook::slotFor(Playbook::SCOPE_SYSTEM, null, 'develop');
+        $slot->publish('My recipe', 'when to use it', 'body', $user);
 
-        // Personal filter lists the personal slot row, not the system slot row.
-        $this->actingAs($user)->get(route('playbooks.index', ['scope' => Playbook::SCOPE_PERSONAL]))
+        $this->actingAs($user)->get(route('playbooks.index'))
             ->assertOk()
-            ->assertSee(route('playbooks.show', $slot))
-            ->assertDontSee(route('playbooks.show', $systemSlot));
+            ->assertSee('Named playbooks')
+            ->assertSee(route('playbooks.show', $slot)); // listed as a reachable named playbook
     }
 
     public function test_slot_detail_shows_versions_active_body_and_a_diff(): void
@@ -133,10 +171,11 @@ class PlaybookSettingsTest extends TestCase
         $plain = Playbook::compose($user, null, 'develop');
         $this->assertStringNotContainsString('PROJECT-RULE', $plain['body']);
 
-        // Previewing the project surfaces it.
-        $this->actingAs($user)->get(route('playbooks.index', ['preview_project' => $project->id]))
+        // Selecting the project context surfaces it.
+        $this->actingAs($user)->get(route('playbooks.index', ['context' => $project->id]))
             ->assertOk()
-            ->assertSee('Rocket');
+            ->assertSee('Rocket')
+            ->assertSee('PROJECT-RULE'); // its composed body is previewable in context
         $this->assertStringContainsString('PROJECT-RULE', Playbook::compose($user, $project, 'develop')['body']);
     }
 

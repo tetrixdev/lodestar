@@ -5,15 +5,15 @@
         <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ __('Playbooks') }}</h2>
     </x-slot>
 
-    <div class="py-12" x-data="{
+    <div class="py-6 sm:py-10" x-data="{
         proposeOpen: {{ $errors->hasAny(['scope', 'key', 'title', 'summary', 'body', 'mode', 'team_id', 'project_id']) ? 'true' : 'false' }},
         scope: '{{ old('scope', $M::SCOPE_PERSONAL) }}',
         mode: '{{ old('mode', $M::MODE_APPEND) }}',
         key: '{{ old('key', '') }}',
-        phases: @js($phases),
+        phases: @js($phaseKeys),
         startProposal(scope, key) { this.scope = scope; this.key = key; this.proposeOpen = true; this.$nextTick(() => this.$refs.proposePanel?.scrollIntoView({ behavior: 'smooth' })); },
     }">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
 
             @if (session('status'))
                 <div class="p-3 bg-green-50 text-green-800 rounded-lg text-sm">
@@ -28,19 +28,40 @@
                 </div>
             @endif
 
-            <div class="flex items-center justify-between gap-3">
-                <p class="text-sm text-gray-500">
-                    Playbooks are <strong>layered</strong>: each phase composes system &rarr; team &rarr; project &rarr;
-                    personal (personal has the final say).
+            {{-- Context bar: ONE picker drives the whole page. Everything below shows
+                 the layers + composed prompts as they apply in this context. --}}
+            <div class="bg-white shadow-sm rounded-lg p-4 sm:p-5 space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div class="min-w-0">
+                        <label for="context" class="block text-[11px] font-medium text-gray-400 uppercase tracking-wide">Showing playbooks for</label>
+                        <form method="GET" class="mt-1">
+                            <x-select id="context" name="context" onchange="this.form.submit()"
+                                      class="block w-full sm:w-72 rounded-md border-gray-300 text-sm">
+                                <option value="">Just me (system &rarr; personal)</option>
+                                @foreach ($projects as $pr)
+                                    <option value="{{ $pr->id }}" @selected($contextProject && $contextProject->id === $pr->id)>Project: {{ $pr->name }}</option>
+                                @endforeach
+                            </x-select>
+                        </form>
+                    </div>
+                    <button type="button" @click="proposeOpen = ! proposeOpen"
+                            class="shrink-0 inline-flex items-center justify-center gap-1.5 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-500">
+                        <span x-text="proposeOpen ? 'Close' : 'Propose a change / add a layer'"></span>
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500">
+                    Playbooks are <strong>layered</strong>: each phase composes system &rarr; team &rarr; project &rarr; personal (personal has the final say).
+                    @if ($contextProject)
+                        You're viewing <strong>{{ $contextProject->name }}</strong>'s context — its team &amp; project layers are folded in.
+                        @unless ($allowPersonal)<span class="text-amber-700">This project's team blocks personal layers, so yours are dropped here.</span>@endunless
+                    @else
+                        Pick a project above to fold in its team &amp; project layers.
+                    @endif
                 </p>
-                <button type="button" @click="proposeOpen = ! proposeOpen"
-                        class="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500">
-                    <span x-text="proposeOpen ? 'Close' : 'Propose a change / add a layer'"></span>
-                </button>
             </div>
 
             {{-- Propose / add a layer --}}
-            <div x-show="proposeOpen" x-cloak x-ref="proposePanel" class="bg-white shadow-sm sm:rounded-lg p-5 space-y-4">
+            <div x-show="proposeOpen" x-cloak x-ref="proposePanel" class="bg-white shadow-sm rounded-lg p-4 sm:p-5 space-y-4">
                 <h3 class="font-semibold text-gray-800">Propose a change / add a layer</h3>
                 <p class="text-xs text-gray-500">
                     Add or change a layer at the personal, team or project scope. If you can approve that scope your
@@ -78,7 +99,7 @@
                             <x-input-label value="Project" />
                             <x-select name="project_id" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
                                 @forelse ($projects as $pr)
-                                    <option value="{{ $pr->id }}" @selected((string) old('project_id') === (string) $pr->id)>{{ $pr->name }}</option>
+                                    <option value="{{ $pr->id }}" @selected((string) old('project_id', $contextProject?->id) === (string) $pr->id)>{{ $pr->name }}</option>
                                 @empty
                                     <option value="">No projects</option>
                                 @endforelse
@@ -91,7 +112,7 @@
                             <input list="playbook-keys" name="key" x-model="key" type="text"
                                    class="mt-1 block w-full rounded-md border-gray-300 text-sm" placeholder="develop, or a named key" />
                             <datalist id="playbook-keys">
-                                @foreach ($phases as $p)
+                                @foreach ($phaseKeys as $p)
                                     <option value="{{ $p }}">{{ $phaseLabels[$p] ?? $p }}</option>
                                 @endforeach
                             </datalist>
@@ -148,116 +169,27 @@
                 </form>
             </div>
 
-            {{-- Effective composed prompt per phase --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                        <h3 class="font-semibold text-gray-800">Effective prompts</h3>
-                        <p class="text-xs text-gray-500">
-                            How each phase composes
-                            @if ($previewProject) on <strong>{{ $previewProject->name }}</strong> (system &rarr; team &rarr; project &rarr; personal).
-                            @else for you (system &rarr; personal). Pick a project to preview its team/project layers. @endif
-                        </p>
-                    </div>
-                    <form method="GET" class="flex items-end gap-2 text-sm">
-                        {{-- preserve list filters when switching preview --}}
-                        @foreach (['scope', 'key', 'team_id', 'project_id', 'status'] as $f)
-                            @if ($filters[$f] ?? null)<input type="hidden" name="{{ $f }}" value="{{ $filters[$f] }}">@endif
-                        @endforeach
-                        <x-select name="preview_project" onchange="this.form.submit()" class="rounded-md border-gray-300 text-sm">
-                            <option value="">Preview: just me</option>
-                            @foreach ($projects as $pr)
-                                <option value="{{ $pr->id }}" @selected($previewProject && $previewProject->id === $pr->id)>Preview: {{ $pr->name }}</option>
-                            @endforeach
-                        </x-select>
-                    </form>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    @foreach ($phases as $phase)
-                        @php $c = $composed[$phase]; @endphp
-                        <div class="border border-gray-100 rounded-md p-3 space-y-1.5">
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-sm font-medium text-gray-700">{{ $phaseLabels[$phase] ?? $phase }}</span>
-                                <button type="button" @click="startProposal('{{ $M::SCOPE_PERSONAL }}', '{{ $phase }}')"
-                                        class="shrink-0 text-[11px] font-medium text-indigo-600 hover:text-indigo-800">+ personal addition</button>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-1">
-                                @forelse ($c['layers'] as $layer)
-                                    <span class="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-indigo-50 text-indigo-700">
-                                        {{ $layer['scope'] }}@if ($layer['mode'] === $M::MODE_OVERWRITE)<span class="text-amber-600" title="overwrites the layers above it">&#9888;</span>@endif
-                                    </span>
-                                @empty
-                                    <span class="text-[10px] text-gray-400">— none —</span>
-                                @endforelse
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
+            {{-- The one list: each phase, with the layers composing in this context and
+                 a preview of both each layer's body and the whole composed prompt. --}}
+            <div class="space-y-4">
+                @foreach ($phases as $phase)
+                    @include('settings.partials.phase-card', ['phase' => $phase])
+                @endforeach
             </div>
 
-            {{-- Filterable layer list --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-4">
-                <h3 class="font-semibold text-gray-800">All playbook layers</h3>
-
-                <form method="GET" class="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
-                    <x-select name="scope" class="rounded-md border-gray-300 text-sm">
-                        <option value="">Any scope</option>
-                        @foreach ($scopes as $s)
-                            <option value="{{ $s }}" @selected(($filters['scope'] ?? '') === $s)>{{ ucfirst($s) }}</option>
-                        @endforeach
-                    </x-select>
-                    <x-select name="key" class="rounded-md border-gray-300 text-sm">
-                        <option value="">Any phase/key</option>
-                        @foreach ($phases as $p)
-                            <option value="{{ $p }}" @selected(($filters['key'] ?? '') === $p)>{{ $phaseLabels[$p] ?? $p }}</option>
-                        @endforeach
-                    </x-select>
-                    <x-select name="team_id" class="rounded-md border-gray-300 text-sm">
-                        <option value="">Any team</option>
-                        @foreach ($teams as $t)
-                            <option value="{{ $t->id }}" @selected((string) ($filters['team_id'] ?? '') === (string) $t->id)>{{ $t->name }}</option>
-                        @endforeach
-                    </x-select>
-                    <x-select name="project_id" class="rounded-md border-gray-300 text-sm">
-                        <option value="">Any project</option>
-                        @foreach ($projects as $pr)
-                            <option value="{{ $pr->id }}" @selected((string) ($filters['project_id'] ?? '') === (string) $pr->id)>{{ $pr->name }}</option>
-                        @endforeach
-                    </x-select>
-                    <x-select name="status" class="rounded-md border-gray-300 text-sm">
-                        <option value="">Any status</option>
-                        @foreach ($statuses as $st)
-                            <option value="{{ $st }}" @selected(($filters['status'] ?? '') === $st)>{{ ucfirst($st) }}</option>
-                        @endforeach
-                    </x-select>
-                    <div class="col-span-2 md:col-span-5 flex gap-2">
-                        <x-primary-button class="!py-1.5 !text-xs">Filter</x-primary-button>
-                        <a href="{{ route('playbooks.index') }}" class="text-xs text-gray-500 hover:text-gray-700 self-center">Clear</a>
+            {{-- Named (on-demand) playbooks reachable in this context --}}
+            <div class="bg-white shadow-sm rounded-lg p-4 sm:p-5 space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <h3 class="font-semibold text-gray-800">Named playbooks</h3>
+                        <p class="text-xs text-gray-500">Loaded on demand (not composed) — most-specific scope wins in this context.</p>
                     </div>
-                </form>
-
+                </div>
                 <div class="divide-y divide-gray-100">
-                    @forelse ($slots as $slot)
-                        <a href="{{ route('playbooks.show', $slot) }}" class="flex items-center justify-between gap-3 py-2.5 hover:bg-gray-50 -mx-2 px-2 rounded">
-                            <div class="flex items-center gap-2 min-w-0">
-                                <span class="text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ $slot->scope }}</span>
-                                <span class="font-medium text-gray-800 truncate">{{ $slot->key }}</span>
-                                @if ($slot->owner)
-                                    <span class="text-xs text-gray-400 truncate">{{ $slot->owner->name }}</span>
-                                @endif
-                                @if ($slot->mode === $M::MODE_OVERWRITE)
-                                    <span class="text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-amber-100 text-amber-800">&#9888; overwrite</span>
-                                @endif
-                            </div>
-                            <div class="flex shrink-0 items-center gap-2 text-xs text-gray-500">
-                                @if ($slot->proposed_count > 0)
-                                    <span class="rounded-full px-2 py-0.5 bg-amber-100 text-amber-800 font-medium">{{ $slot->proposed_count }} proposed</span>
-                                @endif
-                                <span>{{ $slot->activeVersion ? 'v'.$slot->activeVersion->version : 'no active' }}</span>
-                            </div>
-                        </a>
+                    @forelse ($named as $slot)
+                        @include('settings.partials.layer-row', ['slot' => $slot, 'showKey' => true])
                     @empty
-                        <p class="text-sm text-gray-400 italic py-2">No playbook layers match.</p>
+                        <p class="text-sm text-gray-400 italic py-2">No named playbooks in this context.</p>
                     @endforelse
                 </div>
             </div>

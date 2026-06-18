@@ -19,8 +19,8 @@
         </div>
     </x-slot>
 
-    <div class="py-10">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+    <div class="py-6 sm:py-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5 sm:space-y-6">
 
             @if (session('status'))
                 <div class="p-3 bg-green-50 text-green-800 rounded-lg text-sm">
@@ -36,7 +36,7 @@
             @endif
 
             {{-- how the active version composes (mode is versioned — change it via a proposal) --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-1">
+            <div class="bg-white shadow-sm sm:rounded-lg p-4 sm:p-5 space-y-1">
                 @if ($playbook->activeVersion?->mode === $M::MODE_OVERWRITE)
                     <div class="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-300 p-3 text-sm text-amber-800">
                         <span class="text-lg leading-none">&#9888;</span>
@@ -51,11 +51,21 @@
             </div>
 
             {{-- active version --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
-                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Active version</p>
+            <div class="bg-white shadow-sm sm:rounded-lg p-4 sm:p-5 space-y-2" x-data="{ raw: false }">
+                <div class="flex items-center justify-between gap-2">
+                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Active version</p>
+                    @if ($playbook->activeVersion)
+                        <button type="button" @click="raw = !raw" class="text-[11px] font-medium text-gray-500 hover:text-gray-700">
+                            <span x-text="raw ? 'Show rendered' : 'Show raw markdown'"></span>
+                        </button>
+                    @endif
+                </div>
                 @if ($playbook->activeVersion)
                     <p class="text-xs text-gray-500">v{{ $playbook->activeVersion->version }} · {{ $playbook->activeVersion->title }}</p>
-                    <pre class="whitespace-pre-wrap break-words text-xs text-gray-700 bg-gray-50 rounded-md p-3 max-h-[50vh] overflow-y-auto">{{ $playbook->activeVersion->body }}</pre>
+                    <div x-show="!raw" class="rounded-md border border-gray-100 bg-gray-50 p-3 max-h-[50vh] overflow-y-auto">
+                        <x-markdown :content="$playbook->activeVersion->body" />
+                    </div>
+                    <pre x-show="raw" x-cloak class="whitespace-pre-wrap break-words text-xs text-gray-700 bg-gray-50 rounded-md p-3 max-h-[50vh] overflow-y-auto">{{ $playbook->activeVersion->body }}</pre>
                 @else
                     <p class="text-sm text-gray-400 italic">No active version — nothing from this layer composes yet.</p>
                 @endif
@@ -65,7 +75,7 @@
                  v1 proposal (only version, nothing to compare against) is approvable too --}}
             @php $pending = $versions->where('status', $V::STATUS_PROPOSED); @endphp
             @if ($pending->isNotEmpty())
-                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
+                <div class="bg-white shadow-sm sm:rounded-lg p-4 sm:p-5 space-y-3">
                     <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
                         Pending proposal{{ $pending->count() > 1 ? 's' : '' }} ({{ $pending->count() }})
                     </p>
@@ -82,7 +92,7 @@
 
             {{-- propose a change (collapsed by default so it's not shown alongside the review) --}}
             @if ($canPropose)
-                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3"
+                <div class="bg-white shadow-sm sm:rounded-lg p-4 sm:p-5 space-y-3"
                      x-data="{ proposing: @js($errors->hasAny(['title', 'summary', 'body', 'note'])) }">
                     <div class="flex items-center justify-between">
                         <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Propose a change</p>
@@ -152,15 +162,15 @@
             @endif
 
             {{-- compare versions + decide on a proposal --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3" x-data="{ editing: false }">
+            <div class="bg-white shadow-sm sm:rounded-lg p-4 sm:p-5 space-y-3" x-data="{ editing: false }">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Compare &amp; review</p>
                 @if ($versions->count() < 2)
                     <p class="text-sm text-gray-400 italic">Need at least two versions to compare.</p>
                 @else
-                    <form method="GET" class="flex flex-wrap items-end gap-2 text-sm">
+                    <form method="GET" class="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-end gap-2 text-sm">
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">From</label>
-                            <x-select name="a">
+                            <x-select name="a" class="w-full sm:w-auto">
                                 @foreach ($versions as $v)
                                     <option value="{{ $v->id }}" @selected($diffA && $diffA->is($v))>v{{ $v->version }} · {{ $v->status }}</option>
                                 @endforeach
@@ -168,13 +178,13 @@
                         </div>
                         <div>
                             <label class="block text-xs text-gray-500 mb-1">To</label>
-                            <x-select name="b">
+                            <x-select name="b" class="w-full sm:w-auto">
                                 @foreach ($versions as $v)
                                     <option value="{{ $v->id }}" @selected($diffB && $diffB->is($v))>v{{ $v->version }} · {{ $v->status }}</option>
                                 @endforeach
                             </x-select>
                         </div>
-                        <x-primary-button>Diff</x-primary-button>
+                        <x-primary-button class="col-span-2 justify-center sm:col-span-1">Diff</x-primary-button>
                     </form>
 
                     @if ($diffA && $diffB && $diffA->isNot($diffB))
@@ -233,7 +243,7 @@
             </div>
 
             {{-- version history (read-only log) --}}
-            <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
+            <div class="bg-white shadow-sm sm:rounded-lg p-4 sm:p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Version history</p>
                 <p class="text-xs text-gray-400">Decide on proposals in <span class="font-medium">Pending proposals</span> above; use <span class="font-medium">Compare &amp; review</span> to diff any two versions.</p>
                 @foreach ($versions as $v)
