@@ -75,6 +75,32 @@ class Deliverable extends Model
         self::STATUS_DONE,
     ];
 
+    /**
+     * Which board phase column a deliverable card sits in, keyed to the same 5
+     * phase keys as Task::PHASES so deliverable cards and task cards share the
+     * unified board's columns.
+     */
+    public const PHASE_COLUMN = [
+        self::STATUS_NEW => 'backlog',
+        self::STATUS_READY_FOR_PLANNING => 'backlog',
+        self::STATUS_PLANNING => 'plan',
+        self::STATUS_PLAN_REVIEW => 'plan',
+        self::STATUS_BUILDING => 'build',
+        self::STATUS_READY_FOR_AI_REVIEW => 'review',
+        self::STATUS_AI_REVIEW => 'review',
+        self::STATUS_HUMAN_ARCHITECTURE_REVIEW => 'review',
+        self::STATUS_HUMAN_FUNCTIONAL_REVIEW => 'review',
+        self::STATUS_APPROVED => 'ship',
+        self::STATUS_MERGE_DEPLOY => 'ship',
+        self::STATUS_DONE => 'ship',
+    ];
+
+    /** The board phase column this deliverable's status belongs to. */
+    public function phaseColumn(): string
+    {
+        return self::PHASE_COLUMN[$this->status] ?? 'backlog';
+    }
+
     public const LABELS = [
         self::STATUS_NEW => 'New',
         self::STATUS_READY_FOR_PLANNING => 'Ready for planning',
@@ -210,6 +236,22 @@ class Deliverable extends Model
     public static function phaseFor(string $workingStatus): ?string
     {
         return self::PHASE_FOR_WORKING[$workingStatus] ?? null;
+    }
+
+    /**
+     * Classify a transition from this deliverable's current status to $target
+     * (forward · back · cancel), reusing Task's KIND vocabulary so the shared
+     * transition controls render identically.
+     */
+    public function transitionKind(string $target): string
+    {
+        if ($target === self::STATUS_CANCELLED) {
+            return Task::KIND_CANCEL;
+        }
+
+        $forward = self::TRANSITIONS[$this->status][0] ?? null;
+
+        return $target === $forward ? Task::KIND_FORWARD : Task::KIND_BACK;
     }
 
     // ── Open-questions gate ──────────────────────────────────────────────────

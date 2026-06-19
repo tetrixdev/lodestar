@@ -78,6 +78,35 @@ class Project extends Model
         return $this->hasMany(Deliverable::class);
     }
 
+    /** The short chip label for the unified board — `code`, or a derived fallback. */
+    public function chipCode(): string
+    {
+        if (filled($this->code)) {
+            return $this->code;
+        }
+
+        // Derive: initials of the first two words, else the first 3 chars, upper-cased.
+        $words = preg_split('/\s+/', trim((string) $this->name)) ?: [];
+        if (count($words) >= 2) {
+            return strtoupper(mb_substr($words[0], 0, 1).mb_substr($words[1], 0, 1));
+        }
+
+        return strtoupper(mb_substr((string) $this->name, 0, 3));
+    }
+
+    /** The chip colour for the board — `color`, or a stable default derived from the id. */
+    public function chipColor(): string
+    {
+        if (filled($this->color)) {
+            return $this->color;
+        }
+
+        // Stable hue from the id so each project keeps a consistent colour without config.
+        $palette = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+        return $palette[$this->id % count($palette)];
+    }
+
     public function workSessions(): HasMany
     {
         return $this->hasMany(WorkSession::class);

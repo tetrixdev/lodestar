@@ -224,6 +224,8 @@ are informational — the test checks Field **names** only.
 | user_id | bigint | FK → users | The owning account. `(user_id, slug)` is unique, so a slug is unique per user, not globally. |
 | name | string | not null | The project's display name. |
 | slug | string | not null · unique per user | URL/identity slug, unique within the owner's projects. |
+| code | string | nullable | Short chip label (≤12 chars) for the unified board; falls back to a derived code when unset. |
+| color | string | nullable | Chip colour (#rrggbb[aa]); falls back to a stable id-derived colour when unset. |
 | description | text | nullable | Optional longer description of the project. |
 | primary_goal | text | nullable | The project's headline goal — what the stack of tasks is driving toward. |
 | team_id | bigint | FK → teams · nullable | The owning team, or null for a **personal** project (owner-only access). |
@@ -607,6 +609,8 @@ erDiagram
         bigint team_id FK "nullable, null = personal"
         string name
         string slug "unique per user"
+        string code "nullable, board chip label"
+        string color "nullable, board chip colour"
         text description "nullable"
         text primary_goal "nullable"
     }

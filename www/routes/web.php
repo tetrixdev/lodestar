@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\AgentTokenController;
+use App\Http\Controllers\BoardController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeliverableController;
 use App\Http\Controllers\GithubConnectionController;
 use App\Http\Controllers\McpReferenceController;
 use App\Http\Controllers\ProfileController;
@@ -19,13 +21,18 @@ use App\Http\Controllers\WorkSessionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('welcome');
+    return auth()->check() ? redirect()->route('board') : view('welcome');
 });
 
-Route::get('/dashboard', [DashboardController::class, 'index'])
+// The unified board is the authenticated landing (task #69). The old dashboard
+// inbox is folded into the board's "needs you" strip; /dashboard now redirects
+// here (its controller/views stay dormant until #70 deletes them).
+Route::get('/dashboard', fn () => redirect()->route('board'))
     ->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/board', [BoardController::class, 'index'])->name('board');
+
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
@@ -63,6 +70,15 @@ Route::middleware('auth')->group(function () {
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('/tasks/{task}/move', [TaskController::class, 'move'])->name('tasks.move');
     Route::patch('/tasks/{task}/release', [TaskController::class, 'release'])->name('tasks.release');
+
+    // Deliverables — the optional task-grouping layer + its funnel lifecycle.
+    Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store'])->name('deliverables.store');
+    Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show'])->name('deliverables.show');
+    Route::patch('/deliverables/{deliverable}', [DeliverableController::class, 'update'])->name('deliverables.update');
+    Route::patch('/deliverables/{deliverable}/move', [DeliverableController::class, 'move'])->name('deliverables.move');
+    Route::post('/deliverables/{deliverable}/tasks', [DeliverableController::class, 'addTask'])->name('deliverables.tasks.store');
+    Route::post('/deliverables/{deliverable}/questions', [DeliverableController::class, 'addQuestion'])->name('deliverables.questions.store');
+    Route::patch('/deliverables/{deliverable}/questions/{question}', [DeliverableController::class, 'answerQuestion'])->name('deliverables.questions.answer');
 
     // Teams — shared projects + approval rights. Membership is owner-managed.
     Route::get('/teams', [TeamController::class, 'index'])->name('teams.index');
