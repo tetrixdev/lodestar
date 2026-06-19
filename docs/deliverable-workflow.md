@@ -41,7 +41,7 @@ are familiar):
 | `building` | (special) | approved. Deliverable branch created. Child tasks become claimable and run in parallel. |
 | `ready_for_ai_review` | queued | all child tasks merged → queue the deliverable-level AI review |
 | `ai_review` | ai | AI reviews the **whole** deliverable diff (`base_branch...deliverable_branch`) |
-| `human_architecture_review` | human | technical review (≈ today's code review). Skippable later via settings; **always on for now.** |
+| `human_architecture_review` | human | technical review (≈ today's code review). **Always required — not skippable** (decided: we do not offer skipping the code review). |
 | `human_functional_review` | human | final thin functional sanity check — did any review-driven change break behaviour? |
 | `approved` | queued | ready to merge the deliverable branch into its base |
 | `merge_deploy` | ai | merge `deliverable_branch → base_branch` |
@@ -258,8 +258,9 @@ first, and surface that to the user before continuing other work.
 - Building blocks → fold into this deliverable: **#63** (manual-test checklist =
   functional sections), **#74** (structured plan-review = plan-review screen),
   **#73** (linked reviews ordering/dedup), **#65** (multi-repo reviews), **#75**
-  (`get_task`), **revive #30** (technical-stakeholder skip).
+  (`get_task`).
 - Sequence *with* this: **#69** (unified board), **#70** (delete old dashboard).
 - Parallel/independent: #71 (pgvector), #59, #72, #76, #61, #58, #66.
-- Out of scope: #32 (SaaS/pricing).
+- Out of scope: #32 (SaaS/pricing); **#30 (technical-stakeholder skip) — dropped:
+  the code/architecture review is always required, never skippable.**
 ```

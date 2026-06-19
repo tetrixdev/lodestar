@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Mcp\Tools;
 
 use App\Models\Deliverable;
+use App\Models\Review;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -54,6 +55,23 @@ class AdvanceDeliverableTool extends LodestarTool
             && $to === Deliverable::STATUS_READY_FOR_AI_REVIEW
             && ! $deliverable->allTasksComplete()) {
             return Response::error('Not all child tasks are done — finish (or cancel) every task before the deliverable AI review.');
+        }
+
+        // Coverage gate: the deliverable can only reach the human architecture
+        // review once it has a deliverable-scoped review whose every changed file
+        // is covered by a section (the same exhaustiveness guard as tasks — this is
+        // what forces newly-added files into sections on a re-review).
+        if ($to === Deliverable::STATUS_HUMAN_ARCHITECTURE_REVIEW) {
+            $reviews = $deliverable->reviews()->where('scope', Review::SCOPE_DELIVERABLE)->get();
+            if ($reviews->isEmpty()) {
+                return Response::error('This deliverable has no linked review. Create one (create_review scope:"deliverable") and cover its files before the human review.');
+            }
+            foreach ($reviews as $review) {
+                $coverage = $review->coverage();
+                if (! $coverage['complete']) {
+                    return Response::error("Review #{$review->id} still has uncovered files: ".implode(', ', $coverage['uncovered']).'.');
+                }
+            }
         }
 
         // Entering build: cut the integration branch identity if not set yet.
