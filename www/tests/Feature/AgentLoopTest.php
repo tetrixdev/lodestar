@@ -29,7 +29,7 @@ class AgentLoopTest extends TestCase
             ->tool(GetPlaybookTool::class, ['key' => 'work'])
             ->assertOk()
             ->assertSee('the loop')
-            ->assertSee('claim_task');
+            ->assertSee('claim_work');
     }
 
     public function test_project_page_shows_the_loop_prompt(): void

@@ -9,6 +9,7 @@ use App\Mcp\Tools\AdvanceDeliverableTool;
 use App\Mcp\Tools\ClaimWorkTool;
 use App\Mcp\Tools\GetTaskTool;
 use App\Mcp\Tools\UpsertDeliverableTool;
+use App\Mcp\Tools\UpsertTaskTool;
 use App\Models\Deliverable;
 use App\Models\Task;
 use App\Models\User;
@@ -141,6 +142,28 @@ class McpDeliverableToolsTest extends TestCase
             ->assertOk()
             ->assertSee('No work available');
         $this->assertSame(Task::STATUS_READY_FOR_DEV, $blocked->fresh()->status);
+    }
+
+    public function test_upsert_task_attaches_a_child_and_wires_dependencies(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
+        $first = $d->tasks()->create(['project_id' => $project->id, 'title' => 'First', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 0]);
+
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, [
+                'deliverable' => $d->id,
+                'title' => 'Second',
+                'depends_on' => [$first->id],
+            ])
+            ->assertOk()
+            ->assertSee('"status":"ready_for_dev"'); // child skips planning
+
+        $second = Task::where('title', 'Second')->sole();
+        $this->assertSame($d->id, $second->deliverable_id);
+        $this->assertNotNull($second->sub_id);
+        $this->assertTrue($second->dependencies->contains($first->id));
     }
 
     public function test_claim_work_takes_a_deliverable_for_planning(): void

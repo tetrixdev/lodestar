@@ -50,7 +50,7 @@ class SystemPlaybookSeeder extends Seeder
             'develop' => 'Build an approved task on its branch, with tests and doc updates.',
             'ai_review' => 'Make a developed change reviewable: sections, modes, findings.',
             'merge' => 'Ship an approved task: merge, test, deploy, mark done.',
-            'work' => 'Run the autonomous backlog loop for a project (one worker per task).',
+            'work' => 'Run the autonomous backlog loop: claim_work, spawn a worker per unit (tasks parallel in worktrees, deliverable-level sequential).',
             'docs-template' => "Starting skeleton + rules for a project's DATA-MODEL.md and ARCHITECTURE.md — load when a project lacks them.",
         ];
     }
@@ -201,6 +201,21 @@ class SystemPlaybookSeeder extends Seeder
 
                 When the plan is ready, advance the task to `plan_review` for a human.
                 Do not write code in this phase.
+
+                ── DELIVERABLES (planning the whole increment) ──
+                If you claimed a DELIVERABLE (not a task), you plan the whole thing:
+                1. Rewrite the raw `concept` into a clear spec in `body` (Why / What — in
+                   and out of scope / Done when) via upsert_deliverable (id + body +
+                   body_summary).
+                2. Write the `plan` (+ plan_summary): the structure map across the
+                   deliverable and how it DECOMPOSES into tasks.
+                3. Create each child task with upsert_task, passing `deliverable:<id>` so it
+                   attaches as a child — child tasks SKIP planning and enter at ready_for_dev.
+                   Use `depends_on:[ids]` where one task must finish before another.
+                4. Raise every decision the human must make as QUESTIONS
+                   (upsert_deliverable questions:[...]). The plan CANNOT be approved until
+                   all are answered — encode questions, never ask in your response.
+                5. advance_deliverable to `plan_review` for the human.
                 MD],
 
             'develop' => ['Develop a task', <<<'MD'
@@ -236,6 +251,33 @@ class SystemPlaybookSeeder extends Seeder
                 explaining where you left off, so the next run can pick it up. Never
                 leave the card sitting in `developing` — a card with no live worker in a
                 working state is the one thing the loop cannot recover on its own.
+
+                ── DELIVERABLE CHILD TASKS ──
+                If this task belongs to a deliverable (get_task shows it), it shares the
+                deliverable's INTEGRATION branch:
+                - Branch naming (BNC): the task branch is `D<deliverable:06d>/T<sub:02d>-<slug>`,
+                  cut from the deliverable branch `D<deliverable:06d>-<slug>` — NOT from main.
+                - Work in your OWN git worktree for that branch (`git worktree add ...`), so
+                  parallel workers never share a checkout.
+                - The human gate for a child is the FUNCTIONAL review (not code review) — the
+                  ai_review phase builds a functional walkthrough; code/architecture review
+                  happens once, later, at the deliverable level.
+
+                ── MINIMISE HUMAN WORK (always) ──
+                Anything a machine can check, it MUST: write automated tests for every logic
+                path you can, so the human review only judges business logic / UX / UI /
+                permissions. Build every outbound side-effect (mail, webhook, 3rd-party sync)
+                with a dry-run/preview so it can be verified without firing it.
+
+                ── TEST ENVIRONMENT & ISOLATION (parallel-safe) ──
+                Do NOT bring up the project's full Docker stack — sibling workers collide on
+                fixed container names. Run composer/build/tests in an ephemeral, version-
+                pinned runtime that matches production (never trust host tooling). Prefer
+                no-shared-state tests (in-memory sqlite, array mail/cache, sync queue); if a
+                real datastore is required (e.g. pgvector / Qdrant / a Postgres-only feature)
+                use an isolated per-task database, never a shared mutable dev DB. If you can't
+                run tests in isolation, STOP: create a task to fix the test environment first
+                and surface it — don't hack around it.
                 MD],
 
             'ai_review' => ['AI-review a task', <<<'MD'
@@ -303,6 +345,29 @@ class SystemPlaybookSeeder extends Seeder
                 Escalation: when a pattern repeats, lift it into a human-meaningful
                 abstraction, then mirror_guard the family. Non-human actors (agents/jobs)
                 are surfaces too — each gets a doc of its field access + validation.
+
+                ── SECURITY LENS (every review) ──
+                Always include a security pass: authz/permission checks, input validation,
+                injection, and "no credentials in the code". If a secret was committed,
+                raise a finding to ROTATE it (treat it as leaked).
+
+                ── DELIVERABLE CHILD TASK → FUNCTIONAL REVIEW ──
+                If the task belongs to a deliverable, its human gate is the FUNCTIONAL
+                review — built for a non-technical-but-involved person: business logic,
+                UX/UI, permissions. Frame each section as INPUT → OUTPUT (an input screen +
+                its result; a command + its result; an invisible output like mail/sync shown
+                via its dry-run/preview). Give each section a SHORT, COMPLETE manual_steps:
+                exactly what to run and where to look, so the human only judges whether what
+                they see is right. Do NOT do a per-task code review — that is batched at the
+                deliverable level.
+
+                ── DELIVERABLE-LEVEL REVIEW ──
+                If you claimed a DELIVERABLE in ai_review, review the WHOLE deliverable diff
+                (base_branch...deliverable branch) for architecture + code quality — the
+                batched technical review (this IS the code review). On pass, advance_deliverable
+                to `human_architecture_review`. On issues, advance_deliverable back to
+                `building` and create corrective task(s) (upsert_task on the deliverable)
+                describing the fixes — there is no separate deliverable dev cycle.
                 MD],
 
             'merge' => ['Merge & deploy a task', <<<'MD'
@@ -320,6 +385,24 @@ class SystemPlaybookSeeder extends Seeder
                 `report` a work-session LINKED TO THIS TASK (pass task_id) with what
                 shipped, then advance the task to `done`. If anything blocks the merge,
                 advance back to `approved` and report why.
+
+                ── DELIVERABLE CHILD TASK MERGE (into the deliverable branch, not main) ──
+                A child task merges into its DELIVERABLE branch:
+                1. Update your task branch from the deliverable branch FIRST:
+                   `git checkout <task-branch>; git merge <deliverable-branch>`.
+                2. If there are conflicts (another task merged ahead of you), resolve them
+                   IN the task worktree and RE-RUN the task's tests. If the resolution
+                   changed real behaviour, advance the task back to review instead of
+                   merging blind.
+                3. Merge the task branch into the deliverable branch (merge-commit, never
+                   squash) and push.
+                4. report (task_id) and advance_task to `done`. When the LAST child task is
+                   done, advance_deliverable from `building` to `ready_for_ai_review`.
+
+                ── DELIVERABLE MERGE (into base) ──
+                If you claimed a DELIVERABLE in merge, merge the deliverable branch into its
+                `base_branch` (merge-commit), run the full suite once more, then
+                advance_deliverable to `done`.
                 MD],
 
             'work' => ['Work the backlog (the loop)', <<<'MD'
@@ -333,23 +416,34 @@ class SystemPlaybookSeeder extends Seeder
                    (get_playbook phase:"main") and do its WORKSPACE SETUP for this project
                    under `~/ld-agent`.
 
-                THE LOOP (SEQUENTIAL — finish one task before starting the next):
-                2. claim_task with agent_id:"loop" (so the board shows the loop is
-                   running). It atomically takes the next ready_* card and returns it +
-                   its phase. If nothing is claimable, stop — you're done.
-                3. Spawn ONE worker subagent for that task, with a short prompt:
-                   "You are a Lodestar worker for task #<id> on project <slug>. First
-                    get_playbook(phase:'main') and do its background workspace setup, then
-                    get_playbook(task_id:<id>) and do exactly what it returns. Work ONLY this
-                    task, only under ~/ld-agent/<slug>/. report and advance_task as the
-                    playbook directs."
-                   Let it finish before moving on — one runtime, one task at a time, so
-                   nothing collides. (Running tasks in parallel would need a separate
-                   environment per worker; that's a future option, not now.)
-                4. Go back to step 2.
+                THE LOOP:
+                2. claim_work with agent_id:"loop" (so the board shows the loop is
+                   running). It atomically takes the next available unit — a DELIVERABLE
+                   or a TASK — and returns its {type, id, phase}. If nothing is claimable,
+                   stop — you're done. (claim_work only ever hands you a child task once
+                   its deliverable is `building` AND its dependencies are done, so trust
+                   that whatever it returns is ready to start now.)
+                3. Spawn ONE worker SUBAGENT per claimed unit, with a short prompt:
+                   "You are a Lodestar worker for <type> #<id> on project <slug>. First
+                    get_playbook(phase:'main') and do its workspace setup, then
+                    get_playbook(<type>_id:<id>) and do exactly what it returns. Work ONLY
+                    this <type>; report and advance_<type> as the playbook directs."
+                   (<type> is task or deliverable; pass task_id:<id> or deliverable_id:<id>.)
+                4. PARALLELISM: child tasks are isolated by git WORKTREE (see develop), so
+                   you MAY run several TASK workers at once — each makes its own worktree and
+                   never shares a checkout. Keep DELIVERABLE-level work (planning, the
+                   deliverable review, the deliverable merge) SEQUENTIAL — one at a time.
+                   Safe default: spawn up to a few task workers in parallel, then loop.
+                5. Go back to step 2 until claim_work returns nothing.
+
+                WHY PARALLEL IS SAFE (and its limit): each task worker works in its own
+                worktree + task branch and runs tests in an ephemeral, version-pinned
+                runtime — never the shared dev stack (see develop's TEST ENVIRONMENT
+                rules). If a worker needs a running app or real datastore it can't get in
+                isolation, it STOPS and files a task to fix the environment first.
 
                 INSUFFICIENT INFORMATION (never ask the user — the worker acts):
-                - The phase playbooks (plan, ai_review) tell each worker how to handle a task
+                - The phase playbooks (plan, ai_review) tell each worker how to handle work
                   that lacks information — push it back with questions, or embed questions
                   behind the plan_review gate. Trust them; never block the loop on a human.
                 MD],
