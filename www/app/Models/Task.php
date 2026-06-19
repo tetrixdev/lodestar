@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 
 /**
  * A kanban card moving through the Lodestar lifecycle.
@@ -29,6 +30,8 @@ class Task extends Model
         'claimed_at' => 'datetime',
         'start_date' => 'date',
         'due_date' => 'date',
+        'is_corrective' => 'boolean',
+        'needs_functional_review' => 'boolean',
     ];
 
     // ── Priority ─────────────────────────────────────────────────────────────
@@ -279,11 +282,39 @@ class Task extends Model
                 $task->status_changed_at = now();
             }
         });
+
+        // Assign the per-deliverable sub_id (1,2,3…) when a task is first attached
+        // to a deliverable. Drives the nested branch name D{deliverable}/T{sub_id}.
+        static::creating(function (Task $task): void {
+            if ($task->deliverable_id !== null && $task->sub_id === null) {
+                $task->sub_id = $task->deliverable->nextSubId();
+            }
+        });
     }
 
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** The deliverable this task belongs to (null = standalone task). */
+    public function deliverable(): BelongsTo
+    {
+        return $this->belongsTo(Deliverable::class);
+    }
+
+    /**
+     * The branch convention: a task under a deliverable nests its branch as
+     * D{deliverable:06d}/T{sub_id:02d}-slug; a standalone task is flat
+     * T{id:06d}-slug. See docs/deliverable-workflow.md §3.
+     */
+    public function branchName(): string
+    {
+        $slug = Str::slug($this->title);
+
+        return $this->deliverable_id !== null
+            ? sprintf('D%06d/T%02d-%s', $this->deliverable_id, (int) $this->sub_id, $slug)
+            : sprintf('T%06d-%s', $this->id, $slug);
     }
 
     /** The reviews that cover this card (openable from the card). */

@@ -21,9 +21,35 @@ class Review extends Model
 {
     protected $guarded = [];
 
+    // ── Scope (what the review targets) ──────────────────────────────────────
+
+    public const SCOPE_TASK = 'task';
+
+    public const SCOPE_DELIVERABLE = 'deliverable';
+
+    // ── Type (what kind of review) ───────────────────────────────────────────
+
+    public const TYPE_FUNCTIONAL = 'functional';   // per task; behaviour/UX/UI/permissions
+
+    public const TYPE_CODE = 'code';               // technical (task-level)
+
+    public const TYPE_ARCHITECTURE = 'architecture'; // technical (deliverable-level)
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** The deliverable this review targets (scope = deliverable; else null). */
+    public function deliverable(): BelongsTo
+    {
+        return $this->belongsTo(Deliverable::class);
+    }
+
+    /** Is this a deliverable-scoped review (whole-deliverable diff vs base_branch)? */
+    public function isDeliverableScoped(): bool
+    {
+        return $this->scope === self::SCOPE_DELIVERABLE;
     }
 
     /** The repository this review's comparison is within (null = doc-only review). */

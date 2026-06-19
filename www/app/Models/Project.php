@@ -72,6 +72,12 @@ class Project extends Model
         return $this->hasMany(Task::class);
     }
 
+    /** The deliverables (the optional task-grouping layer) on this project. */
+    public function deliverables(): HasMany
+    {
+        return $this->hasMany(Deliverable::class);
+    }
+
     public function workSessions(): HasMany
     {
         return $this->hasMany(WorkSession::class);
