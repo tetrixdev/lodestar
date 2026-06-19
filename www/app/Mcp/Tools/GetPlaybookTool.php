@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
+use App\Models\Deliverable;
 use App\Models\Playbook;
 use App\Models\Task;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -19,9 +20,10 @@ class GetPlaybookTool extends LodestarTool
     public function handle(Request $request): Response
     {
         $data = $request->validate([
-            'task_id' => ['required_without_all:phase,key', 'integer'],
-            'phase' => ['required_without_all:task_id,key', 'string', 'in:'.implode(',', Playbook::PHASES)],
-            'key' => ['required_without_all:task_id,phase', 'string', 'max:255'],
+            'task_id' => ['required_without_all:phase,key,deliverable_id', 'integer'],
+            'deliverable_id' => ['required_without_all:phase,key,task_id', 'integer'],
+            'phase' => ['required_without_all:task_id,key,deliverable_id', 'string', 'in:'.implode(',', Playbook::PHASES)],
+            'key' => ['required_without_all:task_id,phase,deliverable_id', 'string', 'max:255'],
             'project' => ['nullable', 'string'],
         ]);
 
@@ -42,6 +44,22 @@ class GetPlaybookTool extends LodestarTool
                 );
             }
             $project = $task->project;
+        } elseif (! empty($data['deliverable_id'])) {
+            $deliverable = Deliverable::query()
+                ->whereHas('project', fn ($q) => $q->accessibleBy($user))
+                ->whereKey((int) $data['deliverable_id'])
+                ->first();
+            if (! $deliverable) {
+                return Response::error('No deliverable with that id belongs to you.');
+            }
+            $key = Deliverable::phaseFor($deliverable->status);
+            if (! $key) {
+                return Response::error(
+                    "Deliverable {$deliverable->id} is in '{$deliverable->status}', which has no playbook phase. "
+                    .'Claim it first, or pass phase explicitly.'
+                );
+            }
+            $project = $deliverable->project;
         } elseif (! empty($data['project'])) {
             $project = $this->ownedProject($request, $data['project']);
             if (! $project) {
@@ -88,6 +106,7 @@ class GetPlaybookTool extends LodestarTool
     {
         return [
             'task_id' => $schema->integer()->description('A claimed task; its working state selects the phase.'),
+            'deliverable_id' => $schema->integer()->description('A claimed deliverable; its working state selects the phase.'),
             'phase' => $schema->string()->enum(Playbook::PHASES)->description('Phase to load directly (composed across scopes).'),
             'key' => $schema->string()->description('A named on-demand playbook key (resolves to the most-specific scope, no composition).'),
             'project' => $schema->string()->description('Optional project id/slug for scope resolution (team/personal/project layers).'),

@@ -238,6 +238,24 @@ class Deliverable extends Model
         return self::PHASE_FOR_WORKING[$workingStatus] ?? null;
     }
 
+    /** The ready_* states an agent may claim (deliverable-level work). */
+    public static function claimableStatuses(): array
+    {
+        return array_keys(self::CLAIM_MAP);
+    }
+
+    /** The *-ing states (an agent is actively working the deliverable itself). */
+    public static function workingStatuses(): array
+    {
+        return array_values(self::CLAIM_MAP);
+    }
+
+    /** The queue state a working deliverable returns to when released (inverse of CLAIM_MAP). */
+    public static function queueStateFor(string $workingStatus): ?string
+    {
+        return array_search($workingStatus, self::CLAIM_MAP, true) ?: null;
+    }
+
     /**
      * Classify a transition from this deliverable's current status to $target
      * (forward · back · cancel), reusing Task's KIND vocabulary so the shared
