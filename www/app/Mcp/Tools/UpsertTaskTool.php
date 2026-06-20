@@ -91,10 +91,10 @@ class UpsertTaskTool extends LodestarTool
             if (! $project) {
                 return Response::error('No project "'.$data['project'].'" belongs to you.');
             }
-            // Default the entry state from the work itself: a card that already
-            // has a plan is ready for the human's plan_review; a bare idea is new.
-            // (A deliverable child is coerced to ready_for_dev by the model.)
-            $status = $data['status'] ?? ($hasPlan ? Task::STATUS_PLAN_REVIEW : Task::STATUS_NEW);
+            // Entry from the work itself: a task that already has a plan awaits the
+            // human's plan_review; a bare task goes to the planning queue (the AI
+            // plans it). `new` is a deliverable-only backlog state — tasks skip it.
+            $status = $data['status'] ?? ($hasPlan ? Task::STATUS_PLAN_REVIEW : Task::STATUS_READY_FOR_PLANNING);
             $task = $project->tasks()->make([
                 'deliverable_id' => $deliverable?->id,
                 'status' => $status,

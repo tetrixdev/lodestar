@@ -75,7 +75,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store'])->name('deliverables.store');
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show'])->name('deliverables.show');
     Route::patch('/deliverables/{deliverable}', [DeliverableController::class, 'update'])->name('deliverables.update');
-    Route::patch('/deliverables/{deliverable}/move', [DeliverableController::class, 'move'])->name('deliverables.move');
     Route::post('/deliverables/{deliverable}/tasks', [DeliverableController::class, 'addTask'])->name('deliverables.tasks.store');
     Route::post('/deliverables/{deliverable}/questions', [DeliverableController::class, 'addQuestion'])->name('deliverables.questions.store');
     Route::patch('/deliverables/{deliverable}/questions/{question}', [DeliverableController::class, 'answerQuestion'])->name('deliverables.questions.answer');

@@ -172,7 +172,7 @@ class BoardTest extends TestCase
 
     // ── creating cards ───────────────────────────────────────────────────────
 
-    public function test_store_defaults_to_new(): void
+    public function test_store_defaults_to_ready_for_planning(): void
     {
         $user = User::factory()->create();
         $project = $this->project($user);
@@ -181,10 +181,11 @@ class BoardTest extends TestCase
             ->post("/projects/{$project->id}/tasks", ['title' => 'Fresh'])
             ->assertRedirect();
 
+        // A manually-added task goes straight to the planning queue (new is deliverable-only).
         $this->assertDatabaseHas('tasks', [
             'project_id' => $project->id,
             'title' => 'Fresh',
-            'status' => 'new',
+            'status' => 'ready_for_planning',
         ]);
     }
 

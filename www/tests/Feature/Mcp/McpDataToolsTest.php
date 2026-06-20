@@ -41,7 +41,7 @@ class McpDataToolsTest extends TestCase
         $this->assertSame('changed', $project->fresh()->description);
     }
 
-    public function test_upsert_task_defaults_to_new_and_can_be_addressed_by_slug(): void
+    public function test_upsert_task_defaults_to_ready_for_planning_and_can_be_addressed_by_slug(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
@@ -50,8 +50,9 @@ class McpDataToolsTest extends TestCase
             ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Card', 'category' => 'mcp'])
             ->assertOk();
 
+        // A bare task (no plan) queues for AI planning; `new` is deliverable-only.
         $task = $project->tasks()->sole();
-        $this->assertSame(Task::STATUS_NEW, $task->status);
+        $this->assertSame(Task::STATUS_READY_FOR_PLANNING, $task->status);
         $this->assertSame('mcp', $task->category);
     }
 

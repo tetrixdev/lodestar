@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Support;
 
-use App\Support\Markdown;
 use Caxy\HtmlDiff\HtmlDiff;
 use Illuminate\Support\Str;
 

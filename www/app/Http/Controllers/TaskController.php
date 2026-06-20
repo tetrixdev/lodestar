@@ -72,7 +72,9 @@ class TaskController extends Controller
             'due_date' => ['nullable', 'date'],
         ]);
 
-        $status = $data['status'] ?? Task::STATUS_NEW;
+        // A manually-added task goes straight to the planning queue (the AI plans it).
+        // `new` is a deliverable-only backlog state — tasks don't sit there.
+        $status = $data['status'] ?? Task::STATUS_READY_FOR_PLANNING;
 
         $project->tasks()->create([
             'title' => $data['title'],

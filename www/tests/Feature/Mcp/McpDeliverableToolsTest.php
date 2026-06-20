@@ -178,7 +178,7 @@ class McpDeliverableToolsTest extends TestCase
                 'depends_on' => [$first->id],
             ])
             ->assertOk()
-            ->assertSee('"status":"new"'); // a bare child starts as new (no plan passed)
+            ->assertSee('"status":"ready_for_planning"'); // a bare child queues for AI planning
 
         $second = Task::where('title', 'Second')->sole();
         $this->assertSame($d->id, $second->deliverable_id);

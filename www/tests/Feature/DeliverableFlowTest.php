@@ -62,47 +62,6 @@ class DeliverableFlowTest extends TestCase
         $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'New deliverable', 'status' => 'new']);
     }
 
-    public function test_illegal_lifecycle_move_is_rejected(): void
-    {
-        $user = User::factory()->create();
-        $project = $this->project($user, 'Alpha');
-        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_NEW]);
-
-        $this->actingAs($user)->from(route('deliverables.show', $d))
-            ->patch(route('deliverables.move', $d), ['status' => Deliverable::STATUS_DONE])
-            ->assertSessionHasErrors('status');
-
-        $this->assertSame(Deliverable::STATUS_NEW, $d->fresh()->status);
-    }
-
-    public function test_plan_approval_is_blocked_until_questions_answered(): void
-    {
-        $user = User::factory()->create();
-        $project = $this->project($user, 'Alpha');
-        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_PLAN_REVIEW]);
-        $q = $d->questions()->create(['question' => 'Which provider?', 'position' => 0]);
-
-        // Blocked while unanswered.
-        $this->actingAs($user)->from(route('deliverables.show', $d))
-            ->patch(route('deliverables.move', $d), ['status' => Deliverable::STATUS_BUILDING])
-            ->assertSessionHasErrors('status');
-        $this->assertSame(Deliverable::STATUS_PLAN_REVIEW, $d->fresh()->status);
-
-        // Answer it, then approval succeeds and the branch is stamped.
-        $this->actingAs($user)
-            ->patch(route('deliverables.questions.answer', [$d, $q->id]), ['answer' => 'Sanctum'])
-            ->assertRedirect();
-
-        $this->actingAs($user)
-            ->patch(route('deliverables.move', $d), ['status' => Deliverable::STATUS_BUILDING])
-            ->assertRedirect();
-
-        $fresh = $d->fresh();
-        $this->assertSame(Deliverable::STATUS_BUILDING, $fresh->status);
-        $this->assertNotNull($fresh->branch);
-        $this->assertSame('main', $fresh->base_branch);
-    }
-
     public function test_dashboard_redirects_to_board(): void
     {
         $user = User::factory()->create();

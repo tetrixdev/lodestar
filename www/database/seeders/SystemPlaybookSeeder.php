@@ -76,6 +76,8 @@ class SystemPlaybookSeeder extends Seeder
                   interactive default above.
 
                 HOW WE WORK — the method (applies in every phase):
+                - YAGNI. Build only what the current task needs — no speculative fields,
+                  options, abstractions or "for later" code. Delete what's no longer used.
                 - DOCS ARE THE CONTRACT. Each project keeps two living docs the human
                   reviews INSTEAD of the code: DATA-MODEL.md (the nouns — tables, fields,
                   relations) and ARCHITECTURE.md (the verbs — components, flows, and
