@@ -37,6 +37,24 @@ class CreateReviewTool extends LodestarTool
             return Response::error('No project "'.$data['project'].'" belongs to you.');
         }
 
+        // Guard against duplicate open reviews: a task may have only one review
+        // awaiting a verdict at a time. Each re-review round creates a fresh
+        // review, but only AFTER the previous one is concluded — otherwise the
+        // task page accrues parallel open reviews the human can't reconcile.
+        if (! empty($data['task_ids'])) {
+            $blocked = $project->tasks()
+                ->whereIn('tasks.id', $data['task_ids'])
+                ->whereHas('reviews', fn ($q) => $q->whereNull('outcome'))
+                ->pluck('tasks.id');
+
+            if ($blocked->isNotEmpty()) {
+                return Response::error(
+                    'Task(s) '.$blocked->implode(', ').' already have an open review awaiting a verdict. '
+                    .'Conclude it before opening another, or drop those task_ids from this review.'
+                );
+            }
+        }
+
         // A comparison review resolves to one of the project's linked repositories
         // and reads GitHub through that repo's connection token.
         $files = [];

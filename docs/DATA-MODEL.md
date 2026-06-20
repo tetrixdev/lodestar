@@ -49,8 +49,11 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   / done), an `intro` preamble, and `assigned_to_user_id` — the human currently
   holding the review. A human must **atomically self-assign** a review before
   they may sign off its sections (the human mirror of an agent claiming a task).
-  A review covers many tasks and a task can appear in many reviews (the
-  `review_task` pivot).
+  `concluded_at` records when the human applied the outcome (the "responded"
+  time, paired with `created_at` as "requested"). A review covers many tasks and
+  a task can appear in many reviews (the `review_task` pivot) — but a task may
+  have only **one open review** (no `outcome` yet) at a time; create_review
+  refuses to open a second while one is still awaiting a verdict.
 - **GithubConnection** — one GitHub account/token a user has linked. `label`
   ("work"/"personal"), the resolved `github_login`, and the `token` (stored
   **encrypted**). A user may have several; each Repository is read through one.
@@ -308,6 +311,7 @@ are informational — the test checks Field **names** only.
 | assigned_to_user_id | bigint | FK → users · nullable | The human currently holding the review (atomic self-assign before sign-off). |
 | repository_id | bigint | FK → repositories · nullable | The repository the comparison runs within. |
 | outcome | string | nullable | `approved` / `changes_requested`, set when the human concludes the review. |
+| concluded_at | timestamp | nullable | When the human applied the outcome (the "responded" time). Null while the review is still open; `created_at` is the "requested" time. |
 | base_sha | string | nullable | The resolved commit SHA of `base_ref`. |
 | head_sha | string | nullable | The resolved commit SHA of `head_ref`. |
 

@@ -263,7 +263,7 @@ class ReviewController extends Controller
 
         DB::transaction(function () use ($review, $verdict, &$moved) {
             if ($verdict === 'approved') {
-                $review->update(['outcome' => 'approved', 'status' => 'done']);
+                $review->update(['outcome' => 'approved', 'status' => 'done', 'concluded_at' => now()]);
                 foreach ($review->tasks as $task) {
                     if ($task->status === Task::STATUS_HUMAN_REVIEW
                         && $task->canTransitionTo(Task::STATUS_APPROVED)) {
@@ -281,7 +281,7 @@ class ReviewController extends Controller
 
             // changes_requested
             $notes = $this->compileReworkNotes($review);
-            $review->update(['outcome' => 'changes_requested', 'status' => 'done']);
+            $review->update(['outcome' => 'changes_requested', 'status' => 'done', 'concluded_at' => now()]);
             foreach ($review->tasks as $task) {
                 if ($task->status === Task::STATUS_HUMAN_REVIEW
                     && $task->canTransitionTo(Task::STATUS_READY_FOR_DEV)) {

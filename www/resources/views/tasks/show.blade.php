@@ -257,12 +257,24 @@
                             default => [$review->status ?? 'open', 'bg-gray-100 text-gray-600'],
                         };
                     @endphp
-                    <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                        <a href="{{ route('reviews.show', $review) }}" class="text-indigo-600 hover:underline truncate">{{ $review->title }}</a>
-                        <span class="flex shrink-0 items-center gap-2 text-xs text-gray-500">
-                            <span class="rounded px-1.5 py-0.5 font-medium {{ $outcomeClass }}">{{ $outcomeLabel }}</span>
-                            <span>{{ $cov['covered'] }}/{{ $cov['total'] }} files</span>
-                        </span>
+                    <div class="space-y-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                        <div class="flex items-center justify-between gap-3 text-sm">
+                            <a href="{{ route('reviews.show', $review) }}" class="text-indigo-600 hover:underline truncate">{{ $review->title }}</a>
+                            <span class="flex shrink-0 items-center gap-2 text-xs text-gray-500">
+                                <span class="rounded px-1.5 py-0.5 font-medium {{ $outcomeClass }}">{{ $outcomeLabel }}</span>
+                                <span>{{ $cov['covered'] }}/{{ $cov['total'] }} files</span>
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[11px] text-gray-400">
+                            <span title="{{ $review->created_at }}">Requested {{ $review->created_at->diffForHumans() }}</span>
+                            @if ($review->concluded_at)
+                                <span aria-hidden="true">·</span>
+                                <span title="{{ $review->concluded_at }}">Responded {{ $review->concluded_at->diffForHumans() }}</span>
+                            @else
+                                <span aria-hidden="true">·</span>
+                                <span class="text-amber-600">Awaiting response</span>
+                            @endif
+                        </div>
                     </div>
                 @empty
                     <p class="text-sm text-gray-400 italic">No reviews cover this task yet.</p>

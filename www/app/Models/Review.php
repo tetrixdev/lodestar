@@ -21,6 +21,23 @@ class Review extends Model
 {
     protected $guarded = [];
 
+    protected function casts(): array
+    {
+        return [
+            'concluded_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * Open = not yet concluded (no outcome recorded). An open review is the one
+     * a human still has to act on; the duplicate-review guard keys off this so a
+     * task can't accumulate two reviews awaiting a verdict at once.
+     */
+    public function isOpen(): bool
+    {
+        return $this->outcome === null;
+    }
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);

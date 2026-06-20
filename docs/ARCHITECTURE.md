@@ -236,11 +236,16 @@ the human triages (approve / dismiss / must_fix). Once every section is decided 
 drives the linked task(s) — *approve* → `human_review → approved` (clearing any
 stale `rework_notes` from an earlier round); *changes* → `human_review →
 ready_for_dev` with the compiled rework brief (changes_requested notes + must_fix
-findings) written to the task's `rework_notes`. The review's `outcome` is recorded
-and it freezes to `done`. Re-review creates a **fresh Review** each round (the
-`review_task` pivot is many-to-many), so the rounds accumulate as history — the
-task page lists its linked reviews oldest-first with their outcome. This closes the loop: a human
-review can send work straight back to the developer without leaving the screen.
+findings) written to the task's `rework_notes`. The review's `outcome` is recorded,
+its `concluded_at` is stamped, and it freezes to `done`. Re-review creates a
+**fresh Review** each round (the `review_task` pivot is many-to-many), so the
+rounds accumulate as history — the task page lists its linked reviews
+**newest-first**, each showing when it was *requested* (`created_at`) and
+*responded* to (`concluded_at`, or "awaiting response" while open). To keep that
+history legible, **create_review refuses to open a second review for a task that
+already has an open one** (no `outcome` yet): each round's review must be
+concluded before the next is opened. This closes the loop: a human review can
+send work straight back to the developer without leaving the screen.
 
 ### The agent loop (claim → playbook → work → advance → report)
 

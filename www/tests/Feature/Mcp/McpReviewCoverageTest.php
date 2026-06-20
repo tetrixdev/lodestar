@@ -200,4 +200,29 @@ class McpReviewCoverageTest extends TestCase
         ])->assertOk();
         $this->assertSame(Task::STATUS_HUMAN_REVIEW, $task->fresh()->status);
     }
+
+    public function test_a_second_review_is_refused_while_one_is_still_open(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
+
+        // First review opens fine.
+        LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
+            'project' => 'p', 'title' => 'Round one', 'task_ids' => [$task->id],
+        ])->assertOk();
+
+        // Second one, while the first has no outcome yet, is refused.
+        LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
+            'project' => 'p', 'title' => 'Round two', 'task_ids' => [$task->id],
+        ])->assertHasErrors();
+        $this->assertSame(1, $task->reviews()->count(), 'no second review was created');
+
+        // Conclude the first; a fresh review for the next round is then allowed.
+        $task->reviews()->first()->update(['outcome' => 'approved', 'status' => 'done']);
+        LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
+            'project' => 'p', 'title' => 'Round two', 'task_ids' => [$task->id],
+        ])->assertOk();
+        $this->assertSame(2, $task->reviews()->count());
+    }
 }

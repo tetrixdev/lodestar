@@ -286,10 +286,12 @@ class Task extends Model
         return $this->belongsTo(Project::class);
     }
 
-    /** The reviews that cover this card (openable from the card). */
+    /** The reviews that cover this card (openable from the card), newest-first. */
     public function reviews(): BelongsToMany
     {
-        return $this->belongsToMany(Review::class)->withTimestamps();
+        return $this->belongsToMany(Review::class)
+            ->withTimestamps()
+            ->orderByDesc('reviews.created_at');
     }
 
     public function workSessions(): HasMany

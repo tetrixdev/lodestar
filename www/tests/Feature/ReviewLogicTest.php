@@ -239,6 +239,7 @@ class ReviewLogicTest extends TestCase
 
         $this->assertSame('approved', $review->fresh()->outcome);
         $this->assertSame('done', $review->fresh()->status);
+        $this->assertNotNull($review->fresh()->concluded_at, 'conclude stamps the responded time');
         $this->assertSame(Task::STATUS_APPROVED, $task->fresh()->status);
         $this->assertNull($task->fresh()->rework_notes, 'approval clears the stale rework brief');
         $this->assertDatabaseHas('task_events', ['task_id' => $task->id, 'type' => 'review_approved']);
@@ -293,6 +294,7 @@ class ReviewLogicTest extends TestCase
 
         $this->assertSame('changes_requested', $review->fresh()->outcome);
         $this->assertSame('done', $review->fresh()->status);
+        $this->assertNotNull($review->fresh()->concluded_at, 'conclude stamps the responded time');
 
         $task = $task->fresh();
         $this->assertSame(Task::STATUS_READY_FOR_DEV, $task->status);

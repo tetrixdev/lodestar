@@ -145,4 +145,47 @@ class TaskDetailTest extends TestCase
 
         $this->assertSame('TL;DR.', $task->fresh()->body_summary);
     }
+
+    public function test_linked_reviews_are_listed_newest_first(): void
+    {
+        $user = User::factory()->create();
+        $task = $this->makeTask($user);
+
+        // Created out of order; the relation must surface the newer one first.
+        $older = $task->project->reviews()->create(['title' => 'Round one', 'status' => 'done']);
+        $older->forceFill(['created_at' => now()->subDay()])->save();
+        $newer = $task->project->reviews()->create(['title' => 'Round two', 'status' => 'draft']);
+        $task->reviews()->attach([$older->id, $newer->id]);
+
+        $this->assertSame(
+            ['Round two', 'Round one'],
+            $task->fresh()->reviews->pluck('title')->all(),
+        );
+
+        $html = $this->actingAs($user)->get(route('tasks.show', $task))->assertOk()->getContent();
+        $this->assertLessThan(
+            strpos($html, 'Round one'),
+            strpos($html, 'Round two'),
+            'the newer review should render above the older one',
+        );
+    }
+
+    public function test_linked_reviews_show_requested_and_responded_state(): void
+    {
+        $user = User::factory()->create();
+        $task = $this->makeTask($user);
+
+        $open = $task->project->reviews()->create(['title' => 'Still open', 'status' => 'in_review']);
+        $done = $task->project->reviews()->create([
+            'title' => 'Concluded', 'status' => 'done', 'outcome' => 'approved', 'concluded_at' => now(),
+        ]);
+        $task->reviews()->attach([$open->id, $done->id]);
+
+        $this->actingAs($user)
+            ->get(route('tasks.show', $task))
+            ->assertOk()
+            ->assertSee('Requested')
+            ->assertSee('Awaiting response')
+            ->assertSee('Responded');
+    }
 }
