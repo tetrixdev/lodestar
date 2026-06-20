@@ -25,7 +25,7 @@
 
             {{-- header / meta --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3"
-                 x-data="{ editing: @js($errors->hasAny(['title','category','base_branch','concept','concept_summary','body','body_summary','plan','plan_summary'])) }">
+                 x-data="{ editing: @js($errors->hasAny(['title','category','base_branch','concept','concept_summary','body','body_summary'])) }">
                 <div class="flex items-start justify-between gap-3">
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="inline-block text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ $statusLabel }}</span>
@@ -65,7 +65,7 @@
                             <x-text-input id="d-base" name="base_branch" type="text" class="mt-1 block w-full" :value="old('base_branch', $deliverable->base_branch)" placeholder="main" />
                         </div>
                     </div>
-                    @foreach (['concept' => 'Concept (raw)', 'body' => 'Spec (rewritten)', 'plan' => 'Plan'] as $field => $label)
+                    @foreach (['concept' => 'Concept (raw)', 'body' => 'Scope'] as $field => $label)
                         <div>
                             <x-input-label :for="'d-'.$field.'-summary'" :value="$label.' summary'" />
                             <textarea id="d-{{ $field }}-summary" name="{{ $field }}_summary" rows="2"
@@ -134,18 +134,14 @@
                     </div>
                 @endif
 
-                {{-- concept / spec / plan --}}
+                {{-- scope (a deliverable is a scope, not a plan — the plan is its tasks) --}}
                 <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                     <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Concept (as written)</p>
                     <x-detail-block title="Concept" :summary="$deliverable->concept_summary" :full="$deliverable->concept" empty="No concept yet." />
                 </div>
                 <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
-                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Spec (rewritten)</p>
-                    <x-detail-block title="Spec" :summary="$deliverable->body_summary" :full="$deliverable->body" empty="Not rewritten yet — the planning agent does this." />
-                </div>
-                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
-                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Plan</p>
-                    <x-detail-block title="Plan" :summary="$deliverable->plan_summary" :full="$deliverable->plan" empty="No plan yet." />
+                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Scope</p>
+                    <x-detail-block title="Scope" :summary="$deliverable->body_summary" :full="$deliverable->body" empty="No refined scope yet." />
                 </div>
 
                 {{-- child tasks --}}

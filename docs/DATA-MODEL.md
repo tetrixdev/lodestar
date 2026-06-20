@@ -297,8 +297,6 @@ are informational — the test checks Field **names** only.
 | concept_summary | text | nullable | TL;DR of `concept`. |
 | body | text | nullable | The rewritten spec in our format (planning playbook does the rewrite). |
 | body_summary | text | nullable | TL;DR of `body`. |
-| plan | text | nullable | The planning artifact (markdown) that decomposes into child tasks. |
-| plan_summary | text | nullable | TL;DR of `plan`. |
 | status | string | not null · default `new` | One of the deliverable lifecycle states (see App\Models\Deliverable). |
 | status_changed_at | timestamp | nullable | When the deliverable last entered its current status; stamped automatically. |
 | position | integer | not null · default 0 | Orders deliverables within a status. |
@@ -743,8 +741,6 @@ erDiagram
         text concept_summary "nullable, TL;DR of concept"
         text body "nullable, rewritten spec"
         text body_summary "nullable, TL;DR of body"
-        text plan "nullable, planning artifact (markdown)"
-        text plan_summary "nullable, TL;DR of plan"
         string status "deliverable lifecycle state"
         timestamp status_changed_at "nullable, entered-current-status time"
         integer position "order within status"

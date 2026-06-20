@@ -42,15 +42,15 @@ class McpDeliverableToolsTest extends TestCase
             ->tool(UpsertDeliverableTool::class, [
                 'project' => 'p',
                 'title' => 'Ship v1',
-                'plan' => 'do the things',
-                'plan_summary' => 'things',
+                'body' => 'The scope of v1',
+                'body_summary' => 'v1 scope',
                 'questions' => ['Which auth?', 'Which db?'],
             ])
             ->assertOk()
-            ->assertSee('"status":"plan_review"') // a plan defaults into plan_review
+            ->assertSee('"status":"new"') // a deliverable always enters at backlog
             ->assertSee('"open_questions":2');
 
-        $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'Ship v1', 'status' => 'plan_review']);
+        $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'Ship v1', 'status' => 'new']);
     }
 
     public function test_advance_deliverable_enforces_question_gate_then_stamps_branch(): void
