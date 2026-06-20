@@ -20,6 +20,28 @@
                             <code class="bg-gray-100 px-1 rounded">{{ $review->head_ref ?? '?' }}</code>
                         </p>
                     @endif
+                    @php
+                        $reviewBranch = $review->isDeliverableScoped() ? optional($review->deliverable)->branch : $review->head_ref;
+                        $typeBadge = $review->isDeliverableScoped()
+                            ? 'Deliverable · '.ucfirst($review->review_type)
+                            : ($review->review_type === \App\Models\Review::TYPE_FUNCTIONAL ? 'Functional review' : 'Code review');
+                        $testInstructions = $reviewBranch
+                            ? "git fetch && git checkout {$reviewBranch} && git pull\n# bring the app up (see the project README), then work the steps below"
+                            : null;
+                    @endphp
+                    <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                        <span class="text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-indigo-50 text-indigo-700">{{ $typeBadge }}</span>
+                        @if ($testInstructions)
+                            <div x-data="{ copied: false }">
+                                <button type="button"
+                                        @click="navigator.clipboard.writeText(@js($testInstructions)); copied = true; setTimeout(() => copied = false, 1500)"
+                                        class="inline-flex items-center gap-1 text-[11px] font-medium rounded-md border border-gray-300 bg-white px-2 py-0.5 text-gray-700 hover:bg-gray-50"
+                                        title="Copy: pull the right branch and bring the app up to test">
+                                    <span x-text="copied ? 'Copied!' : 'Copy test instructions'"></span>
+                                </button>
+                            </div>
+                        @endif
+                    </div>
                 </div>
             </div>
 
@@ -147,8 +169,12 @@
                               x-text="signedOff ? '✓' : '{{ $i + 1 }}'"></span>
                         <div class="flex-1">
                             <h3 class="font-semibold text-gray-900">{{ $s->title }}</h3>
-                            <p class="text-xs text-gray-400">{{ str_replace('_', ' ', $s->mode) }}</p>
+                            <p class="text-xs text-gray-400">{{ str_replace('_', ' ', $s->mode) }}{{ $s->kind ? ' · '.str_replace('_', ' ', $s->kind) : '' }}</p>
                         </div>
+                        @if ($s->stale)
+                            <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-amber-100 text-amber-700"
+                                  title="{{ $s->change_note }}">Re-review</span>
+                        @endif
                         <span class="text-gray-300 text-sm" x-text="open ? '▲' : '▼'"></span>
                     </header>
 
@@ -156,6 +182,16 @@
                         @if ($s->context)
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Where this fits</p>
                             <p class="text-sm text-gray-600 mb-3">{{ $s->context }}</p>
+                        @endif
+                        @if ($s->stale && $s->change_note)
+                            <p class="text-[11px] font-medium text-amber-600 uppercase tracking-wide mb-1">What changed since you last reviewed</p>
+                            <p class="text-sm text-amber-700 mb-3">{{ $s->change_note }}</p>
+                        @endif
+                        @if ($s->manual_steps)
+                            <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">How to test — follow each step</p>
+                            <div class="text-sm text-gray-700 mb-3 rounded-md bg-gray-50 border border-gray-100 p-3">
+                                <x-markdown :content="$s->manual_steps" />
+                            </div>
                         @endif
                         @if ($s->link)
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Open</p>
