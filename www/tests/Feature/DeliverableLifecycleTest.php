@@ -8,6 +8,7 @@ use App\Models\Review;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class DeliverableLifecycleTest extends TestCase
@@ -264,5 +265,62 @@ class DeliverableLifecycleTest extends TestCase
         $this->assertNull($fresh->decision);
         $this->assertTrue($fresh->stale);
         $this->assertSame('Task T03 touched app/Models/Review.php on merge', $fresh->change_note);
+    }
+
+    // ── branch / base_branch are set at creation, not lazily ──────────────────
+
+    public function test_creating_a_deliverable_stamps_branch_and_defaults_base_branch(): void
+    {
+        $project = $this->project(User::factory()->create());
+        $d = $project->deliverables()->create([
+            'title' => 'Ship the engine',
+            'status' => Deliverable::STATUS_NEW,
+        ]);
+
+        // branch is stamped from branchName() (D{id:06d}-slug) on create — no lazy wait.
+        $this->assertSame(sprintf('D%06d-ship-the-engine', $d->id), $d->branch);
+        // base_branch is required input and defaults to main when not provided.
+        $this->assertSame('main', $d->base_branch);
+    }
+
+    public function test_explicit_branch_and_base_branch_are_preserved(): void
+    {
+        $project = $this->project(User::factory()->create());
+        $d = $project->deliverables()->create([
+            'title' => 'v0.5',
+            'status' => Deliverable::STATUS_NEW,
+            'branch' => 'D000001-v0-5',
+            'base_branch' => 'baseline-laravel', // a TAG — the whole-app review baseline
+        ]);
+
+        $this->assertSame('D000001-v0-5', $d->branch);
+        $this->assertSame('baseline-laravel', $d->base_branch);
+    }
+
+    public function test_branch_columns_are_not_null_in_the_schema(): void
+    {
+        $columns = collect(Schema::getColumns('deliverables'))->keyBy('name');
+
+        $this->assertFalse($columns['branch']['nullable'], 'deliverables.branch must be NOT NULL');
+        $this->assertFalse($columns['base_branch']['nullable'], 'deliverables.base_branch must be NOT NULL');
+    }
+
+    public function test_store_requires_base_branch_and_auto_sets_branch(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        // base_branch is required input on the web create form.
+        $this->actingAs($user)
+            ->post(route('deliverables.store', $project), ['title' => 'No base'])
+            ->assertSessionHasErrors('base_branch');
+
+        $this->actingAs($user)
+            ->post(route('deliverables.store', $project), ['title' => 'With base', 'base_branch' => 'main'])
+            ->assertRedirect();
+
+        $d = $project->deliverables()->where('title', 'With base')->sole();
+        $this->assertSame('main', $d->base_branch);
+        $this->assertSame(sprintf('D%06d-with-base', $d->id), $d->branch);
     }
 }

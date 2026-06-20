@@ -310,8 +310,8 @@ are informational — the test checks Field **names** only.
 | status | string | not null · default `new` | One of the deliverable lifecycle states (see App\Models\Deliverable). |
 | status_changed_at | timestamp | nullable | When the deliverable last entered its current status; stamped automatically. |
 | position | integer | not null · default 0 | Orders deliverables within a status. |
-| branch | string | nullable | The integration branch `D{id:06d}-slug`. |
-| base_branch | string | nullable | What the branch is cut from / diffed against (the deliverable diff is `base_branch...branch`). |
+| branch | string | not null | The integration branch `D{id:06d}-slug`; stamped automatically at creation. |
+| base_branch | string | not null · default `main` | What the branch is cut from / diffed against (the deliverable diff is `base_branch...branch`). Required at creation. May be a tag / whole-app baseline (e.g. v0.5 → `baseline-laravel`). |
 | claimed_by | string | nullable | The agent holding a working (`*-ing`) deliverable; set by the atomic claim. |
 | claimed_at | timestamp | nullable | When the deliverable was claimed. |
 | deleted_at | timestamp | nullable | Soft-delete marker (SoftDeletes); a deliverable is never physically removed. |
@@ -756,8 +756,8 @@ erDiagram
         string status "deliverable lifecycle state"
         timestamp status_changed_at "nullable, entered-current-status time"
         integer position "order within status"
-        string branch "nullable, D{id}-slug integration branch"
-        string base_branch "nullable, cut-from / diff-against"
+        string branch "D{id}-slug integration branch, stamped at creation"
+        string base_branch "cut-from / diff-against (branch or tag/baseline), default main"
         string claimed_by "nullable, agent holding a *-ing deliverable"
         timestamp claimed_at "nullable, when it was claimed"
         timestamp deleted_at "nullable, soft-delete marker"

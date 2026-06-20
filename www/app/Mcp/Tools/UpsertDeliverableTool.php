@@ -87,7 +87,7 @@ class UpsertDeliverableTool extends LodestarTool
             'id' => $schema->integer()->description('Existing deliverable id to update. Omit to create.'),
             'title' => $schema->string()->description('Deliverable title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix.'),
-            'base_branch' => $schema->string()->description('The branch the deliverable is cut from and diffed against (e.g. main).'),
+            'base_branch' => $schema->string()->description('The ref the deliverable is cut from and diffed against (a branch — e.g. main — or a tag / whole-app baseline). Defaults to main when creating; stamped at creation along with branch (D{id:06d}-slug).'),
             'concept' => $schema->string()->description('The raw goal/scope as the user wrote it. If set you MUST also pass concept_summary.'),
             'concept_summary' => $schema->string()->description('Required when concept is set: a 1–2 sentence TL;DR.'),
             'body' => $schema->string()->description('The refined SCOPE in our format (Why / What — in & out / Done when). A deliverable is a scope, not a plan — the plan is the set of child tasks. If set you MUST also pass body_summary.'),

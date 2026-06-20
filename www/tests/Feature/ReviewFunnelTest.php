@@ -9,8 +9,10 @@ use App\Mcp\Tools\AdvanceDeliverableTool;
 use App\Mcp\Tools\CreateReviewTool;
 use App\Models\Deliverable;
 use App\Models\Review;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class ReviewFunnelTest extends TestCase
@@ -86,7 +88,7 @@ class ReviewFunnelTest extends TestCase
         $this->assertNotNull($task, 'a corrective task should be spawned');
         $this->assertTrue($task->is_corrective);
         $this->assertFalse($task->needs_functional_review, 'spawned fix skips the per-task human review');
-        $this->assertSame(\App\Models\Task::STATUS_READY_FOR_DEV, $task->status, 'fix skips planning');
+        $this->assertSame(Task::STATUS_READY_FOR_DEV, $task->status, 'fix skips planning');
         $this->assertStringContainsString('The auth flow is wrong.', (string) $task->body);
         $this->assertStringContainsString('Token leaks in logs', (string) $task->body);
         // The new non-merged task keeps the deliverable in BUILD.
@@ -95,9 +97,22 @@ class ReviewFunnelTest extends TestCase
 
     public function test_create_review_makes_a_deliverable_scoped_architecture_review(): void
     {
+        // A deliverable always carries branch + base_branch now (set at creation), so a
+        // deliverable review defaults its diff to base_branch...branch and fetches it.
+        Http::fake([
+            'api.github.com/repos/o/r/commits/main' => Http::response(['sha' => 'base-sha'], 200),
+            'api.github.com/repos/o/r/commits/D*' => Http::response(['sha' => 'head-sha'], 200),
+            'api.github.com/repos/o/r/compare/*' => Http::response([
+                'files' => [['filename' => 'a.php', 'status' => 'modified', 'patch' => '@@', 'additions' => 1, 'deletions' => 0]],
+            ], 200),
+        ]);
+
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        // No branch/base on the deliverable → no GitHub fetch, just the typed review.
+        $conn = $user->githubConnections()->create(['label' => 't', 'token' => 'tok', 'github_login' => 'tester']);
+        $repo = $conn->repositories()->create(['full_name' => 'o/r', 'default_branch' => 'main']);
+        $project->repositories()->attach($repo);
+
         $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_AI_REVIEW]);
 
         LodestarServer::actingAs($user)
@@ -106,7 +121,10 @@ class ReviewFunnelTest extends TestCase
             ->assertSee('"scope":"deliverable"')
             ->assertSee('"review_type":"architecture"');
 
-        $this->assertDatabaseHas('reviews', ['deliverable_id' => $d->id, 'scope' => 'deliverable', 'review_type' => 'architecture']);
+        $this->assertDatabaseHas('reviews', [
+            'deliverable_id' => $d->id, 'scope' => 'deliverable', 'review_type' => 'architecture',
+            'base_ref' => 'main', 'head_ref' => $d->branch, 'base_branch' => 'main',
+        ]);
     }
 
     public function test_create_review_makes_a_functional_task_review(): void

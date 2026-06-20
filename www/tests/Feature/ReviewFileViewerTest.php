@@ -6,6 +6,7 @@ namespace Tests\Feature;
 
 use App\Mcp\Servers\LodestarServer;
 use App\Mcp\Tools\CreateReviewTool;
+use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\Review;
 use App\Models\User;
@@ -114,6 +115,47 @@ class ReviewFileViewerTest extends TestCase
         $file = $review->files()->sole();
         $this->assertSame('@@ -1 +1 @@', $file->patch);
         $this->assertSame(2, $file->additions);
+    }
+
+    public function test_deliverable_review_diffs_against_base_branch_as_the_diff_base(): void
+    {
+        // base_branch may be a TAG (v0.5 → baseline-laravel) — a valid diff base.
+        Http::fake([
+            'api.github.com/repos/o/r/commits/baseline-laravel' => Http::response(['sha' => 'tag-sha'], 200),
+            'api.github.com/repos/o/r/commits/D000001-v0-5' => Http::response(['sha' => 'head-sha'], 200),
+            'api.github.com/repos/o/r/compare/*' => Http::response([
+                'files' => [['filename' => 'app/Foo.php', 'status' => 'added', 'patch' => '@@', 'additions' => 1, 'deletions' => 0]],
+            ], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project);
+
+        $deliverable = $project->deliverables()->create([
+            'title' => 'v0.5',
+            'status' => Deliverable::STATUS_READY_FOR_AI_REVIEW,
+            'branch' => 'D000001-v0-5',
+            'base_branch' => 'baseline-laravel',
+        ]);
+
+        LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
+            'project' => 'p', 'title' => 'Deliverable review', 'repo' => 'o/r',
+            'scope' => Review::SCOPE_DELIVERABLE, 'deliverable' => $deliverable->id,
+        ])->assertOk();
+
+        $review = $project->reviews()->sole();
+        // The deliverable's base_branch is the diff base; its branch is the head.
+        $this->assertSame('baseline-laravel', $review->base_ref);
+        $this->assertSame('D000001-v0-5', $review->head_ref);
+        $this->assertSame('tag-sha', $review->base_sha);
+        $this->assertSame('head-sha', $review->head_sha);
+        $this->assertSame('baseline-laravel', $review->base_branch);
+
+        // The compare endpoint was called with base_branch...branch.
+        Http::assertSent(fn ($request) => str_contains(
+            $request->url(), '/compare/baseline-laravel...D000001-v0-5'
+        ));
     }
 
     // --- file endpoint -------------------------------------------------------

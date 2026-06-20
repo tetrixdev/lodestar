@@ -28,14 +28,17 @@ class DeliverableController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'max:60'],
             'concept' => ['nullable', 'string'],
-            'base_branch' => ['nullable', 'string', 'max:200'],
+            // The diff-base — required. A branch, or a tag / whole-app baseline.
+            'base_branch' => ['required', 'string', 'max:200'],
         ]);
 
+        // `branch` is stamped automatically at creation (D{id:06d}-slug); base_branch
+        // is required input (the form defaults it to main).
         $deliverable = $project->deliverables()->create([
             'title' => $data['title'],
             'category' => $data['category'] ?? null,
             'concept' => $data['concept'] ?? null,
-            'base_branch' => $data['base_branch'] ?? null,
+            'base_branch' => $data['base_branch'],
             'status' => Deliverable::STATUS_NEW,
             'position' => (int) $project->deliverables()->where('status', Deliverable::STATUS_NEW)->max('position') + 1,
         ]);
