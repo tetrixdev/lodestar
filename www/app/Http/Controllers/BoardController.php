@@ -66,7 +66,55 @@ class BoardController extends Controller
                 fn (Task $a, Task $b) => $a->position <=> $b->position,
             ]);
 
-        $deliverablesByPhase = $deliverables->groupBy(fn (Deliverable $d) => $d->phaseColumn());
+        // A deliverable PROJECTS onto the board: while active it renders once per
+        // column its tasks occupy (Plan + Build at the same time), each card filtered
+        // to that column's tasks; task-level reviews sit under Build. Once it's in its
+        // OWN review/ship state it's a single card in that column. Backlog = no tasks.
+        // $deliverableCardsByPhase[phase] = [ ['deliverable'=>D, 'tasks'=>subset], ... ]
+        $ownCardStates = [
+            Deliverable::STATUS_AI_REVIEW,
+            Deliverable::STATUS_HUMAN_ARCHITECTURE_REVIEW,
+            Deliverable::STATUS_HUMAN_FUNCTIONAL_REVIEW,
+            Deliverable::STATUS_APPROVED,
+            Deliverable::STATUS_MERGE_DEPLOY,
+            Deliverable::STATUS_DONE,
+        ];
+        // A child task's projection column: planning phases → plan; everything from
+        // dev through its task-level reviews → build; done → nowhere.
+        $taskProjection = function (string $status): ?string {
+            if (in_array($status, [Task::STATUS_NEW, Task::STATUS_READY_FOR_PLANNING, Task::STATUS_PLANNING, Task::STATUS_PLAN_REVIEW], true)) {
+                return 'plan';
+            }
+            if (in_array($status, [Task::STATUS_DONE, Task::STATUS_CANCELLED], true)) {
+                return null;
+            }
+
+            return 'build';
+        };
+
+        $deliverableCardsByPhase = [];
+        foreach (array_keys(Task::PHASES) as $phaseKey) {
+            $deliverableCardsByPhase[$phaseKey] = collect();
+        }
+        foreach ($deliverables as $d) {
+            if (in_array($d->status, $ownCardStates, true)) {
+                $deliverableCardsByPhase[$d->phaseColumn()]->push(['deliverable' => $d, 'tasks' => $d->tasks]);
+
+                continue;
+            }
+            $incomplete = $d->tasks->whereNotIn('status', [Task::STATUS_DONE, Task::STATUS_CANCELLED]);
+            if ($incomplete->isEmpty()) {
+                $deliverableCardsByPhase['backlog']->push(['deliverable' => $d, 'tasks' => collect()]);
+
+                continue;
+            }
+            foreach ($incomplete->groupBy(fn (Task $t) => $taskProjection($t->status)) as $col => $subset) {
+                if ($col !== null && isset($deliverableCardsByPhase[$col])) {
+                    $deliverableCardsByPhase[$col]->push(['deliverable' => $d, 'tasks' => $subset->values()]);
+                }
+            }
+        }
+
         $tasksByPhase = $tasks->groupBy(fn (Task $t) => $statusPhase[$t->status] ?? 'backlog');
 
         // "Needs you" — cross-project signals, scoped to the active project set.
@@ -84,7 +132,7 @@ class BoardController extends Controller
         return view('board', [
             'projects' => $projects,
             'phases' => Task::PHASES,
-            'deliverablesByPhase' => $deliverablesByPhase,
+            'deliverableCardsByPhase' => $deliverableCardsByPhase,
             'tasksByPhase' => $tasksByPhase,
             'selectedId' => $selectedId,
             'needs' => $needs,

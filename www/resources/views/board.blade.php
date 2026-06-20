@@ -57,7 +57,7 @@
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
                 @foreach ($phases as $phaseKey => $phase)
                     @php
-                        $dels = $deliverablesByPhase[$phaseKey] ?? collect();
+                        $dels = $deliverableCardsByPhase[$phaseKey] ?? collect();
                         $tks = $tasksByPhase[$phaseKey] ?? collect();
                         $count = $dels->count() + $tks->count();
                     @endphp
@@ -68,8 +68,8 @@
                         </div>
 
                         <div class="space-y-2">
-                            @foreach ($dels as $deliverable)
-                                @include('partials.board.deliverable-card', ['deliverable' => $deliverable])
+                            @foreach ($dels as $card)
+                                @include('partials.board.deliverable-card', ['deliverable' => $card['deliverable'], 'tasks' => $card['tasks']])
                             @endforeach
                             @foreach ($tks as $task)
                                 @include('partials.board.task-card', ['task' => $task])

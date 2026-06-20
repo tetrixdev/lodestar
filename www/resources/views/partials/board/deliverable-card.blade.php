@@ -1,9 +1,11 @@
 @php
     /** @var \App\Models\Deliverable $deliverable */
+    /** @var \Illuminate\Support\Collection $tasks the task subset to show in THIS column (board projection) */
     $D = \App\Models\Deliverable::class;
     $T = \App\Models\Task::class;
     $statusLabel = $D::LABELS[$deliverable->status] ?? $deliverable->status;
     $project = $deliverable->project;
+    $tasks = $tasks ?? $deliverable->tasks;
 @endphp
 
 <div class="rounded-lg border border-indigo-200 bg-indigo-50/40 shadow-sm p-3 space-y-2">
@@ -18,9 +20,9 @@
         {{ $deliverable->title }}
     </a>
 
-    @if ($deliverable->tasks->isNotEmpty())
+    @if ($tasks->isNotEmpty())
         <ul class="space-y-0.5">
-            @foreach ($deliverable->tasks as $task)
+            @foreach ($tasks as $task)
                 <li class="flex items-center gap-1.5 text-[11px] text-gray-600 min-w-0">
                     <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span>
                     <a href="{{ route('tasks.show', $task) }}" class="truncate hover:text-indigo-600">{{ $task->title }}</a>
