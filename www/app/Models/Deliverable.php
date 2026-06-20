@@ -169,7 +169,9 @@ class Deliverable extends Model
      * construction, so the loop cannot grab them.
      */
     public const CLAIM_MAP = [
-        self::STATUS_READY_FOR_PLANNING => self::STATUS_PLANNING,
+        // A backlog deliverable with a scope is claimed for DECOMPOSITION (the agent
+        // reads the scope and creates the child tasks); then status derives from tasks.
+        self::STATUS_NEW => self::STATUS_PLANNING,
         self::STATUS_READY_FOR_AI_REVIEW => self::STATUS_AI_REVIEW,
         self::STATUS_APPROVED => self::STATUS_MERGE_DEPLOY,
     ];
@@ -308,6 +310,55 @@ class Deliverable extends Model
     }
 
     // ── Branch & sub-id helpers ──────────────────────────────────────────────
+
+    /**
+     * Recompute this deliverable's status from its tasks — HARD LOGIC, no manual or
+     * AI status-picking. Pre-review status is fully derived: no tasks → backlog (new);
+     * any task not yet plan-approved → planning; all approved but not all done →
+     * building; all done → ready_for_ai_review (enters the review chain). The review
+     * chain (ai_review → architecture → functional → approved → merge → done) is driven
+     * by claims + review outcomes, NOT here — except that new incomplete work appearing
+     * mid-review (a corrective task) pulls it back to the derived active state.
+     * Called automatically whenever a child task is saved.
+     */
+    public function syncStatus(): void
+    {
+        if (in_array($this->status, [self::STATUS_DONE, self::STATUS_CANCELLED], true)) {
+            return; // terminal
+        }
+
+        $statuses = $this->tasks()->where('status', '!=', Task::STATUS_CANCELLED)->pluck('status');
+        $incomplete = $statuses->reject(fn ($s) => $s === Task::STATUS_DONE);
+        $hasUnapproved = $incomplete->intersect([
+            Task::STATUS_NEW, Task::STATUS_READY_FOR_PLANNING, Task::STATUS_PLANNING, Task::STATUS_PLAN_REVIEW,
+        ])->isNotEmpty();
+
+        if ($statuses->isEmpty()) {
+            $target = self::STATUS_NEW;                       // backlog — nothing to do yet
+        } elseif ($incomplete->isNotEmpty()) {
+            $target = $hasUnapproved ? self::STATUS_PLANNING : self::STATUS_BUILDING;
+        } else {
+            $target = self::STATUS_READY_FOR_AI_REVIEW;       // all tasks done → review chain
+        }
+
+        $reviewChain = [
+            self::STATUS_AI_REVIEW, self::STATUS_HUMAN_ARCHITECTURE_REVIEW,
+            self::STATUS_HUMAN_FUNCTIONAL_REVIEW, self::STATUS_APPROVED, self::STATUS_MERGE_DEPLOY,
+        ];
+
+        if (in_array($this->status, $reviewChain, true)) {
+            // Only react mid-review if new incomplete work appeared (correctives).
+            if ($incomplete->isNotEmpty() && $this->status !== $target) {
+                $this->forceFill(['status' => $target])->save();
+            }
+
+            return;
+        }
+
+        if ($this->status !== $target) {
+            $this->forceFill(['status' => $target])->save();
+        }
+    }
 
     /** The next per-deliverable task sub_id (1-based). */
     public function nextSubId(): int

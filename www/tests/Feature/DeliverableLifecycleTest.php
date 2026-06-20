@@ -151,38 +151,21 @@ class DeliverableLifecycleTest extends TestCase
 
     // ── child-task lifecycle (no planning; functional gate) ───────────────────
 
-    public function test_child_task_cannot_be_persisted_in_a_plan_phase(): void
+    public function test_child_task_can_be_planned_and_uses_the_functional_gate(): void
     {
         $d = $this->deliverable($this->project(User::factory()->create()));
-        // Try to create a child in plan_review — the saving hook coerces it.
-        $t = $this->task($d, ['status' => Task::STATUS_PLAN_REVIEW]);
-        $this->assertSame(Task::STATUS_READY_FOR_DEV, $t->fresh()->status);
+        // A child CAN carry its own plan phase (planning happens per-task now).
+        $child = $this->task($d, ['status' => Task::STATUS_PLAN_REVIEW]);
+        $this->assertSame(Task::STATUS_PLAN_REVIEW, $child->fresh()->status);
+        $this->assertTrue($child->canTransitionTo(Task::STATUS_READY_FOR_DEV)); // approve plan
 
-        // Attaching an existing plan-phase task to a deliverable also coerces it.
-        $project = $d->project;
-        $standalone = $project->tasks()->create(['title' => 'X', 'status' => Task::STATUS_PLAN_REVIEW, 'position' => 0]);
-        $this->assertSame(Task::STATUS_PLAN_REVIEW, $standalone->fresh()->status); // standalone keeps it
-        $standalone->update(['deliverable_id' => $d->id]);
-        $this->assertSame(Task::STATUS_READY_FOR_DEV, $standalone->fresh()->status);
-    }
-
-    public function test_child_task_transitions_skip_planning_and_use_functional_gate(): void
-    {
-        $d = $this->deliverable($this->project(User::factory()->create()));
-        $child = $this->task($d, ['status' => Task::STATUS_READY_FOR_DEV]);
-
-        // No planning states are ever reachable for a child.
-        $this->assertFalse($child->canTransitionTo(Task::STATUS_PLAN_REVIEW));
-        $this->assertFalse($child->canTransitionTo(Task::STATUS_READY_FOR_PLANNING));
-        $this->assertTrue($child->canTransitionTo(Task::STATUS_DEVELOPING)); // forward into dev
-
-        // ai_review hands off to the human (functional) gate.
+        // It runs the full lifecycle; its human gate is the FUNCTIONAL review.
         $child->update(['status' => Task::STATUS_AI_REVIEW]);
         $this->assertTrue($child->fresh()->canTransitionTo(Task::STATUS_HUMAN_REVIEW));
         $this->assertSame('functional', $child->fresh()->humanGateType());
     }
 
-    public function test_standalone_task_keeps_the_full_lifecycle(): void
+    public function test_standalone_task_human_gate_is_code(): void
     {
         $project = $this->project(User::factory()->create());
         $t = $project->tasks()->create(['title' => 'Solo', 'status' => Task::STATUS_NEW, 'position' => 0]);

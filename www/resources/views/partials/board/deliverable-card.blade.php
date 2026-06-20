@@ -36,7 +36,4 @@
         <p class="text-[11px] text-gray-400 italic">No tasks yet</p>
     @endif
 
-    <div class="flex items-center gap-2 pt-1 border-t border-indigo-100">
-        @include('deliverables.partials.transitions', ['deliverable' => $deliverable, 'targets' => $deliverable->allowedTransitions()])
-    </div>
 </div>

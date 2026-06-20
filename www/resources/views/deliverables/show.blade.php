@@ -85,18 +85,13 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             <div class="lg:col-span-2 space-y-6">
 
-                {{-- lifecycle --}}
-                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Lifecycle</p>
-                    @if ($atPlanReview && $unanswered > 0)
-                        <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
-                            {{ $unanswered }} open question(s) unanswered — answer them all before you can approve the plan.
-                        </div>
-                    @endif
-                    <div class="flex items-center gap-2 flex-wrap">
-                        @include('deliverables.partials.transitions', ['deliverable' => $deliverable, 'targets' => $deliverable->allowedTransitions()])
-                    </div>
-                    <x-input-error :messages="$errors->get('status')" />
+                {{-- lifecycle (status is DERIVED from the tasks + review outcomes — no manual advancement) --}}
+                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
+                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Status</p>
+                    <p class="text-sm text-gray-700">
+                        <span class="inline-block text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ $statusLabel }}</span>
+                        <span class="text-gray-400">— derived from its tasks; it advances on its own and through review decisions.</span>
+                    </p>
                 </div>
 
                 {{-- concept / spec / plan --}}

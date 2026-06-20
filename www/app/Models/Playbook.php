@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Exceptions\StalePlaybookHashException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -137,7 +138,7 @@ class Playbook extends Model
      * the slot has moved on since, refuse — they must re-read. A null hash skips
      * the check (trusted callers like the seeder).
      *
-     * @throws \App\Exceptions\StalePlaybookHashException
+     * @throws StalePlaybookHashException
      */
     public function assertFreshHash(?string $expectedHash): void
     {
@@ -146,7 +147,7 @@ class Playbook extends Model
         }
         $current = $this->currentHash();
         if (! hash_equals($current, $expectedHash)) {
-            throw new \App\Exceptions\StalePlaybookHashException($this, $expectedHash, $current, $this->latestVersion());
+            throw new StalePlaybookHashException($this, $expectedHash, $current, $this->latestVersion());
         }
     }
 

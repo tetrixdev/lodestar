@@ -178,9 +178,9 @@ class DeliverableController extends Controller
             'category' => ['nullable', 'string', 'max:60'],
         ]);
 
-        // Child tasks skip planning — they're decomposed from the deliverable's
-        // approved plan, so they enter the dev cycle directly.
-        $entry = Task::DELIVERABLE_CHILD_ENTRY;
+        // A manually-added child starts as a bare card (new); planning/approval
+        // happens per-task. The deliverable's status re-derives automatically.
+        $entry = Task::STATUS_NEW;
         $deliverable->tasks()->create([
             'project_id' => $deliverable->project_id,
             'title' => $data['title'],

@@ -14,7 +14,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Claim the next available unit of WORK — a deliverable OR a task — and flip it to its working (*-ing) state. This is the loop\'s entry point. It hands out: claimable deliverables (planning / deliverable AI review / merge), standalone tasks, and child tasks — but a child task only once its deliverable is in `building` AND its dependencies are all done. Returns the claimed item, its `type`, and the `phase` to load a playbook for, or "no work available". Supersedes claim_task.')]
+#[Description('Claim the next available unit of WORK — a deliverable OR a task — and flip it to its working (*-ing) state. This is the loop\'s entry point. It hands out: claimable deliverables (a backlog deliverable with a scope → decomposition; deliverable AI review; merge), standalone tasks, and child tasks — a child becomes claimable once its plan is approved (ready_for_dev) and its dependencies are done, even while sibling tasks are still being planned. Returns the claimed item, its `type`, and the `phase` to load a playbook for, or "no work available". Supersedes claim_task.')]
 #[Name('claim_work')]
 class ClaimWorkTool extends LodestarTool
 {
@@ -63,12 +63,15 @@ class ClaimWorkTool extends LodestarTool
     private function claimTask(array $projectIds, string $agent): ?Task
     {
         return DB::transaction(function () use ($projectIds, $agent) {
+            // A task is claimable on its own merit: a claimable status (a child only
+            // reaches ready_for_dev by having its plan approved) and no unfinished
+            // dependency. We deliberately do NOT gate on the deliverable's status —
+            // an approved task may start even while sibling tasks are still in
+            // planning (per-task approval lets some start while others wait). A child
+            // of a not-yet-decomposed deliverable simply has no claimable tasks yet.
             $candidates = Task::query()
                 ->whereIn('project_id', $projectIds)
                 ->whereIn('status', Task::claimableStatuses())
-                ->where(fn ($q) => $q
-                    ->whereNull('deliverable_id')
-                    ->orWhereHas('deliverable', fn ($d) => $d->where('status', Deliverable::STATUS_BUILDING)))
                 ->orderBy('position')
                 ->orderBy('id')
                 ->get();
@@ -99,6 +102,10 @@ class ClaimWorkTool extends LodestarTool
             $candidates = Deliverable::query()
                 ->whereIn('project_id', $projectIds)
                 ->whereIn('status', Deliverable::claimableStatuses())
+                // A backlog (new) deliverable is only claimable for decomposition once
+                // it has a scope to decompose.
+                ->where(fn ($q) => $q->where('status', '!=', Deliverable::STATUS_NEW)
+                    ->orWhere(fn ($q) => $q->whereNotNull('body')->where('body', '!=', '')))
                 ->orderBy('position')
                 ->orderBy('id')
                 ->get();

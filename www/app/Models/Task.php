@@ -221,11 +221,9 @@ class Task extends Model
     ];
 
     /**
-     * The plan-phase statuses. A task that belongs to a deliverable NEVER enters
-     * these — planning happens once, at the deliverable level, and child tasks are
-     * decomposed from the deliverable's approved plan. The `saving` hook coerces
-     * any child found in one of these to the dev entry point, so it is structurally
-     * impossible to persist a deliverable child in a plan phase.
+     * Statuses where a card is still being planned / not yet plan-approved. Used to
+     * derive a deliverable's status from its child tasks (any unapproved child →
+     * the deliverable is still "planning").
      */
     public const PLANNING_PHASE_STATUSES = [
         self::STATUS_NEW,
@@ -233,27 +231,6 @@ class Task extends Model
         self::STATUS_PLANNING,
         self::STATUS_PLAN_REVIEW,
     ];
-
-    /**
-     * The lifecycle for a task that belongs to a deliverable: NO planning head
-     * (it starts at ready_for_dev) and the human gate is the FUNCTIONAL review
-     * (business/UX/UI/permissions), not code review — code/architecture review is
-     * batched at the deliverable level. Same forward·back·cancel ordering.
-     */
-    public const TRANSITIONS_IN_DELIVERABLE = [
-        self::STATUS_READY_FOR_DEV => [self::STATUS_DEVELOPING, self::STATUS_CANCELLED],
-        self::STATUS_DEVELOPING => [self::STATUS_READY_FOR_AI_REVIEW, self::STATUS_READY_FOR_DEV, self::STATUS_CANCELLED],
-        self::STATUS_READY_FOR_AI_REVIEW => [self::STATUS_AI_REVIEW, self::STATUS_DEVELOPING, self::STATUS_CANCELLED],
-        self::STATUS_AI_REVIEW => [self::STATUS_HUMAN_REVIEW, self::STATUS_READY_FOR_DEV, self::STATUS_CANCELLED],
-        self::STATUS_HUMAN_REVIEW => [self::STATUS_APPROVED, self::STATUS_READY_FOR_AI_REVIEW, self::STATUS_READY_FOR_DEV, self::STATUS_CANCELLED],
-        self::STATUS_APPROVED => [self::STATUS_MERGE_DEPLOY, self::STATUS_HUMAN_REVIEW, self::STATUS_CANCELLED],
-        self::STATUS_MERGE_DEPLOY => [self::STATUS_DONE, self::STATUS_APPROVED, self::STATUS_CANCELLED],
-        self::STATUS_DONE => [self::STATUS_CANCELLED],
-        self::STATUS_CANCELLED => [],
-    ];
-
-    /** The status a deliverable child is born into (planning already happened). */
-    public const DELIVERABLE_CHILD_ENTRY = self::STATUS_READY_FOR_DEV;
 
     // ── Claim map (the agent loop) ───────────────────────────────────────────
 
@@ -313,13 +290,6 @@ class Task extends Model
         // the very first save). Automatic so every code path — controller,
         // tinker, future agent loop — keeps the timer honest.
         static::saving(function (Task $task): void {
-            // A deliverable child never lives in a plan-phase status — coerce it to
-            // the dev entry point (covers both new children and tasks just attached
-            // to a deliverable). Done before the timer check so the stamp is honest.
-            if ($task->deliverable_id !== null && in_array($task->status, self::PLANNING_PHASE_STATUSES, true)) {
-                $task->status = self::STATUS_READY_FOR_DEV;
-            }
-
             if ($task->isDirty('status') || ! $task->exists) {
                 $task->status_changed_at = now();
             }
@@ -331,6 +301,15 @@ class Task extends Model
             if ($task->deliverable_id !== null && $task->sub_id === null) {
                 $task->sub_id = $task->deliverable->nextSubId();
             }
+        });
+
+        // Hard-logic: a deliverable's status is DERIVED from its tasks. Re-sync it
+        // whenever a child task is saved or deleted (status changes, attach/detach).
+        static::saved(function (Task $task): void {
+            $task->deliverable?->syncStatus();
+        });
+        static::deleted(function (Task $task): void {
+            $task->deliverable?->syncStatus();
         });
     }
 
@@ -421,16 +400,10 @@ class Task extends Model
         return $this->isDeliverableChild() ? 'functional' : 'code';
     }
 
-    /** The transition map that applies to this task (child vs standalone). */
-    public function transitionMap(): array
-    {
-        return $this->isDeliverableChild() ? self::TRANSITIONS_IN_DELIVERABLE : self::TRANSITIONS;
-    }
-
     /** The legal target statuses from this card's current status. */
     public function allowedTransitions(): array
     {
-        return $this->transitionMap()[$this->status] ?? [];
+        return self::TRANSITIONS[$this->status] ?? [];
     }
 
     /** Is moving this card to $target a legal transition? */
@@ -446,7 +419,7 @@ class Task extends Model
             return self::KIND_CANCEL;
         }
 
-        $forward = $this->transitionMap()[$this->status][0] ?? null;
+        $forward = self::TRANSITIONS[$this->status][0] ?? null;
 
         return $target === $forward ? self::KIND_FORWARD : self::KIND_BACK;
     }

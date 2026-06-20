@@ -140,7 +140,7 @@ class SchemaMirrorTest extends TestCase
      * Compare a documented column list against the live schema, both directions.
      *
      * @param  list<string>  $documentedColumns
-     * @return list<string>  problem messages (empty when they match)
+     * @return list<string> problem messages (empty when they match)
      */
     private function columnMismatches(string $table, array $documentedColumns): array
     {
@@ -177,7 +177,7 @@ class SchemaMirrorTest extends TestCase
      * `### `name`` heading followed by a markdown table; the column names are the
      * first-column (`Field`) cells of the body rows (header + separator skipped).
      *
-     * @return array<string, list<string>>  table name => column names
+     * @return array<string, list<string>> table name => column names
      */
     private function parseFieldReferenceTables(): array
     {
