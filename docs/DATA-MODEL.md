@@ -224,6 +224,8 @@ are informational — the test checks Field **names** only.
 | user_id | bigint | FK → users | The owning account. `(user_id, slug)` is unique, so a slug is unique per user, not globally. |
 | name | string | not null | The project's display name. |
 | slug | string | not null · unique per user | URL/identity slug, unique within the owner's projects. |
+| code | string | nullable | Short chip label (≤12 chars) for the unified board; falls back to a derived code when unset. |
+| color | string | nullable | Chip colour (#rrggbb[aa]); falls back to a stable id-derived colour when unset. |
 | description | text | nullable | Optional longer description of the project. |
 | primary_goal | text | nullable | The project's headline goal — what the stack of tasks is driving toward. |
 | team_id | bigint | FK → teams · nullable | The owning team, or null for a **personal** project (owner-only access). |
@@ -278,6 +280,43 @@ are informational — the test checks Field **names** only.
 | rework_notes | text | nullable | What a review sent back — the change request brief written on `changes_requested`. |
 | body_summary | text | nullable | TL;DR of `body`; required when `body` is set. |
 | plan_summary | text | nullable | TL;DR of `plan`; required when `plan` is set. |
+| deliverable_id | bigint | FK → deliverables · nullable | The deliverable this task belongs to; null = standalone task (branch-per-task → base). |
+| sub_id | integer | nullable | Per-deliverable task sequence (1,2,3…); drives the nested branch `D{deliverable}/T{sub_id}-slug`. Unique with `deliverable_id`. |
+| is_corrective | boolean | not null · default false | Marks a task spawned from deliverable-level review feedback. |
+| needs_functional_review | boolean | not null · default true | Whether this task gets a human functional review; refactor/doc tasks can skip (also powers "trivial tasks auto-pass"). |
+
+### `deliverables`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| project_id | bigint | FK → projects | The owning project. |
+| title | string | not null | The deliverable title. |
+| category | string | nullable | Free-text grouping prefix. |
+| concept | text | nullable | The raw goal as the user first wrote it. |
+| concept_summary | text | nullable | TL;DR of `concept`. |
+| body | text | nullable | The rewritten spec in our format (planning playbook does the rewrite). |
+| body_summary | text | nullable | TL;DR of `body`. |
+| plan | text | nullable | The planning artifact (markdown) that decomposes into child tasks. |
+| plan_summary | text | nullable | TL;DR of `plan`. |
+| status | string | not null · default `new` | One of the deliverable lifecycle states (see App\Models\Deliverable). |
+| status_changed_at | timestamp | nullable | When the deliverable last entered its current status; stamped automatically. |
+| position | integer | not null · default 0 | Orders deliverables within a status. |
+| branch | string | nullable | The integration branch `D{id:06d}-slug`. |
+| base_branch | string | nullable | What the branch is cut from / diffed against (the deliverable diff is `base_branch...branch`). |
+| claimed_by | string | nullable | The agent holding a working (`*-ing`) deliverable; set by the atomic claim. |
+| claimed_at | timestamp | nullable | When the deliverable was claimed. |
+
+### `deliverable_questions`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| deliverable_id | bigint | FK → deliverables | The owning deliverable. |
+| question | text | not null | The open question the planning agent raised. |
+| answer | text | nullable | The human's answer. |
+| answered_at | timestamp | nullable | Stamped when a non-empty answer lands; gates plan approval (all must be answered). |
+| position | integer | not null · default 0 | Orders the questions. |
 
 ### `work_sessions`
 
@@ -300,6 +339,10 @@ are informational — the test checks Field **names** only.
 |-------|------|-------------|-------|
 | id | bigint | PK | Primary key. |
 | project_id | bigint | FK → projects | The owning project. |
+| scope | string | not null · default `task` | What the review targets: `task` (via review_task pivot) or `deliverable` (via `deliverable_id`). |
+| deliverable_id | bigint | FK → deliverables · nullable | The deliverable this review targets (scope = deliverable). |
+| review_type | string | not null · default `code` | `functional` (per task; behaviour/UX/UI/permissions) / `code` (technical, task-level) / `architecture` (technical, deliverable-level). |
+| base_branch | string | nullable | What a deliverable review diffs against (`base_branch...deliverable.branch`); task reviews use base_sha/head_sha instead. |
 | title | string | not null | The review's display title. |
 | base_ref | string | nullable | The base of the comparison (e.g. `main`). |
 | head_ref | string | nullable | The head of the comparison (e.g. `feat/x`). |
@@ -344,12 +387,16 @@ are informational — the test checks Field **names** only.
 | position | integer | not null · default 0 | Orders the sections in the walkthrough (top-to-bottom). |
 | title | string | not null | The section title. |
 | mode | string | not null | The review mode: `skip` / `behavioural` / `direct` / `direct_doc` / `mirror_guard`. |
+| kind | string | nullable | Frames the change as input→output (orthogonal to `mode`): `input_screen` / `command` / `outbound_effect` / `other`. |
 | context | text | nullable | Rebuilds the reviewer's knowledge for this step. |
 | link | string | nullable | What to open (a doc / file / route). |
 | checks | jsonb | nullable | A JSON list of "what to confirm". |
 | status | string | not null · default `open` | `open` / `signed_off` — the human's per-section sign-off. |
 | note | text | nullable | The human's comment / change request for the section. |
 | decision | string | nullable | The human verdict: `approved` / `changes_requested`, distinct from sign-off; drives the review outcome. |
+| stale | boolean | not null · default false | Dirty-watermark flag: set when new commits touch this section's files, so the human re-walks only flagged sections. |
+| change_note | text | nullable | What changed / when, stamped when the section is flagged stale. |
+| manual_steps | text | nullable | Short-but-complete step-by-step the human follows to test a functional section (incl. dry-run previews of invisible outputs). |
 
 ### `review_task`
 
@@ -524,6 +571,10 @@ erDiagram
     USER }o--o{ TEAM : "team_user (member)"
     USER }o--o{ PROJECT : "project_user (member)"
     PROJECT ||--o{ TASK : has
+    PROJECT ||--o{ DELIVERABLE : "groups tasks (optional)"
+    DELIVERABLE ||--o{ TASK : "child tasks (nullable)"
+    DELIVERABLE ||--o{ DELIVERABLE_QUESTION : "open questions"
+    DELIVERABLE ||--o{ REVIEW : "deliverable-scoped (nullable)"
     PROJECT ||--o{ WORK_SESSION : "work log"
     PROJECT ||--o{ REVIEW : has
     REVIEW ||--o{ REVIEW_SECTION : "walkthrough steps"
@@ -558,6 +609,8 @@ erDiagram
         bigint team_id FK "nullable, null = personal"
         string name
         string slug "unique per user"
+        string code "nullable, board chip label"
+        string color "nullable, board chip colour"
         text description "nullable"
         text primary_goal "nullable"
     }
@@ -587,6 +640,10 @@ erDiagram
     TASK {
         bigint id PK
         bigint project_id FK
+        bigint deliverable_id FK "nullable, null = standalone task"
+        integer sub_id "nullable, per-deliverable sequence; unique with deliverable_id"
+        boolean is_corrective "spawned from deliverable review feedback"
+        boolean needs_functional_review "default true; refactor/doc tasks skip"
         string title
         string category "nullable, grouping prefix"
         string priority "low|normal|high|urgent"
@@ -619,6 +676,10 @@ erDiagram
     REVIEW {
         bigint id PK
         bigint project_id FK
+        string scope "task|deliverable"
+        bigint deliverable_id FK "nullable, target when scope=deliverable"
+        string review_type "functional|code|architecture"
+        string base_branch "nullable, deliverable diff base"
         string title
         bigint repository_id FK "nullable, the compared repo"
         string base_ref "nullable, e.g. main"
@@ -655,11 +716,15 @@ erDiagram
         integer position "order in the walkthrough"
         string title
         string mode "skip|behavioural|direct|direct_doc|mirror_guard"
+        string kind "nullable, input_screen|command|outbound_effect|other"
         text context "nullable, rebuilds reviewer knowledge"
         string link "nullable, what to open"
         jsonb checks "nullable, [what to confirm]"
         string status "open|signed_off"
         string decision "nullable, approved|changes_requested"
+        boolean stale "dirty-watermark: re-walk this section"
+        text change_note "nullable, what changed / when"
+        text manual_steps "nullable, step-by-step to test a functional section"
         text note "nullable, human comment / change request"
     }
 
@@ -667,6 +732,35 @@ erDiagram
         bigint id PK
         bigint review_id FK
         bigint task_id FK
+    }
+
+    DELIVERABLE {
+        bigint id PK
+        bigint project_id FK
+        string title
+        string category "nullable, grouping prefix"
+        text concept "nullable, raw goal as written"
+        text concept_summary "nullable, TL;DR of concept"
+        text body "nullable, rewritten spec"
+        text body_summary "nullable, TL;DR of body"
+        text plan "nullable, planning artifact (markdown)"
+        text plan_summary "nullable, TL;DR of plan"
+        string status "deliverable lifecycle state"
+        timestamp status_changed_at "nullable, entered-current-status time"
+        integer position "order within status"
+        string branch "nullable, D{id}-slug integration branch"
+        string base_branch "nullable, cut-from / diff-against"
+        string claimed_by "nullable, agent holding a *-ing deliverable"
+        timestamp claimed_at "nullable, when it was claimed"
+    }
+
+    DELIVERABLE_QUESTION {
+        bigint id PK
+        bigint deliverable_id FK
+        text question
+        text answer "nullable, the human's answer"
+        timestamp answered_at "nullable, gates plan approval"
+        integer position "order"
     }
 
     USER {

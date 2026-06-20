@@ -21,9 +21,58 @@ class Review extends Model
 {
     protected $guarded = [];
 
+    // ── Scope (what the review targets) ──────────────────────────────────────
+
+    public const SCOPE_TASK = 'task';
+
+    public const SCOPE_DELIVERABLE = 'deliverable';
+
+    // ── Type (what kind of review) ───────────────────────────────────────────
+
+    public const TYPE_FUNCTIONAL = 'functional';   // per task; behaviour/UX/UI/permissions
+
+    public const TYPE_CODE = 'code';               // technical (task-level)
+
+    public const TYPE_ARCHITECTURE = 'architecture'; // technical (deliverable-level)
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** The deliverable this review targets (scope = deliverable; else null). */
+    public function deliverable(): BelongsTo
+    {
+        return $this->belongsTo(Deliverable::class);
+    }
+
+    /** Is this a deliverable-scoped review (whole-deliverable diff vs base_branch)? */
+    public function isDeliverableScoped(): bool
+    {
+        return $this->scope === self::SCOPE_DELIVERABLE;
+    }
+
+    /**
+     * Auto-flag for re-review every section that covers one of $changedPaths
+     * (the dirty-section watermark). Called when the comparison is refreshed so
+     * the human only re-walks sections whose files actually changed; untouched
+     * sections keep their prior decision. Returns the number of sections flagged.
+     */
+    public function flagStaleSections(array $changedPaths, string $note): int
+    {
+        if ($changedPaths === []) {
+            return 0;
+        }
+
+        $sections = $this->sections()
+            ->whereHas('files', fn ($q) => $q->whereIn('path', $changedPaths))
+            ->get();
+
+        foreach ($sections as $section) {
+            $section->markStale($note);
+        }
+
+        return $sections->count();
     }
 
     /** The repository this review's comparison is within (null = doc-only review). */

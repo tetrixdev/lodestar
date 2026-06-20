@@ -49,7 +49,7 @@ class TeamAccessTest extends TestCase
         // A plan_review card surfaces in the dashboard's "Plans to review" bucket.
         $project->tasks()->create(['title' => 'Needs a human', 'status' => Task::STATUS_PLAN_REVIEW]);
 
-        $this->actingAs($member)->get('/dashboard')->assertOk()->assertSee('Needs a human');
+        $this->actingAs($member)->get(route('board'))->assertOk()->assertSee('Needs a human');
     }
 
     public function test_a_teammate_does_not_see_the_owners_personal_data(): void

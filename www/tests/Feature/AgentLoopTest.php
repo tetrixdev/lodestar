@@ -29,7 +29,7 @@ class AgentLoopTest extends TestCase
             ->tool(GetPlaybookTool::class, ['key' => 'work'])
             ->assertOk()
             ->assertSee('the loop')
-            ->assertSee('claim_task');
+            ->assertSee('claim_work');
     }
 
     public function test_project_page_shows_the_loop_prompt(): void
@@ -49,11 +49,11 @@ class AgentLoopTest extends TestCase
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
 
         // No working task → idle.
-        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('No agent');
+        $this->actingAs($user)->get(route('board'))->assertOk()->assertSee('No agent');
 
         // A card in a working (*-ing) state → the heartbeat lights up.
         $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
-        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Agent working');
+        $this->actingAs($user)->get(route('board'))->assertOk()->assertSee('Agent working');
     }
 
     public function test_heartbeat_labels_the_loop_when_claimed_by_loop(): void
@@ -64,7 +64,7 @@ class AgentLoopTest extends TestCase
             'title' => 'T', 'status' => Task::STATUS_DEVELOPING, 'claimed_by' => 'loop',
         ]);
 
-        $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertSee('Loop running');
+        $this->actingAs($user)->get(route('board'))->assertOk()->assertSee('Loop running');
     }
 
     public function test_agents_page_lists_working_agents_and_their_tasks(): void
