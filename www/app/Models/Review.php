@@ -92,6 +92,34 @@ class Review extends Model
         ];
     }
 
+    /**
+     * The manual-test checklist totals across all sections: how many checklist
+     * items exist and how many the human has ticked. Drives the aggregate
+     * progress indicator. Uses loaded sections when available.
+     */
+    public function manualTestSummary(): array
+    {
+        $sections = $this->relationLoaded('sections') ? $this->sections : $this->sections()->get();
+        $total = 0;
+        $done = 0;
+        foreach ($sections as $section) {
+            $items = count((array) $section->checks);
+            $total += $items;
+            // Only count ticks that point at an item that still exists.
+            $done += collect((array) $section->checked)
+                ->map(fn ($i) => (int) $i)
+                ->filter(fn ($i) => $i >= 0 && $i < $items)
+                ->unique()
+                ->count();
+        }
+
+        return [
+            'total' => $total,
+            'done' => $done,
+            'complete' => $total > 0 && $done >= $total,
+        ];
+    }
+
     /** The tasks this review covers (openable from either side). */
     public function tasks(): BelongsToMany
     {

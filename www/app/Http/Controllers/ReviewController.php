@@ -189,6 +189,11 @@ class ReviewController extends Controller
             'status' => ['nullable', 'in:open,signed_off'],
             'note' => ['nullable', 'string', 'max:4000'],
             'decision' => ['nullable', 'in:approved,changes_requested'],
+            // The manual-test checklist progress: indices into the section's
+            // `checks` the human has ticked. Bounded to the actual item count so a
+            // stale/forged index can't be persisted.
+            'checked' => ['nullable', 'array'],
+            'checked.*' => ['integer', 'min:0', 'max:'.(count((array) $section->checks) - 1)],
         ]);
 
         // `decision` is intentionally allowed through even when null is sent — the
@@ -201,6 +206,13 @@ class ReviewController extends Controller
         if (array_key_exists('decision', $data)) {
             $update['decision'] = $data['decision'];
         }
+        // `checked` (manual-test progress) is sent whole each toggle; dedupe + sort
+        // for a stable stored shape. An empty array clears all ticks.
+        if (array_key_exists('checked', $data)) {
+            $checked = array_values(array_unique(array_map('intval', $data['checked'] ?? [])));
+            sort($checked);
+            $update['checked'] = $checked;
+        }
         $section->update($update);
 
         return response()->json([
@@ -208,6 +220,7 @@ class ReviewController extends Controller
             'signed_off' => $review->sections()->where('status', 'signed_off')->count(),
             'total' => $review->sections()->count(),
             'decisions' => $review->fresh()->decisionSummary(),
+            'manual_tests' => $review->fresh()->load('sections')->manualTestSummary(),
         ]);
     }
 

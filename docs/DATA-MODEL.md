@@ -67,8 +67,9 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   the HTML walkthrough screen. `position` orders the sections; `mode` is the
   review mode (`skip` / `behavioural` / `direct` / `direct_doc` / `mirror_guard`);
   `context` rebuilds the reviewer's knowledge; `link` is what to open (a doc /
-  file / route); `checks` is a JSON list of "what to confirm"; `status`
-  (`open` / `signed_off`) + `note` carry the human's per-section sign-off.
+  file / route); `checks` is the agent-authored manual-test checklist ("what to
+  confirm") and `checked` is the human's persisted tick progress against it;
+  `status` (`open` / `signed_off`) + `note` carry the human's per-section sign-off.
 
 - **Playbook** — a *slot*: one addressable layer of a composed prompt, identified by
   (`scope`, `owner`, `key`). `scope` is `system` (ours, `owner` null), `team`,
@@ -346,7 +347,8 @@ are informational — the test checks Field **names** only.
 | mode | string | not null | The review mode: `skip` / `behavioural` / `direct` / `direct_doc` / `mirror_guard`. |
 | context | text | nullable | Rebuilds the reviewer's knowledge for this step. |
 | link | string | nullable | What to open (a doc / file / route). |
-| checks | jsonb | nullable | A JSON list of "what to confirm". |
+| checks | jsonb | nullable | A JSON list of "what to confirm" — the agent-authored manual-test checklist items. |
+| checked | jsonb | nullable | The human's manual-test progress: the list of `checks` indices ticked off. Persisted server-side (not localStorage) so it survives a device switch and is visible to whoever opens the review; kept separate from `checks` so re-authoring the list never wipes progress. |
 | status | string | not null · default `open` | `open` / `signed_off` — the human's per-section sign-off. |
 | note | text | nullable | The human's comment / change request for the section. |
 | decision | string | nullable | The human verdict: `approved` / `changes_requested`, distinct from sign-off; drives the review outcome. |
@@ -658,6 +660,7 @@ erDiagram
         text context "nullable, rebuilds reviewer knowledge"
         string link "nullable, what to open"
         jsonb checks "nullable, [what to confirm]"
+        jsonb checked "nullable, [ticked check indices], server-persisted manual-test progress"
         string status "open|signed_off"
         string decision "nullable, approved|changes_requested"
         text note "nullable, human comment / change request"

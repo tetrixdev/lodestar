@@ -24,7 +24,29 @@ class ReviewSection extends Model
 
     protected function casts(): array
     {
-        return ['checks' => 'array'];
+        return ['checks' => 'array', 'checked' => 'array'];
+    }
+
+    /**
+     * The manual-test checklist as render-ready items: each carries its index,
+     * label, and whether the human has ticked it. `checks` is the agent-authored
+     * list of labels; `checked` is the human's persisted set of ticked indices —
+     * the two are kept apart so re-authoring the checklist never wipes progress.
+     *
+     * @return list<array{index:int, label:string, done:bool}>
+     */
+    public function checklist(): array
+    {
+        $done = array_flip(array_map('intval', $this->checked ?? []));
+
+        return collect($this->checks ?? [])
+            ->values()
+            ->map(fn ($label, $i) => [
+                'index' => $i,
+                'label' => (string) $label,
+                'done' => isset($done[$i]),
+            ])
+            ->all();
     }
 
     public function review(): BelongsTo

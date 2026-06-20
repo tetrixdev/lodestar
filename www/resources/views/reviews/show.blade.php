@@ -53,9 +53,10 @@
     </x-slot>
 
     <div class="py-10"
-         x-data="walkthrough({{ $review->sections->where('status', 'signed_off')->count() }}, {{ $review->sections->count() }}, @js($review->decisionSummary()))"
+         x-data="walkthrough({{ $review->sections->where('status', 'signed_off')->count() }}, {{ $review->sections->count() }}, @js($review->decisionSummary()), @js($review->manualTestSummary()))"
          x-on:signed-changed.window="signedCount = $event.detail"
-         x-on:decisions-changed.window="decisions = $event.detail">
+         x-on:decisions-changed.window="decisions = $event.detail"
+         x-on:manual-changed.window="manualTests = $event.detail">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
             @if (session('status'))
@@ -110,13 +111,21 @@
             @endif
 
             {{-- progress --}}
-            <div class="sticky top-0 z-10 bg-gray-100/95 backdrop-blur py-3 -mx-1 px-1 rounded">
+            <div class="sticky top-0 z-10 bg-gray-100/95 backdrop-blur py-3 -mx-1 px-1 rounded space-y-2">
                 <div class="flex items-center gap-3">
                     <div class="flex-1 h-2 rounded-full bg-gray-300 overflow-hidden">
                         <div class="h-full bg-indigo-500 transition-all"
                              :style="`width:${ total ? Math.round(100*signedCount/total) : 0 }%`"></div>
                     </div>
                     <span class="text-sm font-medium text-gray-600" x-text="`${signedCount}/${total} signed off`"></span>
+                </div>
+                {{-- Aggregate manual-test progress (only when the review has any). --}}
+                <div class="flex items-center gap-3" x-show="manualTests.total > 0" x-cloak>
+                    <div class="flex-1 h-2 rounded-full bg-gray-300 overflow-hidden">
+                        <div class="h-full bg-emerald-500 transition-all"
+                             :style="`width:${ manualTests.total ? Math.round(100*manualTests.done/manualTests.total) : 0 }%`"></div>
+                    </div>
+                    <span class="text-sm font-medium text-gray-600" x-text="`${manualTests.done}/${manualTests.total} manual tests`"></span>
                 </div>
             </div>
 
@@ -138,7 +147,7 @@
 
             {{-- sections --}}
             @foreach ($review->sections as $i => $s)
-                <section x-data="section({{ $s->id }}, {{ $s->status === 'signed_off' ? 'true' : 'false' }}, @js($s->note), @js($s->decision), {{ $i === 0 ? 'true' : 'false' }})"
+                <section x-data="section({{ $s->id }}, {{ $s->status === 'signed_off' ? 'true' : 'false' }}, @js($s->note), @js($s->decision), {{ $i === 0 ? 'true' : 'false' }}, @js($s->checklist()))"
                          class="rounded-lg border bg-white shadow-sm transition"
                          :class="signedOff ? 'border-emerald-300 opacity-70' : 'border-gray-200'">
                     <header class="flex items-center gap-3 px-4 py-3 cursor-pointer" @click="open = !open">
@@ -194,13 +203,35 @@
                                 </ul>
                             </div>
                         @endif
+                        {{-- Manual-test checklist: agent-authored items, ticked by the
+                             reviewer. Ticks persist server-side (same fetch as sign-off,
+                             not localStorage) so they survive a device switch and are
+                             visible to whoever opens the review. --}}
                         @if (!empty($s->checks))
-                            <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-3 mb-1">What to check</p>
-                            <ul class="list-disc pl-5 space-y-1 text-sm text-gray-700">
-                                @foreach ($s->checks as $check)
-                                    <li>{{ $check }}</li>
-                                @endforeach
-                            </ul>
+                            <div class="mt-3">
+                                <div class="flex items-center justify-between mb-1">
+                                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Manual tests</p>
+                                    <span class="text-[11px] font-medium tabular-nums"
+                                          :class="checkedCount >= checklist.length ? 'text-emerald-600' : 'text-gray-400'"
+                                          x-text="`${checkedCount}/${checklist.length}`"></span>
+                                </div>
+                                <ul class="space-y-1">
+                                    <template x-for="item in checklist" :key="item.index">
+                                        <li>
+                                            <label class="flex items-start gap-2 text-sm select-none rounded-md px-2 py-1.5 -mx-2 transition"
+                                                   :class="[
+                                                       item.done ? 'text-gray-400' : 'text-gray-700',
+                                                       canSignOff ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default',
+                                                   ]">
+                                                <input type="checkbox" :checked="item.done" :disabled="!canSignOff"
+                                                       @change="toggleCheck(item.index)"
+                                                       class="mt-0.5 rounded text-emerald-500 focus:ring-emerald-500 disabled:cursor-not-allowed">
+                                                <span :class="item.done && 'line-through'" x-text="item.label"></span>
+                                            </label>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </div>
                         @endif
 
                         {{-- AI-raised findings (scenario + impact); humans triage each --}}
@@ -380,7 +411,7 @@
             const base = '{{ url('/reviews/'.$review->id.'/sections') }}';
             const canSignOff = {{ $isAssignee ? 'true' : 'false' }};
 
-            Alpine.data('walkthrough', (signedCount, total, decisions) => ({ signedCount, total, decisions }));
+            Alpine.data('walkthrough', (signedCount, total, decisions, manualTests) => ({ signedCount, total, decisions, manualTests }));
 
             const filesBase = '{{ url('/reviews/'.$review->id.'/files') }}';
             Alpine.data('fileModal', () => ({
@@ -439,11 +470,14 @@
                 },
             }));
 
-            Alpine.data('section', (id, signedOff, note, decision, open) => ({
+            Alpine.data('section', (id, signedOff, note, decision, open, checklist) => ({
                 // Everything autosaves immediately via patch(): the reviewed-checkbox
-                // (status open↔signed_off), the Approve/Request-changes decision, and
-                // the comment (debounced on input + flushed on blur). No manual save.
+                // (status open↔signed_off), the Approve/Request-changes decision, the
+                // manual-test checklist ticks, and the comment (debounced on input +
+                // flushed on blur). No manual save.
                 id, signedOff, note, decision, open, savedNote: note, canSignOff, justSaved: false,
+                checklist,
+                get checkedCount() { return this.checklist.filter(i => i.done).length; },
                 async patch(body) {
                     const res = await fetch(`${base}/${this.id}`, {
                         method: 'PATCH',
@@ -454,6 +488,7 @@
                     const d = await res.json();
                     this.$dispatch('signed-changed', d.signed_off);
                     this.$dispatch('decisions-changed', d.decisions);
+                    if (d.manual_tests) this.$dispatch('manual-changed', d.manual_tests);
                     this.flashSaved();
                     return d;
                 },
@@ -476,6 +511,18 @@
                     const next = this.decision === value ? null : value;
                     const d = await this.patch({ decision: next });
                     if (d) this.decision = next;
+                },
+                // Tick / untick one manual-test item. Optimistic: flip locally, send
+                // the whole checked set, roll back if the save fails. The patch()
+                // response carries the review-wide manual_tests totals.
+                async toggleCheck(index) {
+                    if (!this.canSignOff) return;
+                    const item = this.checklist.find(i => i.index === index);
+                    if (!item) return;
+                    item.done = !item.done;
+                    const checked = this.checklist.filter(i => i.done).map(i => i.index);
+                    const d = await this.patch({ checked });
+                    if (!d) item.done = !item.done; // save failed — revert
                 },
             }));
 

@@ -37,9 +37,15 @@ signed-in user.
   - `index()` lists a project's reviews; `show()` renders the **walkthrough** —
     the review's ordered sections, the linked tasks, and the assignee chip.
   - `assign()` / `unassign()` are the **atomic self-assignment** endpoints.
-  - `updateSection()` persists a section's reviewed-marker / decision / note
-    (called from the walkthrough via `fetch`), **gated** on the caller holding the
-    review. The walkthrough page matches the playbooks pages at `max-w-7xl`.
+  - `updateSection()` persists a section's reviewed-marker / decision / note /
+    **manual-test ticks** (called from the walkthrough via `fetch`), **gated** on
+    the caller holding the review. Manual-test ticks are the indices of the
+    section's agent-authored `checks` the human has confirmed; they live in a
+    `checked` column (server-side, not localStorage) so progress survives a device
+    switch and is visible to whoever opens the review — kept separate from `checks`
+    so the agent re-authoring the checklist never wipes human progress. Indices are
+    validated against the current item count, deduped and sorted before storing.
+    The walkthrough page matches the playbooks pages at `max-w-7xl`.
   - `file()` serves the **changed-file viewer** — a per-mode HTML fragment the
     modal injects. `diff` renders the stored unified patch (no GitHub call);
     `full` fetches the head blob and renders the whole file with changed lines
@@ -221,13 +227,22 @@ sign-off, so losing the claim (someone releases / reassigns) locks the screen
 read-only. A review is linked to the Tasks it covers via the `review_task`
 pivot; the walkthrough lists them and each board card links back to its review.
 
-Each section's controls model three independent things, and **all autosave** (no
+Each section's controls model four independent things, and **all autosave** (no
 save buttons): a neutral **"I've reviewed this section"** checkbox (maps to
 `status` open↔signed_off — a "been through it" marker, not a satisfaction
 statement, which drives the progress bar), an **Approve / Request-changes
-decision**, and an always-available **comment** (useful alongside an approval too)
+decision**, a **manual-test checklist** of agent-authored items the reviewer ticks
+off (each toggle optimistically flips, PATCHes the whole `checked` set, and rolls
+back if the save fails; an aggregate green bar tracks ticked/total across the
+review), and an always-available **comment** (useful alongside an approval too)
 that debounces on input and flushes on blur. Every change PATCHes immediately, so
-a refresh shows the persisted state.
+a refresh — or a different device — shows the persisted state.
+
+The manual-test checklist honours the review **boundary**: the agent emits the
+checklist *items* as structured data (the `checks` string list, via
+`upsert_review_section`) — never HTML — and Lodestar renders them with its own
+trusted Blade + Tailwind checkboxes. The human's tick state is Lodestar's own
+(`checked`), so item authoring and progress never collide.
 
 Beyond the reviewed-marker, each section's **decision** (approve / request
 changes) drives the outcome, and the AI's concerns are first-class **findings**

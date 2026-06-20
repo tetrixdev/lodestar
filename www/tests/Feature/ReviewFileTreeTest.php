@@ -32,6 +32,44 @@ class ReviewFileTreeTest extends TestCase
             ->assertSee('1 uncovered'); // the guard surfaces the gap in the UI
     }
 
+    public function test_the_walkthrough_renders_the_manual_test_checklist(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $review = $project->reviews()->create(['title' => 'R', 'status' => 'in_review']);
+        $review->claimFor($user->id);
+
+        $review->sections()->create([
+            'title' => 'S', 'mode' => 'direct', 'status' => 'open', 'position' => 1,
+            'checks' => ['log in as admin', 'create a card'],
+            'checked' => [1], // second item already ticked
+        ]);
+
+        $body = $this->actingAs($user)->get(route('reviews.show', $review))
+            ->assertOk()
+            ->assertSee('Manual tests')
+            ->assertSee('log in as admin')
+            ->assertSee('create a card')
+            ->getContent();
+
+        // The render seeds the Alpine `section()` component with the persisted tick
+        // state and the walkthrough with the aggregate manual-test totals. The view
+        // emits these via @js (Js::from), so build the expected escaped payloads the
+        // same way: the full checklist (item 1 'create a card' done) and the summary
+        // (2 items, 1 done).
+        $section = $review->sections()->first();
+        $this->assertStringContainsString(
+            (string) \Illuminate\Support\Js::from($section->checklist()),
+            $body,
+        );
+        $this->assertStringContainsString(
+            (string) \Illuminate\Support\Js::from($review->load('sections')->manualTestSummary()),
+            $body,
+        );
+        // Sanity: the persisted tick is reflected in the seeded checklist.
+        $this->assertTrue($section->checklist()[1]['done']);
+    }
+
     public function test_sections_dispatch_the_file_viewer_with_full_payload(): void
     {
         $user = User::factory()->create();

@@ -185,6 +185,106 @@ class ReviewLogicTest extends TestCase
         $this->assertNull($section->fresh()->decision);
     }
 
+    // ── manual-test checklist (web) ──────────────────────────────────────────
+
+    public function test_manual_test_ticks_persist_for_the_holder(): void
+    {
+        $owner = User::factory()->create();
+        $review = $this->review($this->project($owner), 'in_review');
+        $section = $this->section($review);
+        $section->update(['checks' => ['log in', 'create a card', 'sign off']]);
+        $review->claimFor($owner->id);
+
+        $this->actingAs($owner)
+            ->patchJson(route('reviews.sections.update', [$review, $section]), ['checked' => [0, 2]])
+            ->assertOk()
+            ->assertJsonPath('manual_tests.total', 3)
+            ->assertJsonPath('manual_tests.done', 2);
+
+        $this->assertSame([0, 2], $section->fresh()->checked);
+    }
+
+    public function test_manual_test_ticks_are_deduped_and_sorted(): void
+    {
+        $owner = User::factory()->create();
+        $review = $this->review($this->project($owner), 'in_review');
+        $section = $this->section($review);
+        $section->update(['checks' => ['a', 'b', 'c']]);
+        $review->claimFor($owner->id);
+
+        $this->actingAs($owner)
+            ->patchJson(route('reviews.sections.update', [$review, $section]), ['checked' => [2, 0, 2, 1]])
+            ->assertOk();
+
+        $this->assertSame([0, 1, 2], $section->fresh()->checked);
+    }
+
+    public function test_manual_test_ticks_can_be_cleared(): void
+    {
+        $owner = User::factory()->create();
+        $review = $this->review($this->project($owner), 'in_review');
+        $section = $this->section($review);
+        $section->update(['checks' => ['a', 'b'], 'checked' => [0, 1]]);
+        $review->claimFor($owner->id);
+
+        $this->actingAs($owner)
+            ->patchJson(route('reviews.sections.update', [$review, $section]), ['checked' => []])
+            ->assertOk()
+            ->assertJsonPath('manual_tests.done', 0);
+
+        $this->assertSame([], $section->fresh()->checked);
+    }
+
+    public function test_manual_test_ticks_are_gated_on_holding_the_review(): void
+    {
+        $owner = User::factory()->create();
+        $review = $this->review($this->project($owner), 'in_review');
+        $section = $this->section($review);
+        $section->update(['checks' => ['a', 'b']]);
+
+        // Not assigned → blocked.
+        $this->actingAs($owner)
+            ->patchJson(route('reviews.sections.update', [$review, $section]), ['checked' => [1]])
+            ->assertForbidden();
+
+        $this->assertNull($section->fresh()->checked);
+    }
+
+    public function test_manual_test_rejects_an_index_out_of_range(): void
+    {
+        $owner = User::factory()->create();
+        $review = $this->review($this->project($owner), 'in_review');
+        $section = $this->section($review);
+        $section->update(['checks' => ['a', 'b']]); // valid indices: 0, 1
+        $review->claimFor($owner->id);
+
+        // The app renders JSON only for api/* (see bootstrap/app.php); a validation
+        // failure on a web route redirects back with the errors flashed.
+        $this->actingAs($owner)
+            ->patch(route('reviews.sections.update', [$review, $section]), ['checked' => [2]])
+            ->assertSessionHasErrors('checked.0');
+
+        $this->assertNull($section->fresh()->checked);
+    }
+
+    public function test_checklist_helper_marks_done_and_survives_reauthoring(): void
+    {
+        $owner = User::factory()->create();
+        $review = $this->review($this->project($owner));
+        $section = $this->section($review);
+        $section->update(['checks' => ['a', 'b', 'c'], 'checked' => [1]]);
+
+        $list = $section->fresh()->checklist();
+        $this->assertSame(['index' => 0, 'label' => 'a', 'done' => false], $list[0]);
+        $this->assertSame(['index' => 1, 'label' => 'b', 'done' => true], $list[1]);
+
+        // Re-authoring the checks list down to 2 items leaves a stale tick at index 1
+        // pointing at 'c'→gone? index 1 still valid; the summary filters out-of-range.
+        $section->update(['checks' => ['a', 'b'], 'checked' => [1, 5]]); // 5 is stale
+        $this->assertSame(1, $review->fresh()->load('sections')->manualTestSummary()['done']);
+        $this->assertSame(2, $review->fresh()->load('sections')->manualTestSummary()['total']);
+    }
+
     // ── conclude ─────────────────────────────────────────────────────────────
 
     public function test_conclude_is_refused_while_a_section_is_undecided(): void
