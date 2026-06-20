@@ -307,6 +307,17 @@ class Task extends Model
         // whenever a child task is saved or deleted (status changes, attach/detach).
         static::saved(function (Task $task): void {
             $task->deliverable?->syncStatus();
+
+            // Dependency invalidation: if this task dropped BACK to (re-)planning from
+            // an approved phase, its plan changed — invalidate any dependents whose
+            // plan was already approved (their basis may no longer hold).
+            if ($task->wasChanged('status')
+                && in_array($task->status, [self::STATUS_READY_FOR_PLANNING, self::STATUS_PLAN_REVIEW], true)
+                && in_array($task->getOriginal('status'), self::APPROVED_PHASE_STATUSES, true)) {
+                $task->invalidateApprovedDependents(
+                    "Dependency #{$task->id} \"{$task->title}\" was re-planned — re-check this task against it."
+                );
+            }
         });
         static::deleted(function (Task $task): void {
             $task->deliverable?->syncStatus();
@@ -377,6 +388,33 @@ class Task extends Model
         return $this->dependencies()
             ->whereNotIn('status', [self::STATUS_DONE, self::STATUS_CANCELLED])
             ->exists();
+    }
+
+    /** Statuses where a task's plan has been approved and it has moved into (or through) build. */
+    public const APPROVED_PHASE_STATUSES = [
+        self::STATUS_READY_FOR_DEV,
+        self::STATUS_DEVELOPING,
+        self::STATUS_READY_FOR_AI_REVIEW,
+        self::STATUS_AI_REVIEW,
+        self::STATUS_HUMAN_REVIEW,
+        self::STATUS_APPROVED,
+    ];
+
+    /**
+     * Invalidate dependents whose plan was already approved: a task they depend on
+     * changed (was re-planned), so their basis may no longer hold. Send each back to
+     * plan_review with a note so the human re-confirms it. Done-tasks are left alone
+     * (their work already shipped into the branch); cascades naturally down the chain.
+     */
+    public function invalidateApprovedDependents(string $reason): void
+    {
+        $this->dependents()
+            ->whereIn('status', self::APPROVED_PHASE_STATUSES)
+            ->get()
+            ->each(fn (Task $dep) => $dep->forceFill([
+                'status' => self::STATUS_PLAN_REVIEW,
+                'rework_notes' => $reason,
+            ])->save());
     }
 
     /** Append an entry to the activity log. */

@@ -173,6 +173,36 @@ class DeliverableLifecycleTest extends TestCase
         $this->assertSame('code', $t->humanGateType());
     }
 
+    // ── dependency invalidation ───────────────────────────────────────────────
+
+    public function test_replanning_a_dependency_invalidates_approved_dependents(): void
+    {
+        $d = $this->deliverable($this->project(User::factory()->create()));
+        $dep = $this->task($d, ['title' => 'Dependency', 'status' => Task::STATUS_READY_FOR_DEV]);
+        $dependent = $this->task($d, ['title' => 'Dependent', 'status' => Task::STATUS_READY_FOR_DEV]);
+        $dependent->dependencies()->attach($dep->id);
+
+        // The dependency is re-planned (back to plan_review) → the approved dependent
+        // is invalidated back to plan_review with a note.
+        $dep->update(['status' => Task::STATUS_PLAN_REVIEW]);
+
+        $fresh = $dependent->fresh();
+        $this->assertSame(Task::STATUS_PLAN_REVIEW, $fresh->status);
+        $this->assertStringContainsString('re-planned', (string) $fresh->rework_notes);
+    }
+
+    public function test_done_dependents_are_not_invalidated(): void
+    {
+        $d = $this->deliverable($this->project(User::factory()->create()));
+        $dep = $this->task($d, ['title' => 'Dependency', 'status' => Task::STATUS_READY_FOR_DEV]);
+        $doneDependent = $this->task($d, ['title' => 'Shipped', 'status' => Task::STATUS_DONE]);
+        $doneDependent->dependencies()->attach($dep->id);
+
+        $dep->update(['status' => Task::STATUS_PLAN_REVIEW]);
+
+        $this->assertSame(Task::STATUS_DONE, $doneDependent->fresh()->status); // already shipped — left alone
+    }
+
     // ── dirty-section watermark ───────────────────────────────────────────────
 
     public function test_mark_stale_resets_decision_and_records_change(): void
