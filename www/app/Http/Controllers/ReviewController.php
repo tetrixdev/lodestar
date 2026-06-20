@@ -350,12 +350,23 @@ class ReviewController extends Controller
                 return;
             }
 
-            // changes_requested → back to building; rework lands as corrective task(s).
+            // changes_requested → spawn corrective fix task(s) under the deliverable.
+            // Each fix enters at ready_for_dev (skips planning) and skips the per-task
+            // human functional review (needs_functional_review = false) — the human is
+            // reviewing at the DELIVERABLE level, so the fix flows ai_review ⇒ approved
+            // automatically (still AI-reviewed). The new non-merged task pulls the
+            // deliverable back to BUILD via syncStatus().
             $review->update(['outcome' => 'changes_requested', 'status' => 'done']);
-            if ($deliverable->canTransitionTo(Deliverable::STATUS_BUILDING)) {
+            $spawned = $this->spawnCorrectiveTasks($review, $deliverable);
+            // syncStatus() on the new task's save already pulls the deliverable back
+            // to building; fall back explicitly if nothing was spawned.
+            if ($spawned === 0 && $deliverable->canTransitionTo(Deliverable::STATUS_BUILDING)) {
                 $deliverable->update(['status' => Deliverable::STATUS_BUILDING]);
             }
-            $message = 'Changes requested — deliverable sent back to building; add corrective task(s) for the fixes.';
+            $message = $spawned === 0
+                ? 'Changes requested — deliverable sent back to building (no actionable findings to spawn a task from).'
+                : 'Changes requested — '.$spawned.' corrective task'.($spawned === 1 ? '' : 's')
+                    .' created under the deliverable; it is back in building.';
         });
 
         return redirect()->route('reviews.show', $review)->with('status', $message);
@@ -389,6 +400,48 @@ class ReviewController extends Controller
         }
 
         return trim(implode("\n", $lines));
+    }
+
+    /**
+     * Spawn corrective fix task(s) under a deliverable from a changes-requested
+     * deliverable-level review. One summarizing task per deliverable review,
+     * compiling every change-requested section note + must_fix finding into its
+     * body. The task is corrective (is_corrective = true), skips the per-task
+     * human functional review (needs_functional_review = false), enters at
+     * ready_for_dev (no planning), and belongs to the deliverable — which
+     * therefore drops back to BUILD. Returns the number of tasks created.
+     */
+    private function spawnCorrectiveTasks(Review $review, Deliverable $deliverable): int
+    {
+        $body = $this->compileReworkNotes($review);
+
+        // Nothing actionable (no change-requested notes, no must_fix findings) →
+        // don't manufacture an empty fix task; the caller falls back to building.
+        $heading = "# Rework requested (review: {$review->title})";
+        if (trim($body) === '' || trim($body) === $heading) {
+            return 0;
+        }
+
+        $title = "Corrective: {$review->title}";
+
+        $task = $deliverable->project->tasks()->make([
+            'deliverable_id' => $deliverable->id,
+            'status' => Task::STATUS_READY_FOR_DEV,
+            'is_corrective' => true,
+            'needs_functional_review' => false,
+            'title' => $title,
+            'body' => $body,
+            'body_summary' => "Fixes raised by deliverable review “{$review->title}”.",
+            'rework_notes' => $body,
+            'position' => (int) $deliverable->project->tasks()
+                ->where('status', Task::STATUS_READY_FOR_DEV)->max('position') + 1,
+        ]);
+        $task->save();
+
+        $task->logEvent('review_changes_requested', $review->assignee?->name,
+            "Spawned from deliverable review #{$review->id} (changes requested).");
+
+        return 1;
     }
 
     /** Atomically self-assign this review (succeeds only if currently unassigned). */

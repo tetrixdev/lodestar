@@ -67,6 +67,32 @@ class ReviewFunnelTest extends TestCase
         $this->assertSame('changes_requested', $review->fresh()->outcome);
     }
 
+    public function test_changes_requested_spawns_a_corrective_task_under_the_deliverable(): void
+    {
+        $user = User::factory()->create();
+        $review = $this->deliverableReview($user, Deliverable::STATUS_HUMAN_ARCHITECTURE_REVIEW);
+        $section = $review->sections()->first();
+        $section->update(['decision' => 'changes_requested', 'note' => 'The auth flow is wrong.']);
+        $section->findings()->create([
+            'title' => 'Token leaks in logs', 'severity' => 'high', 'status' => 'must_fix',
+            'detail' => 'Redact the token before logging.', 'position' => 0,
+        ]);
+
+        $this->actingAs($user)->post(route('reviews.conclude', $review))->assertRedirect();
+
+        $deliverable = $review->deliverable->fresh();
+        $task = $deliverable->tasks()->latest('id')->first();
+
+        $this->assertNotNull($task, 'a corrective task should be spawned');
+        $this->assertTrue($task->is_corrective);
+        $this->assertFalse($task->needs_functional_review, 'spawned fix skips the per-task human review');
+        $this->assertSame(\App\Models\Task::STATUS_READY_FOR_DEV, $task->status, 'fix skips planning');
+        $this->assertStringContainsString('The auth flow is wrong.', (string) $task->body);
+        $this->assertStringContainsString('Token leaks in logs', (string) $task->body);
+        // The new non-merged task keeps the deliverable in BUILD.
+        $this->assertSame(Deliverable::STATUS_BUILDING, $deliverable->status);
+    }
+
     public function test_create_review_makes_a_deliverable_scoped_architecture_review(): void
     {
         $user = User::factory()->create();

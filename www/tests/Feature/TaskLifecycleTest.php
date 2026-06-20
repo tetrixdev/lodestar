@@ -51,6 +51,38 @@ class TaskLifecycleTest extends TestCase
         $this->assertFalse($task->canTransitionTo(Task::STATUS_PLANNING));           // illegal jump
     }
 
+    public function test_normal_task_at_ai_review_must_pass_through_human_review(): void
+    {
+        // needs_functional_review defaults true → the human gate stands.
+        $task = new Task(['status' => Task::STATUS_AI_REVIEW, 'needs_functional_review' => true]);
+
+        $this->assertContains(Task::STATUS_HUMAN_REVIEW, $task->allowedTransitions());
+        $this->assertTrue($task->canTransitionTo(Task::STATUS_HUMAN_REVIEW));
+        $this->assertFalse($task->canTransitionTo(Task::STATUS_APPROVED), 'normal task cannot skip human review');
+        $this->assertTrue($task->requiresHumanReview());
+    }
+
+    public function test_corrective_task_at_ai_review_skips_human_review_to_approved(): void
+    {
+        // A deliverable-review fix (needs_functional_review = false) flows
+        // ai_review ⇒ approved, bypassing the per-task human gate. AI review itself
+        // is still mandatory (developing ⇒ ready_for_ai_review ⇒ ai_review unchanged).
+        $task = new Task([
+            'status' => Task::STATUS_AI_REVIEW,
+            'is_corrective' => true,
+            'needs_functional_review' => false,
+        ]);
+
+        $this->assertFalse($task->requiresHumanReview());
+        $this->assertTrue($task->canTransitionTo(Task::STATUS_APPROVED), 'skip task may go straight to approved');
+        $this->assertFalse($task->canTransitionTo(Task::STATUS_HUMAN_REVIEW), 'human gate is bypassed entirely');
+        // Forward target is approved (preserves forward · back · cancel ordering).
+        $this->assertSame(Task::STATUS_APPROVED, $task->allowedTransitions()[0]);
+        // The AI-review step into this state is unaffected.
+        $dev = new Task(['status' => Task::STATUS_READY_FOR_AI_REVIEW, 'needs_functional_review' => false]);
+        $this->assertTrue($dev->canTransitionTo(Task::STATUS_AI_REVIEW));
+    }
+
     public function test_saving_stamps_status_changed_at_only_when_status_changes(): void
     {
         $user = User::factory()->create();

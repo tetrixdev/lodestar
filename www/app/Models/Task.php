@@ -428,10 +428,41 @@ class Task extends Model
         return 'functional';
     }
 
-    /** The legal target statuses from this card's current status. */
+    /**
+     * Does this task stop at the per-task human (functional) review gate?
+     *
+     * Normal tasks do (the human signs off each card). A corrective task spawned
+     * by a DELIVERABLE-level review skips it (`needs_functional_review = false`):
+     * the human is already reviewing at the deliverable level, so the fix flows
+     * ai_review ⇒ approved automatically. The AI review step stays mandatory
+     * either way — only the HUMAN gate is bypassed.
+     */
+    public function requiresHumanReview(): bool
+    {
+        return (bool) $this->needs_functional_review;
+    }
+
+    /**
+     * The legal target statuses from this card's current status.
+     *
+     * Mostly static (see TRANSITIONS), with one dynamic edge: when a task skips
+     * its human gate (see requiresHumanReview()), ai_review hands straight to
+     * approved instead of human_review. The AI-review step itself is unchanged.
+     */
     public function allowedTransitions(): array
     {
-        return self::TRANSITIONS[$this->status] ?? [];
+        $targets = self::TRANSITIONS[$this->status] ?? [];
+
+        if ($this->status === self::STATUS_AI_REVIEW && ! $this->requiresHumanReview()) {
+            // Swap the human_review forward-target for approved, preserving order
+            // (forward · back · cancel) so the UI control ordering still holds.
+            $targets = array_values(array_map(
+                fn (string $t) => $t === self::STATUS_HUMAN_REVIEW ? self::STATUS_APPROVED : $t,
+                $targets
+            ));
+        }
+
+        return $targets;
     }
 
     /** Is moving this card to $target a legal transition? */

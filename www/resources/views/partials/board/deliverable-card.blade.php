@@ -35,6 +35,7 @@
                     <li class="flex items-center gap-1.5 text-[11px] min-w-0 {{ $isMerged ? 'text-emerald-600' : 'text-gray-600' }}">
                         <span class="{{ $isMerged ? 'text-emerald-500' : 'text-gray-400' }}">{{ sprintf('T%02d', $task->sub_id) }}</span>
                         <a href="{{ route('tasks.show', $task) }}" class="truncate {{ $isMerged ? 'hover:text-emerald-700' : 'hover:text-indigo-600' }}">{{ $task->title }}</a>
+                        @if ($task->is_corrective)<span class="shrink-0 text-[9px] uppercase tracking-wide text-amber-600" title="Corrective fix — skips the per-task human review">fix</span>@endif
                         <span class="ml-auto shrink-0 size-1.5 rounded-full
                             {{ $isMerged ? 'bg-emerald-400' : ($T::actorFor($task->status) === $T::ACTOR_AI_WORKING ? 'bg-violet-400' : ($T::actorFor($task->status) === $T::ACTOR_QUEUED ? 'bg-blue-400' : ($T::actorFor($task->status) === $T::ACTOR_DONE ? 'bg-emerald-400' : 'bg-amber-400'))) }}"
                             title="{{ $T::LABELS[$task->status] ?? $task->status }}"></span>
