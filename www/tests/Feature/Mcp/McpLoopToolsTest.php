@@ -24,7 +24,7 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_READY_FOR_DEV]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_READY_FOR_DEV]);
 
         LodestarServer::actingAs($user)
             ->tool(ClaimTaskTool::class, ['agent_id' => 'laptop'])
@@ -41,7 +41,7 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $gate = $project->tasks()->create(['title' => 'G', 'status' => Task::STATUS_PLAN_REVIEW]);
+        $gate = $this->makeTask($project, ['title' => 'G', 'status' => Task::STATUS_PLAN_REVIEW]);
 
         LodestarServer::actingAs($user)
             ->tool(ClaimTaskTool::class, [])
@@ -55,7 +55,7 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         LodestarServer::actingAs($user)->tool(ClaimTaskTool::class, [])->assertOk()->assertSee('"claimed":true');
         LodestarServer::actingAs($user)->tool(ClaimTaskTool::class, [])->assertOk()->assertSee('No task available');
@@ -66,8 +66,8 @@ class McpLoopToolsTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         // Two queued cards; the first by position is A, but we target B.
-        $a = $project->tasks()->create(['title' => 'A', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 1]);
-        $b = $project->tasks()->create(['title' => 'B', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 2]);
+        $a = $this->makeTask($project, ['title' => 'A', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 1]);
+        $b = $this->makeTask($project, ['title' => 'B', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 2]);
 
         LodestarServer::actingAs($user)
             ->tool(ClaimTaskTool::class, ['task_id' => $b->id])
@@ -81,19 +81,19 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_PLAN_REVIEW]);
 
         LodestarServer::actingAs($user)
             ->tool(ClaimTaskTool::class, ['task_id' => $task->id])
             ->assertHasErrors();
-        $this->assertSame(Task::STATUS_NEW, $task->fresh()->status);
+        $this->assertSame(Task::STATUS_PLAN_REVIEW, $task->fresh()->status);
     }
 
     public function test_phase_filter_only_claims_matching_queue(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $project->tasks()->create(['title' => 'D', 'status' => Task::STATUS_READY_FOR_DEV]);
+        $this->makeTask($project, ['title' => 'D', 'status' => Task::STATUS_READY_FOR_DEV]);
 
         // Asking for the plan phase finds nothing (the only card is a dev card).
         LodestarServer::actingAs($user)
@@ -105,14 +105,14 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create([
+        $task = $this->makeTask($project, [
             'title' => 'T', 'status' => Task::STATUS_DEVELOPING,
             'claimed_by' => 'laptop', 'claimed_at' => now(),
         ]);
 
         // Illegal jump rejected, task untouched.
         LodestarServer::actingAs($user)
-            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_DONE])
+            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_MERGED])
             ->assertHasErrors();
         $this->assertSame(Task::STATUS_DEVELOPING, $task->fresh()->status);
 
@@ -131,10 +131,10 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_CANCELLED]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_CANCELLED]);
 
         LodestarServer::actingAs($user)
-            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_NEW])
+            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_READY_FOR_PLANNING])
             ->assertHasErrors();
 
         $this->assertSame(Task::STATUS_CANCELLED, $task->fresh()->status);
@@ -144,7 +144,7 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
 
         LodestarServer::actingAs($user)
             ->tool(ReportTool::class, ['task_id' => $task->id, 'title' => 'Built the thing'])
@@ -183,7 +183,7 @@ class McpLoopToolsTest extends TestCase
 
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
 
         // No personal layer → just the system develop base.
         LodestarServer::actingAs($user)

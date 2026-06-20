@@ -52,7 +52,7 @@ class AgentLoopTest extends TestCase
         $this->actingAs($user)->get(route('board'))->assertOk()->assertSee('No agent');
 
         // A card in a working (*-ing) state → the heartbeat lights up.
-        $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
+        $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
         $this->actingAs($user)->get(route('board'))->assertOk()->assertSee('Agent working');
     }
 
@@ -60,7 +60,7 @@ class AgentLoopTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $project->tasks()->create([
+        $this->makeTask($project, [
             'title' => 'T', 'status' => Task::STATUS_DEVELOPING, 'claimed_by' => 'loop',
         ]);
 
@@ -71,7 +71,7 @@ class AgentLoopTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'Rocket', 'slug' => 'rocket']);
-        $project->tasks()->create(['title' => 'Build it', 'status' => Task::STATUS_DEVELOPING, 'claimed_by' => 'loop']);
+        $this->makeTask($project, ['title' => 'Build it', 'status' => Task::STATUS_DEVELOPING, 'claimed_by' => 'loop']);
 
         $this->actingAs($user)->get(route('agents.index'))
             ->assertOk()
@@ -84,8 +84,8 @@ class AgentLoopTest extends TestCase
     {
         $me = User::factory()->create();
         $stranger = User::factory()->create();
-        $stranger->projects()->create(['name' => 'X', 'slug' => 'x'])
-            ->tasks()->create(['title' => 'theirs', 'status' => Task::STATUS_DEVELOPING]);
+        $strangerProject = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
+        $this->makeTask($strangerProject, ['title' => 'theirs', 'status' => Task::STATUS_DEVELOPING]);
 
         $this->assertSame(0, Task::agentSnapshot($me)['working']);
     }

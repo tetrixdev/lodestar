@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 /**
@@ -24,6 +25,8 @@ use Illuminate\Support\Str;
  */
 class Deliverable extends Model
 {
+    use SoftDeletes;
+
     protected $guarded = [];
 
     protected $casts = [
@@ -53,9 +56,9 @@ class Deliverable extends Model
 
     public const STATUS_APPROVED = 'approved';
 
-    public const STATUS_MERGE_DEPLOY = 'merge_deploy';
+    public const STATUS_MERGING = 'merging';
 
-    public const STATUS_DONE = 'done';
+    public const STATUS_MERGED = 'merged';
 
     public const STATUS_CANCELLED = 'cancelled';
 
@@ -71,8 +74,8 @@ class Deliverable extends Model
         self::STATUS_HUMAN_ARCHITECTURE_REVIEW,
         self::STATUS_HUMAN_FUNCTIONAL_REVIEW,
         self::STATUS_APPROVED,
-        self::STATUS_MERGE_DEPLOY,
-        self::STATUS_DONE,
+        self::STATUS_MERGING,
+        self::STATUS_MERGED,
     ];
 
     /**
@@ -91,8 +94,8 @@ class Deliverable extends Model
         self::STATUS_HUMAN_ARCHITECTURE_REVIEW => 'review',
         self::STATUS_HUMAN_FUNCTIONAL_REVIEW => 'review',
         self::STATUS_APPROVED => 'ship',
-        self::STATUS_MERGE_DEPLOY => 'ship',
-        self::STATUS_DONE => 'ship',
+        self::STATUS_MERGING => 'ship',
+        self::STATUS_MERGED => 'ship',
     ];
 
     /** The board phase column this deliverable's status belongs to. */
@@ -112,8 +115,8 @@ class Deliverable extends Model
         self::STATUS_HUMAN_ARCHITECTURE_REVIEW => 'Architecture review',
         self::STATUS_HUMAN_FUNCTIONAL_REVIEW => 'Functional sanity',
         self::STATUS_APPROVED => 'Approved',
-        self::STATUS_MERGE_DEPLOY => 'Merge & deploy',
-        self::STATUS_DONE => 'Done',
+        self::STATUS_MERGING => 'Merging',
+        self::STATUS_MERGED => 'Merged',
         self::STATUS_CANCELLED => 'Cancelled',
     ];
 
@@ -130,8 +133,8 @@ class Deliverable extends Model
         self::STATUS_HUMAN_ARCHITECTURE_REVIEW => Task::ACTOR_NEEDS_HUMAN,
         self::STATUS_HUMAN_FUNCTIONAL_REVIEW => Task::ACTOR_NEEDS_HUMAN,
         self::STATUS_APPROVED => Task::ACTOR_QUEUED,
-        self::STATUS_MERGE_DEPLOY => Task::ACTOR_AI_WORKING,
-        self::STATUS_DONE => Task::ACTOR_DONE,
+        self::STATUS_MERGING => Task::ACTOR_AI_WORKING,
+        self::STATUS_MERGED => Task::ACTOR_DONE,
         self::STATUS_CANCELLED => Task::ACTOR_ARCHIVED,
     ];
 
@@ -154,9 +157,9 @@ class Deliverable extends Model
         self::STATUS_AI_REVIEW => [self::STATUS_HUMAN_ARCHITECTURE_REVIEW, self::STATUS_BUILDING, self::STATUS_CANCELLED],
         self::STATUS_HUMAN_ARCHITECTURE_REVIEW => [self::STATUS_HUMAN_FUNCTIONAL_REVIEW, self::STATUS_BUILDING, self::STATUS_CANCELLED],
         self::STATUS_HUMAN_FUNCTIONAL_REVIEW => [self::STATUS_APPROVED, self::STATUS_BUILDING, self::STATUS_CANCELLED],
-        self::STATUS_APPROVED => [self::STATUS_MERGE_DEPLOY, self::STATUS_HUMAN_FUNCTIONAL_REVIEW, self::STATUS_CANCELLED],
-        self::STATUS_MERGE_DEPLOY => [self::STATUS_DONE, self::STATUS_APPROVED, self::STATUS_CANCELLED],
-        self::STATUS_DONE => [self::STATUS_CANCELLED],
+        self::STATUS_APPROVED => [self::STATUS_MERGING, self::STATUS_HUMAN_FUNCTIONAL_REVIEW, self::STATUS_CANCELLED],
+        self::STATUS_MERGING => [self::STATUS_MERGED, self::STATUS_APPROVED, self::STATUS_CANCELLED],
+        self::STATUS_MERGED => [self::STATUS_CANCELLED],
         self::STATUS_CANCELLED => [],
     ];
 
@@ -173,7 +176,7 @@ class Deliverable extends Model
         // reads the scope and creates the child tasks); then status derives from tasks.
         self::STATUS_NEW => self::STATUS_PLANNING,
         self::STATUS_READY_FOR_AI_REVIEW => self::STATUS_AI_REVIEW,
-        self::STATUS_APPROVED => self::STATUS_MERGE_DEPLOY,
+        self::STATUS_APPROVED => self::STATUS_MERGING,
     ];
 
     /**
@@ -184,7 +187,7 @@ class Deliverable extends Model
     public const PHASE_FOR_WORKING = [
         self::STATUS_PLANNING => 'plan',
         self::STATUS_AI_REVIEW => 'ai_review',
-        self::STATUS_MERGE_DEPLOY => 'merge',
+        self::STATUS_MERGING => 'merge',
     ];
 
     protected static function booted(): void
@@ -297,7 +300,7 @@ class Deliverable extends Model
     public function openTasks()
     {
         return $this->tasks()
-            ->whereNotIn('status', [Task::STATUS_DONE, Task::STATUS_CANCELLED]);
+            ->whereNotIn('status', [Task::STATUS_MERGED, Task::STATUS_CANCELLED]);
     }
 
     /**
@@ -323,14 +326,14 @@ class Deliverable extends Model
      */
     public function syncStatus(): void
     {
-        if (in_array($this->status, [self::STATUS_DONE, self::STATUS_CANCELLED], true)) {
+        if (in_array($this->status, [self::STATUS_MERGED, self::STATUS_CANCELLED], true)) {
             return; // terminal
         }
 
         $statuses = $this->tasks()->where('status', '!=', Task::STATUS_CANCELLED)->pluck('status');
-        $incomplete = $statuses->reject(fn ($s) => $s === Task::STATUS_DONE);
+        $incomplete = $statuses->reject(fn ($s) => $s === Task::STATUS_MERGED);
         $hasUnapproved = $incomplete->intersect([
-            Task::STATUS_NEW, Task::STATUS_READY_FOR_PLANNING, Task::STATUS_PLANNING, Task::STATUS_PLAN_REVIEW,
+            Task::STATUS_READY_FOR_PLANNING, Task::STATUS_PLANNING, Task::STATUS_PLAN_REVIEW,
         ])->isNotEmpty();
 
         if ($statuses->isEmpty()) {
@@ -343,7 +346,7 @@ class Deliverable extends Model
 
         $reviewChain = [
             self::STATUS_AI_REVIEW, self::STATUS_HUMAN_ARCHITECTURE_REVIEW,
-            self::STATUS_HUMAN_FUNCTIONAL_REVIEW, self::STATUS_APPROVED, self::STATUS_MERGE_DEPLOY,
+            self::STATUS_HUMAN_FUNCTIONAL_REVIEW, self::STATUS_APPROVED, self::STATUS_MERGING,
         ];
 
         if (in_array($this->status, $reviewChain, true)) {

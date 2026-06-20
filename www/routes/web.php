@@ -64,7 +64,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/projects/{project}/repositories', [RepositoryController::class, 'index'])->name('repositories.index');
     Route::post('/projects/{project}/repositories', [RepositoryController::class, 'store'])->name('repositories.store');
     Route::delete('/projects/{project}/repositories/{repository}', [RepositoryController::class, 'destroy'])->name('repositories.destroy');
-    Route::post('/projects/{project}/tasks', [TaskController::class, 'store'])->name('tasks.store');
     Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
     Route::post('/tasks/{task}/comments', [TaskController::class, 'comment'])->name('tasks.comments.store');
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');

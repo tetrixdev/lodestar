@@ -25,7 +25,7 @@ class ProjectManagementTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)
             ->patch("/tasks/{$task->id}", [
@@ -50,24 +50,24 @@ class ProjectManagementTest extends TestCase
         $this->assertSame('desc', $fresh->body);
         $this->assertSame('the plan', $fresh->plan);
         // status untouched.
-        $this->assertSame('new', $fresh->status);
+        $this->assertSame('ready_for_planning', $fresh->status);
     }
 
     public function test_update_can_edit_content_and_change_status_together(): void
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)
             ->patch("/tasks/{$task->id}", [
-                'status' => 'ready_for_planning',
+                'status' => 'planning',
                 'priority' => 'high',
             ])
             ->assertRedirect();
 
         $fresh = $task->fresh();
-        $this->assertSame('ready_for_planning', $fresh->status);
+        $this->assertSame('planning', $fresh->status);
         $this->assertSame('high', $fresh->priority);
     }
 
@@ -75,7 +75,7 @@ class ProjectManagementTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0, 'priority' => 'normal']);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0, 'priority' => 'normal']);
 
         $this->actingAs($user)
             ->patch("/tasks/{$task->id}", ['priority' => 'bogus'])
@@ -89,44 +89,11 @@ class ProjectManagementTest extends TestCase
         $owner = User::factory()->create();
         $intruder = User::factory()->create();
         $project = $this->project($owner);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($intruder)
             ->patch("/tasks/{$task->id}", ['priority' => 'urgent'])
             ->assertForbidden();
-    }
-
-    // ── richer create ────────────────────────────────────────────────────────
-
-    public function test_store_accepts_priority_and_due_date(): void
-    {
-        $user = User::factory()->create();
-        $project = $this->project($user);
-
-        $this->actingAs($user)
-            ->post("/projects/{$project->id}/tasks", [
-                'title' => 'Fresh',
-                'priority' => 'high',
-                'due_date' => '2026-08-15',
-            ])
-            ->assertRedirect();
-
-        $task = $project->tasks()->where('title', 'Fresh')->first();
-        $this->assertNotNull($task);
-        $this->assertSame('high', $task->priority);
-        $this->assertSame('2026-08-15', $task->due_date->format('Y-m-d'));
-    }
-
-    public function test_store_defaults_priority_to_normal(): void
-    {
-        $user = User::factory()->create();
-        $project = $this->project($user);
-
-        $this->actingAs($user)
-            ->post("/projects/{$project->id}/tasks", ['title' => 'Plain'])
-            ->assertRedirect();
-
-        $this->assertSame('normal', $project->tasks()->where('title', 'Plain')->first()->priority);
     }
 
     // ── the board still renders ──────────────────────────────────────────────
@@ -135,7 +102,7 @@ class ProjectManagementTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $project->tasks()->create(['title' => 'Visible card', 'status' => 'new', 'position' => 0, 'priority' => 'urgent']);
+        $this->makeTask($project, ['title' => 'Visible card', 'status' => 'ready_for_planning', 'position' => 0, 'priority' => 'urgent']);
 
         $this->actingAs($user)
             ->get("/projects/{$project->id}")
@@ -155,7 +122,7 @@ class ProjectManagementTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $project->tasks()->create([
+        $this->makeTask($project, [
             'title' => 'Timeline card',
             'status' => 'developing',
             'position' => 0,
@@ -197,8 +164,8 @@ class ProjectManagementTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $project->tasks()->create(['title' => 'Done one', 'status' => 'done', 'position' => 0]);
-        $project->tasks()->create(['title' => 'Open one', 'status' => 'new', 'position' => 0]);
+        $this->makeTask($project, ['title' => 'Done one', 'status' => 'merged', 'position' => 0]);
+        $this->makeTask($project, ['title' => 'Open one', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)
             ->get('/projects')

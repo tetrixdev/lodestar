@@ -98,7 +98,7 @@ class AttentionTray
             ->whereIn('project_id', $projectIds)
             ->whereNotNull('due_date')
             ->whereDate('due_date', '<=', now()->addDays(7)->toDateString())
-            ->whereNotIn('status', [Task::STATUS_DONE, Task::STATUS_CANCELLED])
+            ->whereNotIn('status', [Task::STATUS_MERGED, Task::STATUS_CANCELLED])
             ->with('project:id,name')
             ->orderBy('due_date')
             ->get()

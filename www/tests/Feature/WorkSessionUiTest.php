@@ -64,7 +64,7 @@ class WorkSessionUiTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'Some task', 'status' => Task::STATUS_NEW, 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'Some task', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
 
         $this->actingAs($user)->post(route('work-sessions.store', $project), [
             'title' => 'Worked on the task',
@@ -101,7 +101,7 @@ class WorkSessionUiTest extends TestCase
         $user = User::factory()->create();
         $project = $this->project($user);
         $otherProject = $this->project($user);
-        $foreignTask = $otherProject->tasks()->create(['title' => 'Elsewhere', 'status' => Task::STATUS_NEW, 'position' => 0]);
+        $foreignTask = $this->makeTask($otherProject, ['title' => 'Elsewhere', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
 
         $this->actingAs($user)
             ->post(route('work-sessions.store', $project), [

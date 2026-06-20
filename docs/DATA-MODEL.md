@@ -30,9 +30,11 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   changes go through the team). Members + their `can_approve_prompts` rights live
   in the `team_user` pivot (the owner is always a member with approval). The
   `project_user` pivot does the same for project-level playbook approval.
-- **Task** — a kanban card. `status` is one of the **13 lifecycle states** (see
-  Invariants); `position` orders cards within a single status; `category` is a
-  free-text grouping prefix (e.g. `mcp`, `infra`); `body` is the card detail.
+- **Task** — a kanban card, always a **child of a Deliverable** (`deliverable_id`
+  is required — there are no loose/standalone tasks). `status` is one of the **12
+  lifecycle states** (11 live + `cancelled`, see Invariants); `position` orders
+  cards within a single status; `category` is a free-text grouping prefix (e.g.
+  `mcp`, `infra`); `body` is the card detail.
   `status_changed_at` records when the card last entered its current status (the
   "Nh in status" timer) and is stamped automatically on every status change.
   `claimed_by` / `claimed_at` record which agent currently holds a working
@@ -127,18 +129,25 @@ These are the rules the column list alone won't tell you:
   and MCP tool uses (403 otherwise). Personal projects (`team_id` null) are
   owner-only, so this is backward-compatible with the original `user_id` check.
   `(user_id, slug)` is unique, so a slug is unique *per user*, not globally.
-- **A Task's status is one of 13 — 12 live + `cancelled`.** The live pipeline,
-  in order: `new → ready_for_planning → planning → plan_review → ready_for_dev →
+- **A Task's status is one of 12 — 11 live + `cancelled`.** The live pipeline,
+  in order: `ready_for_planning → planning → plan_review → ready_for_dev →
   developing → ready_for_ai_review → ai_review → human_review → approved →
-  merge_deploy → done`. `cancelled` is the archive (a soft-delete; there is no
-  hard delete). The board groups the 12 live states into **5 phase columns**
+  merging → merged`. `cancelled` is the archive (a soft-delete; there is no
+  hard delete). (Tasks have no `new` state — that is a deliverable-only backlog
+  status.) The board groups the 11 live states into **5 phase columns**
   (Backlog · Plan · Build · Review · Ship) and colours each card by the **actor**
   it waits on (needs-human / queued / ai-working / done / archived).
 - **Status moves are legal-only.** A Task may only move to a status in its
   allowed-transition set (`Task::TRANSITIONS`); an illegal jump is rejected (422
-  / validation error). The transition map is forward · back · cancel per state,
-  with `cancelled` restoring to `new`. The lists, phases, actors, labels and
-  transition map all live as constants on `App\Models\Task`.
+  / validation error). The transition map is forward · back · cancel per state;
+  the task backlog state is `ready_for_planning` (tasks have no `new`), and
+  `cancelled` is a permanent archive (no restore edge). The lists, phases, actors,
+  labels and transition map all
+  live as constants on `App\Models\Task`. A task is **always a deliverable
+  child** (`deliverable_id` is a required FK, `restrictOnDelete`); there are no
+  loose/standalone tasks, and nothing is hard-deleted (Task + Deliverable both use
+  **SoftDeletes** — `cancelled` is the archive state, `deleted_at` the soft-delete
+  marker).
 - **`status_changed_at` is stamped automatically.** A `saving` model hook stamps
   it whenever `status` is dirty (or on first save), so every code path — the
   board, tinker, a future agent loop — keeps the timer honest. A non-status edit
@@ -267,7 +276,7 @@ are informational — the test checks Field **names** only.
 | title | string | not null | The card title. |
 | category | string | nullable | Free-text grouping prefix (e.g. `mcp`, `infra`). |
 | body | text | nullable | The card detail, markdown. |
-| status | string | not null | One of the **13 lifecycle states** (see Invariants). |
+| status | string | not null | One of the **12 lifecycle states** (11 live + `cancelled`, see Invariants). |
 | position | integer | not null · default 0 | Orders cards **within a single status** (not across the board). |
 | status_changed_at | timestamp | nullable | When the card last entered its current status (the "Nh in status" timer); stamped automatically on every status change. |
 | claimed_by | string | nullable | The agent currently holding a working (`*-ing`) card; set by the atomic claim, cleared when the card moves on. |
@@ -280,10 +289,11 @@ are informational — the test checks Field **names** only.
 | rework_notes | text | nullable | What a review sent back — the change request brief written on `changes_requested`. |
 | body_summary | text | nullable | TL;DR of `body`; required when `body` is set. |
 | plan_summary | text | nullable | TL;DR of `plan`; required when `plan` is set. |
-| deliverable_id | bigint | FK → deliverables · nullable | The deliverable this task belongs to; null = standalone task (branch-per-task → base). |
+| deliverable_id | bigint | FK → deliverables · not null · restrictOnDelete | The deliverable this task belongs to. Required — every task is a deliverable child (no loose/standalone tasks). |
 | sub_id | integer | nullable | Per-deliverable task sequence (1,2,3…); drives the nested branch `D{deliverable}/T{sub_id}-slug`. Unique with `deliverable_id`. |
 | is_corrective | boolean | not null · default false | Marks a task spawned from deliverable-level review feedback. |
 | needs_functional_review | boolean | not null · default true | Whether this task gets a human functional review; refactor/doc tasks can skip (also powers "trivial tasks auto-pass"). |
+| deleted_at | timestamp | nullable | Soft-delete marker (SoftDeletes); a task is never physically removed. |
 
 ### `deliverables`
 
@@ -304,6 +314,7 @@ are informational — the test checks Field **names** only.
 | base_branch | string | nullable | What the branch is cut from / diffed against (the deliverable diff is `base_branch...branch`). |
 | claimed_by | string | nullable | The agent holding a working (`*-ing`) deliverable; set by the atomic claim. |
 | claimed_at | timestamp | nullable | When the deliverable was claimed. |
+| deleted_at | timestamp | nullable | Soft-delete marker (SoftDeletes); a deliverable is never physically removed. |
 
 ### `deliverable_questions`
 
@@ -569,8 +580,8 @@ erDiagram
     USER }o--o{ TEAM : "team_user (member)"
     USER }o--o{ PROJECT : "project_user (member)"
     PROJECT ||--o{ TASK : has
-    PROJECT ||--o{ DELIVERABLE : "groups tasks (optional)"
-    DELIVERABLE ||--o{ TASK : "child tasks (nullable)"
+    PROJECT ||--o{ DELIVERABLE : "groups tasks"
+    DELIVERABLE ||--|{ TASK : "child tasks (required)"
     DELIVERABLE ||--o{ DELIVERABLE_QUESTION : "open questions"
     DELIVERABLE ||--o{ REVIEW : "deliverable-scoped (nullable)"
     PROJECT ||--o{ WORK_SESSION : "work log"
@@ -638,7 +649,7 @@ erDiagram
     TASK {
         bigint id PK
         bigint project_id FK
-        bigint deliverable_id FK "nullable, null = standalone task"
+        bigint deliverable_id FK "required, the owning deliverable (restrictOnDelete)"
         integer sub_id "nullable, per-deliverable sequence; unique with deliverable_id"
         boolean is_corrective "spawned from deliverable review feedback"
         boolean needs_functional_review "default true; refactor/doc tasks skip"
@@ -653,11 +664,12 @@ erDiagram
         text plan "nullable, planning artifact (markdown)"
         text plan_summary "nullable, TL;DR of plan; required when plan is set"
         text rework_notes "nullable, what a review sent back"
-        string status "one of 13 lifecycle states"
+        string status "one of 12 lifecycle states (11 live + cancelled)"
         timestamp status_changed_at "nullable, entered-current-status time"
         string claimed_by "nullable, agent holding a *-ing card"
         timestamp claimed_at "nullable, when it was claimed"
         integer position "order within status"
+        timestamp deleted_at "nullable, soft-delete marker"
     }
 
     WORK_SESSION {
@@ -748,6 +760,7 @@ erDiagram
         string base_branch "nullable, cut-from / diff-against"
         string claimed_by "nullable, agent holding a *-ing deliverable"
         timestamp claimed_at "nullable, when it was claimed"
+        timestamp deleted_at "nullable, soft-delete marker"
     }
 
     DELIVERABLE_QUESTION {

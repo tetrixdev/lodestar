@@ -44,8 +44,8 @@ are familiar):
 | `human_architecture_review` | human | technical review (≈ today's code review). **Always required — not skippable** (decided: we do not offer skipping the code review). |
 | `human_functional_review` | human | final thin functional sanity check — did any review-driven change break behaviour? |
 | `approved` | queued | ready to merge the deliverable branch into its base |
-| `merge_deploy` | ai | merge `deliverable_branch → base_branch` |
-| `done` | done | shipped |
+| `merging` | ai | merge `deliverable_branch → base_branch` |
+| `merged` | done | shipped |
 | `cancelled` | archived | archive |
 
 **Feedback loops** (see §4, open-Q1): AI review or architecture review that finds

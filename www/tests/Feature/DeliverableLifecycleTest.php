@@ -35,7 +35,7 @@ class DeliverableLifecycleTest extends TestCase
         return $d->tasks()->create(array_merge([
             'project_id' => $d->project_id,
             'title' => 'A task',
-            'status' => Task::STATUS_NEW,
+            'status' => Task::STATUS_READY_FOR_PLANNING,
             'position' => 0,
         ], $attrs));
     }
@@ -50,7 +50,7 @@ class DeliverableLifecycleTest extends TestCase
         $this->assertTrue($d->canTransitionTo(Deliverable::STATUS_READY_FOR_PLANNING));  // back
         $this->assertTrue($d->canTransitionTo(Deliverable::STATUS_CANCELLED));           // cancel
         $this->assertFalse($d->canTransitionTo(Deliverable::STATUS_AI_REVIEW));          // illegal jump
-        $this->assertFalse($d->canTransitionTo(Deliverable::STATUS_DONE));
+        $this->assertFalse($d->canTransitionTo(Deliverable::STATUS_MERGED));
     }
 
     public function test_review_feedback_routes_back_to_building(): void
@@ -128,9 +128,10 @@ class DeliverableLifecycleTest extends TestCase
             $nested->branchName(),
         );
 
-        $standalone = $project->tasks()->create(['title' => 'Hotfix thing', 'status' => 'new', 'position' => 0]);
-        $this->assertSame(sprintf('T%06d-hotfix-thing', $standalone->id), $standalone->branchName());
-        $this->assertNull($standalone->sub_id);
+        // A second child gets the next sub_id and nests under the same deliverable.
+        $second = $this->task($d, ['title' => 'Hotfix thing']);
+        $this->assertSame(sprintf('D%06d/T02-hotfix-thing', $d->id), $second->branchName());
+        $this->assertSame(2, $second->sub_id);
     }
 
     // ── child-task completion ─────────────────────────────────────────────────
@@ -144,7 +145,7 @@ class DeliverableLifecycleTest extends TestCase
         $t2 = $this->task($d);
         $this->assertFalse($d->allTasksComplete());
 
-        $t1->update(['status' => Task::STATUS_DONE]);
+        $t1->update(['status' => Task::STATUS_MERGED]);
         $t2->update(['status' => Task::STATUS_CANCELLED]);
         $this->assertTrue($d->fresh()->allTasksComplete());
     }
@@ -165,12 +166,47 @@ class DeliverableLifecycleTest extends TestCase
         $this->assertSame('functional', $child->fresh()->humanGateType());
     }
 
-    public function test_standalone_task_human_gate_is_code(): void
+    public function test_every_task_uses_the_functional_human_gate(): void
     {
+        // No loose tasks: every task is a deliverable child, so the human gate is
+        // always the functional review.
+        $d = $this->deliverable($this->project(User::factory()->create()));
+        $t = $this->task($d, ['title' => 'Child']);
+        $this->assertTrue($t->isDeliverableChild());
+        $this->assertSame('functional', $t->humanGateType());
+    }
+
+    public function test_creating_a_task_without_a_deliverable_is_rejected(): void
+    {
+        // deliverable_id is a required FK — a loose task cannot be created. The model's
+        // creating hook dereferences the deliverable, so a null deliverable throws.
         $project = $this->project(User::factory()->create());
-        $t = $project->tasks()->create(['title' => 'Solo', 'status' => Task::STATUS_NEW, 'position' => 0]);
-        $this->assertTrue($t->canTransitionTo(Task::STATUS_READY_FOR_PLANNING));
-        $this->assertSame('code', $t->humanGateType());
+
+        $this->expectException(\Throwable::class);
+        $project->tasks()->create(['title' => 'Loose', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
+    }
+
+    public function test_soft_deleting_a_task_hides_it_from_default_queries(): void
+    {
+        $d = $this->deliverable($this->project(User::factory()->create()));
+        $t = $this->task($d, ['title' => 'Disappearing']);
+
+        $t->delete();
+
+        $this->assertSoftDeleted('tasks', ['id' => $t->id]);
+        $this->assertNull(Task::find($t->id));
+        $this->assertNotNull(Task::withTrashed()->find($t->id));
+    }
+
+    public function test_soft_deleting_a_deliverable_hides_it_from_default_queries(): void
+    {
+        $d = $this->deliverable($this->project(User::factory()->create()), Deliverable::STATUS_BUILDING);
+
+        $d->delete();
+
+        $this->assertSoftDeleted('deliverables', ['id' => $d->id]);
+        $this->assertNull(Deliverable::find($d->id));
+        $this->assertNotNull(Deliverable::withTrashed()->find($d->id));
     }
 
     // ── dependency invalidation ───────────────────────────────────────────────
@@ -195,12 +231,12 @@ class DeliverableLifecycleTest extends TestCase
     {
         $d = $this->deliverable($this->project(User::factory()->create()));
         $dep = $this->task($d, ['title' => 'Dependency', 'status' => Task::STATUS_READY_FOR_DEV]);
-        $doneDependent = $this->task($d, ['title' => 'Shipped', 'status' => Task::STATUS_DONE]);
+        $doneDependent = $this->task($d, ['title' => 'Shipped', 'status' => Task::STATUS_MERGED]);
         $doneDependent->dependencies()->attach($dep->id);
 
         $dep->update(['status' => Task::STATUS_PLAN_REVIEW]);
 
-        $this->assertSame(Task::STATUS_DONE, $doneDependent->fresh()->status); // already shipped — left alone
+        $this->assertSame(Task::STATUS_MERGED, $doneDependent->fresh()->status); // already shipped — left alone
     }
 
     // ── dirty-section watermark ───────────────────────────────────────────────

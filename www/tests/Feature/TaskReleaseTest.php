@@ -17,7 +17,7 @@ class TaskReleaseTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create([
+        $task = $this->makeTask($project, [
             'title' => 'T', 'status' => Task::STATUS_DEVELOPING,
             'claimed_by' => 'laptop', 'claimed_at' => now(),
         ]);
@@ -34,17 +34,17 @@ class TaskReleaseTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         $this->actingAs($user)->patch(route('tasks.release', $task))->assertStatus(422);
-        $this->assertSame(Task::STATUS_NEW, $task->fresh()->status);
+        $this->assertSame(Task::STATUS_READY_FOR_PLANNING, $task->fresh()->status);
     }
 
     public function test_release_requires_ownership(): void
     {
         $owner = User::factory()->create();
         $project = $owner->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
 
         $this->actingAs(User::factory()->create())
             ->patch(route('tasks.release', $task))

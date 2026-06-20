@@ -17,7 +17,7 @@ class ReapStalledTasksTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p-'.uniqid()]);
-        $task = $project->tasks()->create([
+        $task = $this->makeTask($project, [
             'title' => 'T', 'status' => $status, 'position' => 0,
             'claimed_by' => 'loop', 'claimed_at' => now(),
         ]);
@@ -49,7 +49,7 @@ class ReapStalledTasksTest extends TestCase
             Task::STATUS_PLANNING => Task::STATUS_READY_FOR_PLANNING,
             Task::STATUS_DEVELOPING => Task::STATUS_READY_FOR_DEV,
             Task::STATUS_AI_REVIEW => Task::STATUS_READY_FOR_AI_REVIEW,
-            Task::STATUS_MERGE_DEPLOY => Task::STATUS_APPROVED,
+            Task::STATUS_MERGING => Task::STATUS_APPROVED,
         ];
 
         foreach ($cases as $working => $queue) {

@@ -14,7 +14,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Claim the next available unit of WORK — a deliverable OR a task — and flip it to its working (*-ing) state. This is the loop\'s entry point. It hands out: claimable deliverables (a backlog deliverable with a scope → decomposition; deliverable AI review; merge), standalone tasks, and child tasks — a child becomes claimable once its plan is approved (ready_for_dev) and its dependencies are done, even while sibling tasks are still being planned. Returns the claimed item, its `type`, and the `phase` to load a playbook for, or "no work available". Supersedes claim_task.')]
+#[Description('Claim the next available unit of WORK — a deliverable OR a task — and flip it to its working (*-ing) state. This is the loop\'s entry point. It hands out: claimable deliverables (a backlog deliverable with a scope → decomposition; deliverable AI review; merge) and child tasks — a child becomes claimable once its plan is approved (ready_for_dev) and its dependencies are done, even while sibling tasks are still being planned. Returns the claimed item, its `type`, and the `phase` to load a playbook for, or "no work available". Supersedes claim_task.')]
 #[Name('claim_work')]
 class ClaimWorkTool extends LodestarTool
 {

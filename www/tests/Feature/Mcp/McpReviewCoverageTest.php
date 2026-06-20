@@ -87,7 +87,7 @@ class McpReviewCoverageTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $this->linkRepo($project);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r', 'base_ref' => 'main', 'head_ref' => 'h',
@@ -120,7 +120,7 @@ class McpReviewCoverageTest extends TestCase
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $this->linkRepo($project);
         // ai_review card with NO linked review at all.
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
         LodestarServer::actingAs($user)->tool(AdvanceTaskTool::class, [
             'task_id' => $task->id, 'to' => Task::STATUS_HUMAN_REVIEW,
@@ -134,7 +134,7 @@ class McpReviewCoverageTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $this->linkRepo($project);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'repo' => 'o/r', 'base_ref' => 'm', 'head_ref' => 'h',
             'task_ids' => [$task->id],
@@ -188,7 +188,7 @@ class McpReviewCoverageTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $this->linkRepo($project);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
         // No base/head → no file fetch, no files.
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [

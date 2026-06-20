@@ -42,7 +42,7 @@ class ReviewAssignmentTest extends TestCase
     {
         $owner = User::factory()->create();
         $review = $this->review($owner);
-        $task = $review->project->tasks()->create(['title' => 'T', 'status' => 'human_review', 'position' => 0]);
+        $task = $this->makeTask($review->project, ['title' => 'T', 'status' => 'human_review', 'position' => 0]);
 
         $review->tasks()->attach($task);
 
@@ -54,7 +54,7 @@ class ReviewAssignmentTest extends TestCase
     {
         $owner = User::factory()->create();
         $review = $this->review($owner);
-        $task = $review->project->tasks()->create(['title' => 'Linked card', 'status' => 'human_review', 'position' => 0]);
+        $task = $this->makeTask($review->project, ['title' => 'Linked card', 'status' => 'human_review', 'position' => 0]);
         $review->tasks()->attach($task);
 
         $this->actingAs($owner)
@@ -68,7 +68,7 @@ class ReviewAssignmentTest extends TestCase
     {
         $owner = User::factory()->create();
         $review = $this->review($owner);
-        $task = $review->project->tasks()->create(['title' => 'Reviewed card', 'status' => 'new', 'position' => 0]);
+        $task = $this->makeTask($review->project, ['title' => 'Reviewed card', 'status' => 'ready_for_planning', 'position' => 0]);
         $review->tasks()->attach($task);
 
         $this->actingAs($owner)

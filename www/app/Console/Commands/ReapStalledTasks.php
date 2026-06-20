@@ -11,7 +11,7 @@ use Illuminate\Console\Command;
  * Liveness backstop for the agent loop. Entering a working (*-ing) state is
  * engine-enforced and atomic (claim_task); LEAVING it is prompt-driven — the
  * agent is told to advance_task when it finishes. A worker that crashes or
- * forgets would otherwise pin a card in developing / ai_review / merge_deploy /
+ * forgets would otherwise pin a card in developing / ai_review / merging /
  * planning forever. This reaper re-queues any working card whose
  * status_changed_at is older than the lease, so a dropped task flows back to
  * its ready_* queue for another run. The success path stays agent-driven (only

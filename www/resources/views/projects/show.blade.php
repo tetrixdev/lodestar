@@ -217,36 +217,6 @@
                             No cards here.
                         </p>
 
-                        {{-- inline add card — lands in the phase's first status --}}
-                        <form method="POST" action="{{ route('tasks.store', $project) }}"
-                              x-data="{ open: false }">
-                            @csrf
-                            <input type="hidden" name="status" value="{{ $phaseStatuses[0] }}">
-                            <button type="button" x-show="!open" @click="open = true; $nextTick(() => $refs.title.focus())"
-                                    class="w-full text-left text-xs text-gray-400 hover:text-gray-600 px-1 py-1.5">
-                                + Add card
-                            </button>
-                            <div x-show="open" x-cloak class="space-y-2">
-                                <input x-ref="title" name="title" placeholder="Card title"
-                                       class="w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
-                                <input name="category" placeholder="Category (optional)"
-                                       class="w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
-                                <div class="flex items-center gap-2">
-                                    <x-select name="priority"
-                                            class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
-                                        @foreach (\App\Models\Task::PRIORITIES as $p)
-                                            <option value="{{ $p }}" @selected($p === \App\Models\Task::PRIORITY_NORMAL)>{{ ucfirst($p) }}</option>
-                                        @endforeach
-                                    </x-select>
-                                    <input type="date" name="due_date" title="Due date (optional)"
-                                           class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <x-primary-button class="!py-1.5 !text-xs">Add</x-primary-button>
-                                    <button type="button" @click="open = false" class="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-                                </div>
-                            </div>
-                        </form>
                     </div>
                 @endforeach
             </div>
