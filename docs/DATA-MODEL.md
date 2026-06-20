@@ -311,7 +311,8 @@ are informational — the test checks Field **names** only.
 | status_changed_at | timestamp | nullable | When the deliverable last entered its current status; stamped automatically. |
 | position | integer | not null · default 0 | Orders deliverables within a status. |
 | branch | string | not null | The integration branch `D{id:06d}-slug`; stamped automatically at creation. |
-| base_branch | string | not null · default `main` | What the branch is cut from / diffed against (the deliverable diff is `base_branch...branch`). Required at creation. May be a tag / whole-app baseline (e.g. v0.5 → `baseline-laravel`). |
+| base_branch | string | not null · default `main` | The MERGE TARGET: a real branch the deliverable `branch` merges into. Required at creation. Not assumed to be `main`. |
+| comparison_ref | string | not null | The REVIEW DIFF-BASE: what deliverable reviews diff `branch` against (`comparison_ref...branch`). Defaults to `base_branch` at creation; overridable. May be a branch OR a tag / whole-app baseline (e.g. v0.5 → `baseline-laravel`). |
 | claimed_by | string | nullable | The agent holding a working (`*-ing`) deliverable; set by the atomic claim. |
 | claimed_at | timestamp | nullable | When the deliverable was claimed. |
 | deleted_at | timestamp | nullable | Soft-delete marker (SoftDeletes); a deliverable is never physically removed. |
@@ -351,7 +352,7 @@ are informational — the test checks Field **names** only.
 | scope | string | not null · default `task` | What the review targets: `task` (via review_task pivot) or `deliverable` (via `deliverable_id`). |
 | deliverable_id | bigint | FK → deliverables · nullable | The deliverable this review targets (scope = deliverable). |
 | review_type | string | not null · default `code` | `functional` (per task; behaviour/UX/UI/permissions) / `code` (technical, task-level) / `architecture` (technical, deliverable-level). |
-| base_branch | string | nullable | What a deliverable review diffs against (`base_branch...deliverable.branch`); task reviews use base_sha/head_sha instead. |
+| base_branch | string | nullable | What a deliverable review diffs against — the deliverable's `comparison_ref` (`comparison_ref...deliverable.branch`); task reviews use base_sha/head_sha instead. |
 | title | string | not null | The review's display title. |
 | base_ref | string | nullable | The base of the comparison (e.g. `main`). |
 | head_ref | string | nullable | The head of the comparison (e.g. `feat/x`). |
@@ -757,7 +758,8 @@ erDiagram
         timestamp status_changed_at "nullable, entered-current-status time"
         integer position "order within status"
         string branch "D{id}-slug integration branch, stamped at creation"
-        string base_branch "cut-from / diff-against (branch or tag/baseline), default main"
+        string base_branch "merge target (a real branch), default main"
+        string comparison_ref "review diff-base (branch or tag/baseline), defaults to base_branch"
         string claimed_by "nullable, agent holding a *-ing deliverable"
         timestamp claimed_at "nullable, when it was claimed"
         timestamp deleted_at "nullable, soft-delete marker"

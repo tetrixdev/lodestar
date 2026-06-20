@@ -62,7 +62,45 @@ class DeliverableFlowTest extends TestCase
             ->post(route('deliverables.store', $project), ['title' => 'New deliverable', 'base_branch' => 'main'])
             ->assertRedirect();
 
-        $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'New deliverable', 'status' => 'new', 'base_branch' => 'main']);
+        // comparison_ref (review diff-base) defaults to base_branch when not given.
+        $this->assertDatabaseHas('deliverables', [
+            'project_id' => $project->id, 'title' => 'New deliverable', 'status' => 'new',
+            'base_branch' => 'main', 'comparison_ref' => 'main',
+        ]);
+    }
+
+    public function test_comparison_ref_defaults_to_base_branch_on_create(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user, 'Alpha');
+
+        // No comparison_ref given → defaults to base_branch.
+        $defaulted = $project->deliverables()->create(['title' => 'Defaulted', 'base_branch' => 'develop']);
+        $this->assertSame('develop', $defaulted->comparison_ref);
+
+        // Explicit comparison_ref (a tag) is preserved and may differ from base_branch.
+        $overridden = $project->deliverables()->create([
+            'title' => 'Overridden', 'base_branch' => 'main', 'comparison_ref' => 'baseline-laravel',
+        ]);
+        $this->assertSame('main', $overridden->base_branch);
+        $this->assertSame('baseline-laravel', $overridden->comparison_ref);
+    }
+
+    public function test_create_deliverable_accepts_explicit_comparison_ref(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user, 'Alpha');
+
+        $this->actingAs($user)
+            ->post(route('deliverables.store', $project), [
+                'title' => 'v0.5', 'base_branch' => 'main', 'comparison_ref' => 'baseline-laravel',
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('deliverables', [
+            'project_id' => $project->id, 'title' => 'v0.5',
+            'base_branch' => 'main', 'comparison_ref' => 'baseline-laravel',
+        ]);
     }
 
     public function test_per_task_plan_decision_approve_and_request_changes(): void

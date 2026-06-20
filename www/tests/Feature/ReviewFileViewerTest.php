@@ -117,9 +117,11 @@ class ReviewFileViewerTest extends TestCase
         $this->assertSame(2, $file->additions);
     }
 
-    public function test_deliverable_review_diffs_against_base_branch_as_the_diff_base(): void
+    public function test_deliverable_review_diffs_against_comparison_ref_not_base_branch(): void
     {
-        // base_branch may be a TAG (v0.5 → baseline-laravel) — a valid diff base.
+        // A v0.5-style deliverable: comparison_ref is a TAG (baseline-laravel) — the
+        // review diff-base — while base_branch (the merge target) is `main`. The review
+        // must diff against the tag, NOT the merge target.
         Http::fake([
             'api.github.com/repos/o/r/commits/baseline-laravel' => Http::response(['sha' => 'tag-sha'], 200),
             'api.github.com/repos/o/r/commits/D000001-v0-5' => Http::response(['sha' => 'head-sha'], 200),
@@ -136,7 +138,8 @@ class ReviewFileViewerTest extends TestCase
             'title' => 'v0.5',
             'status' => Deliverable::STATUS_READY_FOR_AI_REVIEW,
             'branch' => 'D000001-v0-5',
-            'base_branch' => 'baseline-laravel',
+            'base_branch' => 'main',                  // merge target
+            'comparison_ref' => 'baseline-laravel',   // review diff-base (a tag)
         ]);
 
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
@@ -145,14 +148,16 @@ class ReviewFileViewerTest extends TestCase
         ])->assertOk();
 
         $review = $project->reviews()->sole();
-        // The deliverable's base_branch is the diff base; its branch is the head.
+        // The deliverable's comparison_ref is the diff base; its branch is the head.
         $this->assertSame('baseline-laravel', $review->base_ref);
         $this->assertSame('D000001-v0-5', $review->head_ref);
         $this->assertSame('tag-sha', $review->base_sha);
         $this->assertSame('head-sha', $review->head_sha);
+        // The review records comparison_ref as its base (NOT the merge-target base_branch).
         $this->assertSame('baseline-laravel', $review->base_branch);
+        $this->assertSame('main', $deliverable->base_branch);  // merge still targets main
 
-        // The compare endpoint was called with base_branch...branch.
+        // The compare endpoint was called with comparison_ref...branch.
         Http::assertSent(fn ($request) => str_contains(
             $request->url(), '/compare/baseline-laravel...D000001-v0-5'
         ));

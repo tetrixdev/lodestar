@@ -25,7 +25,7 @@
 
             {{-- header / meta --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3"
-                 x-data="{ editing: @js($errors->hasAny(['title','category','base_branch','concept','concept_summary','body','body_summary'])) }">
+                 x-data="{ editing: @js($errors->hasAny(['title','category','base_branch','comparison_ref','concept','concept_summary','body','body_summary'])) }">
                 <div class="flex items-start justify-between gap-3">
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="inline-block text-[11px] font-medium uppercase tracking-wide rounded px-2 py-0.5 bg-gray-100 text-gray-700">{{ $statusLabel }}</span>
@@ -44,7 +44,8 @@
                     @if ($deliverable->branch)
                         <span class="min-w-0 break-all">Branch <code class="bg-gray-100 px-1 rounded">{{ $deliverable->branch }}</code></span>
                     @endif
-                    <span class="min-w-0 break-all">Base <code class="bg-gray-100 px-1 rounded">{{ $deliverable->base_branch ?? '—' }}</code></span>
+                    <span class="min-w-0 break-all" title="Merge target">Base <code class="bg-gray-100 px-1 rounded">{{ $deliverable->base_branch ?? '—' }}</code></span>
+                    <span class="min-w-0 break-all" title="Review diff-base">Diff <code class="bg-gray-100 px-1 rounded">{{ $deliverable->comparison_ref ?? '—' }}</code></span>
                 </div>
 
                 {{-- edit panel --}}
@@ -61,8 +62,12 @@
                             <x-text-input id="d-category" name="category" type="text" class="mt-1 block w-full" :value="old('category', $deliverable->category)" />
                         </div>
                         <div>
-                            <x-input-label for="d-base" value="Base branch" />
+                            <x-input-label for="d-base" value="Base branch (merge target)" />
                             <x-text-input id="d-base" name="base_branch" type="text" class="mt-1 block w-full" :value="old('base_branch', $deliverable->base_branch)" placeholder="main" />
+                        </div>
+                        <div>
+                            <x-input-label for="d-comparison" value="Comparison ref (review diff-base)" />
+                            <x-text-input id="d-comparison" name="comparison_ref" type="text" class="mt-1 block w-full" :value="old('comparison_ref', $deliverable->comparison_ref)" placeholder="main" />
                         </div>
                     </div>
                     @foreach (['concept' => 'Concept (raw)', 'body' => 'Scope'] as $field => $label)

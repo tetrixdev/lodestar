@@ -23,6 +23,7 @@ class UpsertDeliverableTool extends LodestarTool
             'title' => ['required_without:id', 'string', 'max:255'],
             'category' => ['nullable', 'string', 'max:255'],
             'base_branch' => ['nullable', 'string', 'max:255'],
+            'comparison_ref' => ['nullable', 'string', 'max:255'],
             'concept' => ['nullable', 'string'],
             'concept_summary' => ['nullable', 'string', 'required_with:concept'],
             'body' => ['nullable', 'string'],
@@ -53,7 +54,7 @@ class UpsertDeliverableTool extends LodestarTool
             ]);
         }
 
-        foreach (['title', 'category', 'base_branch', 'concept', 'concept_summary', 'body', 'body_summary'] as $field) {
+        foreach (['title', 'category', 'base_branch', 'comparison_ref', 'concept', 'concept_summary', 'body', 'body_summary'] as $field) {
             if (array_key_exists($field, $data)) {
                 $deliverable->{$field} = $data[$field];
             }
@@ -87,7 +88,8 @@ class UpsertDeliverableTool extends LodestarTool
             'id' => $schema->integer()->description('Existing deliverable id to update. Omit to create.'),
             'title' => $schema->string()->description('Deliverable title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix.'),
-            'base_branch' => $schema->string()->description('The ref the deliverable is cut from and diffed against (a branch — e.g. main — or a tag / whole-app baseline). Defaults to main when creating; stamped at creation along with branch (D{id:06d}-slug).'),
+            'base_branch' => $schema->string()->description('The MERGE TARGET: a real branch the deliverable branch merges into (e.g. main). Defaults to main when creating; stamped at creation along with branch (D{id:06d}-slug).'),
+            'comparison_ref' => $schema->string()->description('The REVIEW DIFF-BASE: what deliverable reviews diff `branch` against. May be a branch OR a tag / whole-app baseline (e.g. v0.5 → baseline-laravel). Defaults to base_branch when not given.'),
             'concept' => $schema->string()->description('The raw goal/scope as the user wrote it. If set you MUST also pass concept_summary.'),
             'concept_summary' => $schema->string()->description('Required when concept is set: a 1–2 sentence TL;DR.'),
             'body' => $schema->string()->description('The refined SCOPE in our format (Why / What — in & out / Done when). A deliverable is a scope, not a plan — the plan is the set of child tasks. If set you MUST also pass body_summary.'),

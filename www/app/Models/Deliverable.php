@@ -205,14 +205,19 @@ class Deliverable extends Model
             }
         });
 
-        // base_branch is required and defaults to `main` when not provided; both
-        // branches are stamped at CREATION, not lazily when entering building.
+        // base_branch (the MERGE TARGET) is required and defaults to `main`;
+        // comparison_ref (the REVIEW DIFF-BASE) defaults to base_branch when not
+        // given but is overridable (it may point at a tag / whole-app baseline).
+        // Both branches are stamped at CREATION, not lazily when entering building.
         // branch derives from branchName() (D{id:06d}-slug) which needs the assigned
         // id, so on create we insert a placeholder (the column is NOT NULL) and then
         // rewrite it with the real name once the id exists.
         static::creating(function (Deliverable $deliverable): void {
             if (blank($deliverable->base_branch)) {
                 $deliverable->base_branch = 'main';
+            }
+            if (blank($deliverable->comparison_ref)) {
+                $deliverable->comparison_ref = $deliverable->base_branch;
             }
             if (blank($deliverable->branch)) {
                 $deliverable->branch = self::PENDING_BRANCH; // placeholder; rewritten in `created`

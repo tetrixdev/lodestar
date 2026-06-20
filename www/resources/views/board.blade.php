@@ -44,8 +44,11 @@
                         <input name="title" type="text" placeholder="New deliverable on {{ $selProject->name }}…" required
                                class="flex-1 sm:w-72 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
                         <input name="base_branch" type="text" value="{{ old('base_branch', 'main') }}" required
-                               title="Base ref the deliverable is cut from and diffed against (a branch, or a tag / whole-app baseline)."
-                               class="w-32 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+                               title="Merge target: the real branch the deliverable merges into (e.g. main)."
+                               class="w-28 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+                        <input name="comparison_ref" type="text" value="{{ old('comparison_ref') }}" placeholder="diff-base"
+                               title="Review diff-base: what reviews diff against (a branch or a tag / baseline). Defaults to the merge target."
+                               class="w-28 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
                         <x-primary-button class="!py-2 !text-xs whitespace-nowrap">+ Deliverable</x-primary-button>
                     </form>
                 @else
