@@ -631,6 +631,7 @@ erDiagram
         string head_sha "nullable, resolved commit of head_ref"
         string status "draft|in_review|done"
         string outcome "nullable, approved|changes_requested"
+        timestamp concluded_at "nullable, when the human applied the outcome (responded time)"
         bigint assigned_to_user_id FK "nullable, current holder"
         text intro "nullable, preamble"
     }
