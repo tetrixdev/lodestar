@@ -52,6 +52,17 @@ signed-in user.
     The viewer modal is opened from both the changed-files tree **and** each
     review section's file references via a shared `<x-open-file>` component (the
     one place the `open-file` Alpine event is dispatched).
+- **PlanReviewController** — the **plan-review surface**, the plan-side mirror of
+  ReviewController. The walkthrough itself lives on the task detail page (the plan
+  lives on the task), so this controller is just the write paths the page calls:
+  `assign()` / `unassign()` are the **atomic self-assignment** of the plan review
+  (`tasks.plan_reviewer_id`); `updateSection()` persists a PlanReviewSection's
+  sign-off / decision / note (gated on holding the plan review); and `conclude()`
+  applies the outcome — **approve** moves the card to `ready_for_dev`, **request
+  changes** moves it back to `ready_for_planning` with the compiled
+  `plan_rework_notes`. The planning agent builds the sections over MCP
+  (`upsert_plan_review_section`); a plan with no sections falls back to a plain
+  gate moved by the normal lifecycle controls.
 - **TaskController** also has **`release()`** — the human escape hatch that
   returns a stuck working (`*-ing`) card to its `ready_*` queue and clears the
   claim. A scheduled **reaper** (`lodestar:reap-stalled-tasks`) now does the same
@@ -78,8 +89,10 @@ holds the tenancy helpers):
 
 - **Data tools** — `list_projects`, `upsert_project`, `upsert_task`,
   `upsert_session`, `create_review` (returns the URL a human opens),
-  `upsert_review_section`, `add_finding`, `get_review`. The agent's read/write
-  access to the board, the exact data the controllers serve to the browser.
+  `upsert_review_section`, `upsert_plan_review_section` (the plan-side mirror —
+  the planning agent builds the plan-review walkthrough on a task), `add_finding`,
+  `get_review`. The agent's read/write access to the board, the exact data the
+  controllers serve to the browser.
 - **Repository tools** — `link_repository`, `unlink_repository` (attach a repo to
   a project through a GitHub connection).
 - **Loop tools** — `claim_task` (atomic claim, by next or by id), `get_playbook`
@@ -241,6 +254,41 @@ and it freezes to `done`. Re-review creates a **fresh Review** each round (the
 `review_task` pivot is many-to-many), so the rounds accumulate as history — the
 task page lists its linked reviews oldest-first with their outcome. This closes the loop: a human
 review can send work straight back to the developer without leaving the screen.
+
+### The plan-review walkthrough (mirror of the code review, on the task)
+
+The `plan_review` gate used to be a bare human gate — read the `plan` blob, click
+a transition. It is now the **plan-side mirror of the code-review walkthrough**.
+The planning agent builds an ordered set of **PlanReviewSections** on the task
+(over `upsert_plan_review_section`), each focusing on a slice of the plan with
+context + checks. At the gate the task page renders the walkthrough; before
+deciding anything a human **atomically self-assigns** the plan review
+(`tasks.plan_reviewer_id`, the same `WHERE … IS NULL` conditional UPDATE as a
+Review), then signs off / decides each section (autosaving, gated on the hold),
+then **concludes**:
+
+```mermaid
+sequenceDiagram
+    participant H as Human
+    participant T as Task (DB)
+    H->>T: assign  (UPDATE ... WHERE plan_reviewer_id IS NULL)
+    H->>T: PATCH section {status, decision, note}  (gated: must hold it)
+    T-->>H: {signed_off, total, decisions}  → progress bar + outcome readiness
+    H->>T: POST conclude  (all sections decided → apply outcome)
+    alt approved
+        T->>T: status → ready_for_dev, clear plan_rework_notes, release hold
+    else changes requested
+        T->>T: status → ready_for_planning, write plan_rework_notes, release hold
+    end
+```
+
+It deliberately reuses the *shape* of the review flow (atomic claim, per-section
+decision distinct from sign-off, an all-decided gate before concluding, a
+compiled rework brief) but **not the Review machinery** — there is no Review row,
+no GitHub comparison and no file coverage, because the thing under review is the
+plan text on the task. Conclude is allowed only from the `plan_review` status, so
+a stale re-submit can't re-drive a card that already moved. A plan with no
+sections degrades to the old plain gate (the normal lifecycle controls move it).
 
 ### The agent loop (claim → playbook → work → advance → report)
 

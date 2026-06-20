@@ -12,6 +12,7 @@ use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\SecretController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\PlanReviewController;
 use App\Http\Controllers\PlaybookController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TeamController;
@@ -63,6 +64,14 @@ Route::middleware('auth')->group(function () {
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('/tasks/{task}/move', [TaskController::class, 'move'])->name('tasks.move');
     Route::patch('/tasks/{task}/release', [TaskController::class, 'release'])->name('tasks.release');
+
+    // Plan review — the structured plan-review walkthrough lives on the task page
+    // (the plan mirror of the code-review flow): self-assign, sign off / decide
+    // each section, then conclude to drive the task forward or back to planning.
+    Route::post('/tasks/{task}/plan-review/assign', [PlanReviewController::class, 'assign'])->name('plan-review.assign');
+    Route::post('/tasks/{task}/plan-review/unassign', [PlanReviewController::class, 'unassign'])->name('plan-review.unassign');
+    Route::patch('/tasks/{task}/plan-review/sections/{section}', [PlanReviewController::class, 'updateSection'])->name('plan-review.sections.update');
+    Route::post('/tasks/{task}/plan-review/conclude', [PlanReviewController::class, 'conclude'])->name('plan-review.conclude');
 
     // Teams — shared projects + approval rights. Membership is owner-managed.
     Route::get('/teams', [TeamController::class, 'index'])->name('teams.index');

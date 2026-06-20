@@ -69,6 +69,14 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   `context` rebuilds the reviewer's knowledge; `link` is what to open (a doc /
   file / route); `checks` is a JSON list of "what to confirm"; `status`
   (`open` / `signed_off`) + `note` carry the human's per-section sign-off.
+- **PlanReviewSection** — the **plan-side mirror** of a ReviewSection: one ordered
+  step of a task's plan-review walkthrough at the `plan_review` gate. Where a code
+  review walks a GitHub diff, a plan review walks the planning agent's `plan` —
+  `focus` names the slice it covers (the plan analogue of `mode`), `context` /
+  `checks` rebuild the reviewer's knowledge, and `status` + `decision` + `note`
+  carry the human's per-section sign-off and verdict. It belongs straight to a
+  **Task** (the plan lives there), with no separate review row and no file
+  coverage. The human holding the plan review is `tasks.plan_reviewer_id`.
 
 - **Playbook** — a *slot*: one addressable layer of a composed prompt, identified by
   (`scope`, `owner`, `key`). `scope` is `system` (ours, `owner` null), `team`,
@@ -182,6 +190,19 @@ These are the rules the column list alone won't tell you:
   read-then-write race, no double-assignment. Release is guarded the same way
   (`WHERE assigned_to_user_id = :holder`), so a non-holder can never clear
   another reviewer's claim. Section sign-off is gated on holding the review.
+- **The plan review mirrors the code review, on the task itself.** At the
+  `plan_review` gate a task carries ordered **PlanReviewSections**. A human
+  atomically self-assigns the plan review (`tasks.plan_reviewer_id`, claimed by
+  the same `WHERE … IS NULL` conditional UPDATE as a Review — `Task::claimPlanReviewFor`),
+  then signs off / decides each section (gated on holding it). Once **every**
+  section is decided, concluding drives the task: **approve** → `ready_for_dev`
+  (clearing any stale `plan_rework_notes` and releasing the hold); **changes**
+  (any section requests changes) → `ready_for_planning` with the compiled brief
+  (each changes_requested section's note, as markdown) written to
+  `plan_rework_notes`, which the planning agent reads on its next pass. Conclude
+  is only allowed from the `plan_review` status, so a stale re-submit cannot
+  re-drive a card that already moved. A plan with no sections is a plain gate (the
+  human moves it with the normal lifecycle controls).
 - **The walkthrough is the section list, top-to-bottom.** A Review's sections
   are ordered by `position`; the screen rebuilds context as the reviewer
   descends, and the progress bar / "ready" banner are driven by how many
@@ -275,9 +296,11 @@ are informational — the test checks Field **names** only.
 | due_date | date | nullable | Deadline. |
 | branch | string | nullable | The development branch for the card. |
 | plan | text | nullable | The planning artifact (markdown), produced in the plan phase. |
-| rework_notes | text | nullable | What a review sent back — the change request brief written on `changes_requested`. |
+| rework_notes | text | nullable | What a code review sent back — the change request brief written on `changes_requested`. |
 | body_summary | text | nullable | TL;DR of `body`; required when `body` is set. |
 | plan_summary | text | nullable | TL;DR of `plan`; required when `plan` is set. |
+| plan_reviewer_id | bigint | FK → users · nullable | The human currently holding this card's **plan review** (atomic self-assign before sign-off), the plan mirror of `reviews.assigned_to_user_id`. |
+| plan_rework_notes | text | nullable | What a **plan review** sent back — the change-request brief written on `changes_requested`, read by the planning agent on its next pass (the plan mirror of `rework_notes`). |
 
 ### `work_sessions`
 
@@ -370,6 +393,23 @@ are informational — the test checks Field **names** only.
 | severity | string | not null · default `minor` | `info` / `minor` / `major` / `critical`. |
 | status | string | not null · default `open` | Human triage: `open` / `must_fix` / `approved` / `dismissed`. `must_fix` findings feed the rework brief. |
 | position | integer | not null · default 0 | Orders findings within a section. |
+
+### `plan_review_sections`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| task_id | bigint | FK → tasks | The task whose plan this walkthrough step reviews. |
+| position | integer | not null · default 0 | Orders the sections in the walkthrough (top-to-bottom). |
+| title | string | not null | The section title. |
+| focus | string | nullable | The slice of the plan this step reviews (e.g. "Data model", "Migration", "MCP surface") — the plan analogue of a review section's `mode`. |
+| context | text | nullable | Rebuilds the reviewer's knowledge for this step (markdown). |
+| checks | jsonb | nullable | A JSON list of "what to confirm". |
+| status | string | not null · default `open` | `open` / `signed_off` — the human's per-section sign-off. |
+| decision | string | nullable | The human verdict: `approved` / `changes_requested`, distinct from sign-off; drives the plan-review outcome. |
+| note | text | nullable | The human's comment / change request for the section. |
+
+> The plan-side mirror of `review_sections` — minus the file-coverage machinery (a plan has no changed files). The planning agent builds these so the human walks the plan section by section at the `plan_review` gate.
 
 ### `users`
 
@@ -546,6 +586,8 @@ erDiagram
     PROJECT }o--o{ REPOSITORY : "project_repository (stack)"
     REPOSITORY ||--o{ REVIEW : "compared in"
     REVIEW_SECTION ||--o{ REVIEW_FINDING : raises
+    TASK ||--o{ PLAN_REVIEW_SECTION : "plan walkthrough steps"
+    USER ||--o{ TASK : "plan-reviewing (nullable)"
     TASK ||--o{ WORK_SESSION : "logged on (nullable)"
     TASK ||--o{ TASK_COMMENT : has
     TASK ||--o{ TASK_EVENT : "activity log"
@@ -597,7 +639,9 @@ erDiagram
         text body_summary "nullable, TL;DR of body; required when body is set"
         text plan "nullable, planning artifact (markdown)"
         text plan_summary "nullable, TL;DR of plan; required when plan is set"
-        text rework_notes "nullable, what a review sent back"
+        text rework_notes "nullable, what a code review sent back"
+        bigint plan_reviewer_id FK "nullable, human holding the plan review"
+        text plan_rework_notes "nullable, what a plan review sent back"
         string status "one of 13 lifecycle states"
         timestamp status_changed_at "nullable, entered-current-status time"
         string claimed_by "nullable, agent holding a *-ing card"
@@ -770,6 +814,19 @@ erDiagram
         string severity "info|minor|major|critical"
         string status "open|must_fix|approved|dismissed"
         integer position
+    }
+
+    PLAN_REVIEW_SECTION {
+        bigint id PK
+        bigint task_id FK
+        integer position "order in the walkthrough"
+        string title
+        string focus "nullable, the slice of the plan reviewed"
+        text context "nullable, rebuilds reviewer knowledge"
+        jsonb checks "nullable, [what to confirm]"
+        string status "open|signed_off"
+        string decision "nullable, approved|changes_requested"
+        text note "nullable, human comment / change request"
     }
 
     TASK_COMMENT {

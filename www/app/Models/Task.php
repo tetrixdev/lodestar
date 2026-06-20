@@ -292,6 +292,75 @@ class Task extends Model
         return $this->belongsToMany(Review::class)->withTimestamps();
     }
 
+    /** The ordered plan-review walkthrough steps for this card's plan. */
+    public function planReviewSections(): HasMany
+    {
+        return $this->hasMany(PlanReviewSection::class)->orderBy('position');
+    }
+
+    /** The human currently holding this card's plan review (null = unassigned). */
+    public function planReviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'plan_reviewer_id');
+    }
+
+    /**
+     * Atomically claim this card's plan review for $userId, only if it is
+     * currently unassigned — the plan mirror of Review::claimFor. The WHERE NULL
+     * guard makes the check-and-set a single conditional UPDATE (no race).
+     */
+    public function claimPlanReviewFor(int $userId): bool
+    {
+        $claimed = static::whereKey($this->getKey())
+            ->whereNull('plan_reviewer_id')
+            ->update(['plan_reviewer_id' => $userId]) === 1;
+
+        if ($claimed) {
+            $this->plan_reviewer_id = $userId;
+        }
+
+        return $claimed;
+    }
+
+    /** Release this card's plan review, only if $userId currently holds it. */
+    public function releasePlanReviewFor(int $userId): bool
+    {
+        $released = static::whereKey($this->getKey())
+            ->where('plan_reviewer_id', $userId)
+            ->update(['plan_reviewer_id' => null]) === 1;
+
+        if ($released) {
+            $this->plan_reviewer_id = null;
+        }
+
+        return $released;
+    }
+
+    /**
+     * The plan-reviewer's verdict across sections — the plan mirror of
+     * Review::decisionSummary. `verdict` is changes_requested if any section
+     * requests changes, else approved once every section is decided, else null.
+     */
+    public function planDecisionSummary(): array
+    {
+        $sections = $this->relationLoaded('planReviewSections')
+            ? $this->planReviewSections
+            : $this->planReviewSections()->get();
+        $approved = $sections->where('decision', 'approved')->count();
+        $changes = $sections->where('decision', 'changes_requested')->count();
+        $total = $sections->count();
+        $undecided = $total - $approved - $changes;
+
+        return [
+            'approved' => $approved,
+            'changes_requested' => $changes,
+            'undecided' => $undecided,
+            'total' => $total,
+            'all_decided' => $total > 0 && $undecided === 0,
+            'verdict' => $changes > 0 ? 'changes_requested' : (($total > 0 && $undecided === 0) ? 'approved' : null),
+        ];
+    }
+
     public function workSessions(): HasMany
     {
         return $this->hasMany(WorkSession::class);

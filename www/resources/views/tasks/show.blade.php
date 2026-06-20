@@ -174,6 +174,19 @@
                 </div>
             </div>
 
+            {{-- plan review walkthrough (only at the plan_review gate) --}}
+            @if ($task->status === $T::STATUS_PLAN_REVIEW)
+                @include('tasks.partials.plan-review', ['task' => $task])
+            @endif
+
+            {{-- plan-rework notes (what a plan review sent back) --}}
+            @if ($task->plan_rework_notes)
+                <div class="bg-amber-50 border border-amber-300 shadow-sm sm:rounded-lg p-5 space-y-2">
+                    <p class="text-[11px] font-medium text-amber-700 uppercase tracking-wide">Plan rework notes</p>
+                    <x-markdown :content="$task->plan_rework_notes" />
+                </div>
+            @endif
+
             {{-- plan --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                 <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Plan</p>

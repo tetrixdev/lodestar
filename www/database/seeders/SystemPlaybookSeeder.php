@@ -199,8 +199,19 @@ class SystemPlaybookSeeder extends Seeder
                   blocks the card from reaching development until a person answers and
                   sends it back to planning.
 
-                When the plan is ready, advance the task to `plan_review` for a human.
-                Do not write code in this phase.
+                BUILD THE PLAN-REVIEW WALKTHROUGH. The `plan_review` gate is the plan
+                mirror of the code-review walkthrough: don't just dump the plan and hope.
+                After writing the plan, slice it into ordered **plan-review sections**
+                with `upsert_plan_review_section` (task_id + title + focus + context +
+                checks) — one section per coherent slice of the plan (e.g. Data model,
+                Migration, Flow/UI, MCP surface, Tests). Each section's `context`
+                rebuilds what the reviewer needs to know and `checks` lists what to
+                confirm. The human then walks it section by section, decides each, and
+                concludes: approve → ready_for_dev, request-changes → back to planning
+                with the compiled `plan_rework_notes` (read those first on a re-plan).
+
+                When the plan and its sections are ready, advance the task to
+                `plan_review` for a human. Do not write code in this phase.
                 MD],
 
             'develop' => ['Develop a task', <<<'MD'

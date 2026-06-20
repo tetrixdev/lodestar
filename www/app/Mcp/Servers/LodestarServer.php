@@ -8,14 +8,15 @@ use App\Mcp\Tools\AddFindingTool;
 use App\Mcp\Tools\AdvanceTaskTool;
 use App\Mcp\Tools\ClaimTaskTool;
 use App\Mcp\Tools\CreateReviewTool;
-use App\Mcp\Tools\GetReviewTool;
 use App\Mcp\Tools\GetPlaybookTool;
+use App\Mcp\Tools\GetReviewTool;
 use App\Mcp\Tools\LinkRepositoryTool;
 use App\Mcp\Tools\ListProjectsTool;
 use App\Mcp\Tools\ProposePlaybookChangeTool;
 use App\Mcp\Tools\RememberTool;
 use App\Mcp\Tools\ReportTool;
 use App\Mcp\Tools\UnlinkRepositoryTool;
+use App\Mcp\Tools\UpsertPlanReviewSectionTool;
 use App\Mcp\Tools\UpsertProjectTool;
 use App\Mcp\Tools\UpsertReviewSectionTool;
 use App\Mcp\Tools\UpsertSessionTool;
@@ -63,6 +64,7 @@ class LodestarServer extends Server
         UnlinkRepositoryTool::class,
         CreateReviewTool::class,
         UpsertReviewSectionTool::class,
+        UpsertPlanReviewSectionTool::class,
         AddFindingTool::class,
         GetReviewTool::class,
         // Loop tools
