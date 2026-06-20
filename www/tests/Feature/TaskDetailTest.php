@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Deliverable;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -11,11 +12,13 @@ class TaskDetailTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function makeTask(User $owner, array $attrs = []): Task
+    private function makeTaskFor(User $owner, array $attrs = []): Task
     {
         $project = $owner->projects()->create(['name' => 'P', 'slug' => 'p-'.uniqid()]);
+        $deliverable = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
-        return $project->tasks()->create(array_merge([
+        return $deliverable->tasks()->create(array_merge([
+            'project_id' => $project->id,
             'title' => 'Build the thing',
             'status' => Task::STATUS_READY_FOR_PLANNING,
             'plan' => '## The plan',
@@ -25,7 +28,7 @@ class TaskDetailTest extends TestCase
     public function test_detail_page_renders_with_title_plan_and_comments(): void
     {
         $user = User::factory()->create();
-        $task = $this->makeTask($user);
+        $task = $this->makeTaskFor($user);
         $task->comments()->create([
             'user_id' => $user->id,
             'author' => 'Jasper',
@@ -43,7 +46,7 @@ class TaskDetailTest extends TestCase
     public function test_plan_falls_back_when_null(): void
     {
         $user = User::factory()->create();
-        $task = $this->makeTask($user, ['plan' => null]);
+        $task = $this->makeTaskFor($user, ['plan' => null]);
 
         $this->actingAs($user)
             ->get(route('tasks.show', $task))
@@ -54,7 +57,7 @@ class TaskDetailTest extends TestCase
     public function test_posting_a_comment_creates_it_and_an_event(): void
     {
         $user = User::factory()->create();
-        $task = $this->makeTask($user);
+        $task = $this->makeTaskFor($user);
 
         $this->actingAs($user)
             ->post(route('tasks.comments.store', $task), ['body' => 'Please use a queue here'])
@@ -77,7 +80,7 @@ class TaskDetailTest extends TestCase
     public function test_comment_body_is_required(): void
     {
         $user = User::factory()->create();
-        $task = $this->makeTask($user);
+        $task = $this->makeTaskFor($user);
 
         $this->actingAs($user)
             ->post(route('tasks.comments.store', $task), ['body' => ''])
@@ -90,7 +93,7 @@ class TaskDetailTest extends TestCase
     {
         $owner = User::factory()->create();
         $stranger = User::factory()->create();
-        $task = $this->makeTask($owner);
+        $task = $this->makeTaskFor($owner);
 
         $this->actingAs($stranger)
             ->get(route('tasks.show', $task))
@@ -101,7 +104,7 @@ class TaskDetailTest extends TestCase
     {
         $owner = User::factory()->create();
         $stranger = User::factory()->create();
-        $task = $this->makeTask($owner);
+        $task = $this->makeTaskFor($owner);
 
         $this->actingAs($stranger)
             ->post(route('tasks.comments.store', $task), ['body' => 'sneaky'])
@@ -113,7 +116,7 @@ class TaskDetailTest extends TestCase
     public function test_summary_is_shown_by_default_with_a_full_affordance(): void
     {
         $user = User::factory()->create();
-        $task = $this->makeTask($user, [
+        $task = $this->makeTaskFor($user, [
             'body' => 'The very long description body.',
             'body_summary' => 'Short scannable abstract.',
         ]);
@@ -128,7 +131,7 @@ class TaskDetailTest extends TestCase
     public function test_update_requires_a_summary_when_the_detail_is_filled(): void
     {
         $user = User::factory()->create();
-        $task = $this->makeTask($user, ['plan' => null]);
+        $task = $this->makeTaskFor($user, ['plan' => null]);
 
         // Setting body with no body_summary is rejected.
         $this->actingAs($user)

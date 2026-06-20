@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -55,35 +54,6 @@ class TaskController extends Controller
         ]);
 
         $task->logEvent('commented', $request->user()->name);
-
-        return back();
-    }
-
-    /** Add a card to a project (lands at the bottom of its status). */
-    public function store(Request $request, Project $project): RedirectResponse
-    {
-        abort_unless($project->isAccessibleBy($request->user()), 403);
-
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:200'],
-            'category' => ['nullable', 'string', 'max:60'],
-            'status' => ['nullable', Rule::in(Task::STATUSES)],
-            'priority' => ['nullable', Rule::in(Task::PRIORITIES)],
-            'due_date' => ['nullable', 'date'],
-        ]);
-
-        // A manually-added task goes straight to the planning queue (the AI plans it).
-        // `new` is a deliverable-only backlog state — tasks don't sit there.
-        $status = $data['status'] ?? Task::STATUS_READY_FOR_PLANNING;
-
-        $project->tasks()->create([
-            'title' => $data['title'],
-            'category' => $data['category'] ?? null,
-            'status' => $status,
-            'priority' => $data['priority'] ?? Task::PRIORITY_NORMAL,
-            'due_date' => $data['due_date'] ?? null,
-            'position' => (int) $project->tasks()->where('status', $status)->max('position') + 1,
-        ]);
 
         return back();
     }

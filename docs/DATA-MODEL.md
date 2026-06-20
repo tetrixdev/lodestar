@@ -281,10 +281,11 @@ are informational — the test checks Field **names** only.
 | rework_notes | text | nullable | What a review sent back — the change request brief written on `changes_requested`. |
 | body_summary | text | nullable | TL;DR of `body`; required when `body` is set. |
 | plan_summary | text | nullable | TL;DR of `plan`; required when `plan` is set. |
-| deliverable_id | bigint | FK → deliverables · nullable | The deliverable this task belongs to; null = standalone task (branch-per-task → base). |
+| deliverable_id | bigint | FK → deliverables · not null · restrictOnDelete | The deliverable this task belongs to. Required — every task is a deliverable child (no loose/standalone tasks). |
 | sub_id | integer | nullable | Per-deliverable task sequence (1,2,3…); drives the nested branch `D{deliverable}/T{sub_id}-slug`. Unique with `deliverable_id`. |
 | is_corrective | boolean | not null · default false | Marks a task spawned from deliverable-level review feedback. |
 | needs_functional_review | boolean | not null · default true | Whether this task gets a human functional review; refactor/doc tasks can skip (also powers "trivial tasks auto-pass"). |
+| deleted_at | timestamp | nullable | Soft-delete marker (SoftDeletes); a task is never physically removed. |
 
 ### `deliverables`
 
@@ -305,6 +306,7 @@ are informational — the test checks Field **names** only.
 | base_branch | string | nullable | What the branch is cut from / diffed against (the deliverable diff is `base_branch...branch`). |
 | claimed_by | string | nullable | The agent holding a working (`*-ing`) deliverable; set by the atomic claim. |
 | claimed_at | timestamp | nullable | When the deliverable was claimed. |
+| deleted_at | timestamp | nullable | Soft-delete marker (SoftDeletes); a deliverable is never physically removed. |
 
 ### `deliverable_questions`
 
@@ -639,7 +641,7 @@ erDiagram
     TASK {
         bigint id PK
         bigint project_id FK
-        bigint deliverable_id FK "nullable, null = standalone task"
+        bigint deliverable_id FK "required, the owning deliverable (restrictOnDelete)"
         integer sub_id "nullable, per-deliverable sequence; unique with deliverable_id"
         boolean is_corrective "spawned from deliverable review feedback"
         boolean needs_functional_review "default true; refactor/doc tasks skip"
@@ -659,6 +661,7 @@ erDiagram
         string claimed_by "nullable, agent holding a *-ing card"
         timestamp claimed_at "nullable, when it was claimed"
         integer position "order within status"
+        timestamp deleted_at "nullable, soft-delete marker"
     }
 
     WORK_SESSION {
@@ -749,6 +752,7 @@ erDiagram
         string base_branch "nullable, cut-from / diff-against"
         string claimed_by "nullable, agent holding a *-ing deliverable"
         timestamp claimed_at "nullable, when it was claimed"
+        timestamp deleted_at "nullable, soft-delete marker"
     }
 
     DELIVERABLE_QUESTION {

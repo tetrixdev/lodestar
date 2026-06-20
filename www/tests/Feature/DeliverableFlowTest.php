@@ -19,7 +19,7 @@ class DeliverableFlowTest extends TestCase
         return $user->projects()->create(['name' => $name, 'slug' => Str::slug($name).'-'.uniqid()]);
     }
 
-    public function test_board_shows_deliverables_and_standalone_tasks_across_projects(): void
+    public function test_board_shows_deliverables_and_their_child_tasks_across_projects(): void
     {
         $user = User::factory()->create();
         $a = $this->project($user, 'Alpha');
@@ -27,13 +27,16 @@ class DeliverableFlowTest extends TestCase
 
         $deliverable = $a->deliverables()->create(['title' => 'Ship v1', 'status' => Deliverable::STATUS_BUILDING]);
         $deliverable->tasks()->create(['project_id' => $a->id, 'title' => 'Child task one', 'status' => Task::STATUS_DEVELOPING, 'position' => 0]);
-        $b->tasks()->create(['title' => 'Standalone hotfix', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
+
+        $other = $b->deliverables()->create(['title' => 'Ship v2', 'status' => Deliverable::STATUS_BUILDING]);
+        $other->tasks()->create(['project_id' => $b->id, 'title' => 'Hotfix child', 'status' => Task::STATUS_DEVELOPING, 'position' => 0]);
 
         $this->actingAs($user)->get(route('board'))
             ->assertOk()
             ->assertSee('Ship v1')
-            ->assertSee('Child task one')      // inside the deliverable card
-            ->assertSee('Standalone hotfix');  // its own card from another project
+            ->assertSee('Child task one')   // inside the deliverable card
+            ->assertSee('Ship v2')
+            ->assertSee('Hotfix child');    // child of a deliverable in another project
     }
 
     public function test_project_filter_narrows_to_one_project(): void
@@ -105,10 +108,11 @@ class DeliverableFlowTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user, 'Alpha');
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
-        $project->tasks()->create(['title' => 'Approve me', 'status' => Task::STATUS_PLAN_REVIEW, 'position' => 0]);
-        $project->tasks()->create(['title' => 'Review me', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 1]);
-        $project->tasks()->create(['title' => 'Late', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 2, 'due_date' => now()->subDay()->toDateString()]);
+        $d->tasks()->create(['project_id' => $project->id, 'title' => 'Approve me', 'status' => Task::STATUS_PLAN_REVIEW, 'position' => 0]);
+        $d->tasks()->create(['project_id' => $project->id, 'title' => 'Review me', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 1]);
+        $d->tasks()->create(['project_id' => $project->id, 'title' => 'Late', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 2, 'due_date' => now()->subDay()->toDateString()]);
 
         $this->actingAs($user)->get(route('board'))
             ->assertOk()
@@ -122,8 +126,8 @@ class DeliverableFlowTest extends TestCase
         $user = User::factory()->create();
         $stranger = User::factory()->create();
         $strangerProject = $this->project($stranger, 'Secret');
-        $strangerProject->deliverables()->create(['title' => 'Strangers deliverable', 'status' => Deliverable::STATUS_NEW]);
-        $strangerProject->tasks()->create(['title' => 'Strangers task', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
+        $strangerDeliverable = $strangerProject->deliverables()->create(['title' => 'Strangers deliverable', 'status' => Deliverable::STATUS_BUILDING]);
+        $strangerDeliverable->tasks()->create(['project_id' => $strangerProject->id, 'title' => 'Strangers task', 'status' => Task::STATUS_DEVELOPING, 'position' => 0]);
 
         $this->actingAs($user)->get(route('board'))
             ->assertOk()

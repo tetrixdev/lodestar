@@ -12,6 +12,7 @@ use App\Mcp\Tools\UpsertProjectTool;
 use App\Mcp\Tools\UpsertReviewSectionTool;
 use App\Mcp\Tools\UpsertSessionTool;
 use App\Mcp\Tools\UpsertTaskTool;
+use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
@@ -45,30 +46,44 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
         LodestarServer::actingAs($user)
-            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Card', 'category' => 'mcp'])
+            ->tool(UpsertTaskTool::class, ['deliverable' => $d->id, 'title' => 'Card', 'category' => 'mcp'])
             ->assertOk();
 
         // A bare task (no plan) queues for AI planning; `new` is deliverable-only.
         $task = $project->tasks()->sole();
         $this->assertSame(Task::STATUS_READY_FOR_PLANNING, $task->status);
         $this->assertSame('mcp', $task->category);
+        $this->assertSame($d->id, $task->deliverable_id);
+    }
+
+    public function test_upsert_task_requires_a_deliverable_on_create(): void
+    {
+        $user = User::factory()->create();
+        $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+
+        // No deliverable → rejected (every task is a deliverable child).
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Loose'])
+            ->assertHasErrors();
     }
 
     public function test_upsert_task_refuses_to_create_a_card_past_the_backlog(): void
     {
         $user = User::factory()->create();
-        $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
         // Creating straight into a working/gate state bypasses claim_task — rejected.
         LodestarServer::actingAs($user)
-            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'X', 'status' => Task::STATUS_DEVELOPING])
+            ->tool(UpsertTaskTool::class, ['deliverable' => $d->id, 'title' => 'X', 'status' => Task::STATUS_DEVELOPING])
             ->assertHasErrors();
 
         // A backlog entry state is allowed.
         LodestarServer::actingAs($user)
-            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Y', 'status' => Task::STATUS_READY_FOR_PLANNING])
+            ->tool(UpsertTaskTool::class, ['deliverable' => $d->id, 'title' => 'Y', 'status' => Task::STATUS_READY_FOR_PLANNING])
             ->assertOk();
     }
 
@@ -76,12 +91,12 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         // A task in someone else's project must NOT get linked.
         $stranger = User::factory()->create();
         $otherProject = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
-        $foreign = $otherProject->tasks()->create(['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $foreign = $this->makeTask($otherProject, ['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         LodestarServer::actingAs($user)
             ->tool(CreateReviewTool::class, [
@@ -137,7 +152,7 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
 
         LodestarServer::actingAs($user)
             ->tool(ReportTool::class, ['task_id' => $task->id, 'title' => 'Built it'])
@@ -150,7 +165,7 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $task = $this->makeTask($project, ['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         LodestarServer::actingAs($user)
             ->tool(UpsertSessionTool::class, ['project' => 'p', 'title' => 'S', 'task_id' => $task->id])
@@ -162,7 +177,7 @@ class McpDataToolsTest extends TestCase
         // A task from another project cannot be linked.
         $stranger = User::factory()->create();
         $other = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
-        $foreign = $other->tasks()->create(['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $foreign = $this->makeTask($other, ['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         LodestarServer::actingAs($user)
             ->tool(UpsertSessionTool::class, ['id' => $session->id, 'task_id' => $foreign->id])
@@ -175,11 +190,12 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
         // A plan provided on create defaults the entry state to the plan_review gate.
         LodestarServer::actingAs($user)
             ->tool(UpsertTaskTool::class, [
-                'project' => 'p', 'title' => 'Planned card',
+                'deliverable' => $d->id, 'title' => 'Planned card',
                 'plan' => 'Step 1...', 'plan_summary' => 'A plan.',
             ])->assertOk();
 
@@ -190,10 +206,11 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
         // ready_for_dev with no plan → rejected (nothing to build from).
         LodestarServer::actingAs($user)
-            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'X', 'status' => Task::STATUS_READY_FOR_DEV])
+            ->tool(UpsertTaskTool::class, ['deliverable' => $d->id, 'title' => 'X', 'status' => Task::STATUS_READY_FOR_DEV])
             ->assertHasErrors();
 
         $this->assertSame(0, $project->tasks()->count());
@@ -201,7 +218,7 @@ class McpDataToolsTest extends TestCase
         // With a plan, the explicit ready_for_dev express path is allowed.
         LodestarServer::actingAs($user)
             ->tool(UpsertTaskTool::class, [
-                'project' => 'p', 'title' => 'Y', 'status' => Task::STATUS_READY_FOR_DEV,
+                'deliverable' => $d->id, 'title' => 'Y', 'status' => Task::STATUS_READY_FOR_DEV,
                 'plan' => 'Do it', 'plan_summary' => 'Plan.',
             ])->assertOk();
 
@@ -212,15 +229,16 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
         // body without body_summary → rejected.
         LodestarServer::actingAs($user)
-            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Card', 'body' => 'Long detail'])
+            ->tool(UpsertTaskTool::class, ['deliverable' => $d->id, 'title' => 'Card', 'body' => 'Long detail'])
             ->assertHasErrors();
 
         // plan without plan_summary → rejected.
         LodestarServer::actingAs($user)
-            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Card', 'plan' => 'A plan'])
+            ->tool(UpsertTaskTool::class, ['deliverable' => $d->id, 'title' => 'Card', 'plan' => 'A plan'])
             ->assertHasErrors();
 
         $this->assertSame(0, $project->tasks()->count());
@@ -228,7 +246,7 @@ class McpDataToolsTest extends TestCase
         // Both halves present → accepted and stored.
         LodestarServer::actingAs($user)
             ->tool(UpsertTaskTool::class, [
-                'project' => 'p', 'title' => 'Card',
+                'deliverable' => $d->id, 'title' => 'Card',
                 'body' => 'Long detail', 'body_summary' => 'Short.',
                 'plan' => 'A plan', 'plan_summary' => 'Plan TL;DR.',
             ])
@@ -260,7 +278,7 @@ class McpDataToolsTest extends TestCase
         $user = User::factory()->create();
         $stranger = User::factory()->create();
         $otherProject = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
-        $foreign = $otherProject->tasks()->create(['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $foreign = $this->makeTask($otherProject, ['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         // Update a task that belongs to someone else → rejected, untouched.
         LodestarServer::actingAs($user)

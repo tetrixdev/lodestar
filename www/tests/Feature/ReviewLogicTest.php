@@ -193,7 +193,7 @@ class ReviewLogicTest extends TestCase
         $review = $this->review($this->project($owner), 'in_review');
         $this->section($review, 'approved');
         $this->section($review, null); // undecided
-        $task = $review->project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
+        $task = $this->makeTask($review->project, ['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
         $review->tasks()->attach($task);
         $review->claimFor($owner->id);
 
@@ -226,7 +226,7 @@ class ReviewLogicTest extends TestCase
         $this->section($review, 'approved');
         $this->section($review, 'approved');
         // Carries a stale brief from a prior round — approval should clear it.
-        $task = $review->project->tasks()->create([
+        $task = $this->makeTask($review->project, [
             'title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0,
             'rework_notes' => 'leftover from the last round',
         ]);
@@ -249,7 +249,7 @@ class ReviewLogicTest extends TestCase
         $owner = User::factory()->create();
         $review = $this->review($this->project($owner), 'in_review');
         $this->section($review, 'approved');
-        $task = $review->project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
+        $task = $this->makeTask($review->project, ['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
         $review->tasks()->attach($task);
         $review->claimFor($owner->id);
 
@@ -283,7 +283,7 @@ class ReviewLogicTest extends TestCase
             'title' => 'nit', 'detail' => 'whatever', 'severity' => 'info', 'status' => 'dismissed', 'position' => 2,
         ]);
 
-        $task = $review->project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
+        $task = $this->makeTask($review->project, ['title' => 'T', 'status' => Task::STATUS_HUMAN_REVIEW, 'position' => 0]);
         $review->tasks()->attach($task);
         $review->claimFor($owner->id);
 

@@ -27,9 +27,9 @@ class BoardTest extends TestCase
         $user = User::factory()->create();
         $project = $this->project($user);
 
-        $a = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
-        $b = $project->tasks()->create(['title' => 'B', 'status' => 'ready_for_planning', 'position' => 1]);
-        $c = $project->tasks()->create(['title' => 'C', 'status' => 'ready_for_planning', 'position' => 2]);
+        $a = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $b = $this->makeTask($project, ['title' => 'B', 'status' => 'ready_for_planning', 'position' => 1]);
+        $c = $this->makeTask($project, ['title' => 'C', 'status' => 'ready_for_planning', 'position' => 2]);
 
         // Drag C to the front: new order C, A, B.
         $this->actingAs($user)->patchJson("/tasks/{$c->id}/move", [
@@ -46,7 +46,7 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         // move is reorder-only: claiming a different status is rejected.
         $this->actingAs($user)->patchJson("/tasks/{$task->id}/move", [
@@ -62,7 +62,7 @@ class BoardTest extends TestCase
         $owner = User::factory()->create();
         $intruder = User::factory()->create();
         $project = $this->project($owner);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($intruder)
             ->patchJson("/tasks/{$task->id}/move", ['status' => 'ready_for_planning', 'order' => [$task->id]])
@@ -75,8 +75,8 @@ class BoardTest extends TestCase
         $project = $this->project($user);
         $other = $this->project($user);
 
-        $a = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
-        $foreign = $other->tasks()->create(['title' => 'X', 'status' => 'ready_for_planning', 'position' => 0]);
+        $a = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $foreign = $this->makeTask($other, ['title' => 'X', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)->patchJson("/tasks/{$a->id}/move", [
             'status' => 'ready_for_planning',
@@ -94,7 +94,7 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         // Backdate the stamp so we can detect a fresh stamp on transition.
         $past = now()->subDays(3);
@@ -113,7 +113,7 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         // ready_for_planning may only go to planning or cancelled — not straight to merged.
         $this->actingAs($user)
@@ -127,7 +127,7 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)
             ->patchJson("/tasks/{$task->id}", ['status' => 'developing'])
@@ -140,7 +140,7 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'developing', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'developing', 'position' => 0]);
 
         // Any live status may cancel.
         $this->actingAs($user)
@@ -161,7 +161,7 @@ class BoardTest extends TestCase
         $owner = User::factory()->create();
         $intruder = User::factory()->create();
         $project = $this->project($owner);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($intruder)
             ->patch("/tasks/{$task->id}", ['status' => 'planning'])
@@ -172,45 +172,12 @@ class BoardTest extends TestCase
 
     // ── creating cards ───────────────────────────────────────────────────────
 
-    public function test_store_defaults_to_ready_for_planning(): void
-    {
-        $user = User::factory()->create();
-        $project = $this->project($user);
-
-        $this->actingAs($user)
-            ->post("/projects/{$project->id}/tasks", ['title' => 'Fresh'])
-            ->assertRedirect();
-
-        // A manually-added task goes straight to the planning queue (new is deliverable-only).
-        $this->assertDatabaseHas('tasks', [
-            'project_id' => $project->id,
-            'title' => 'Fresh',
-            'status' => 'ready_for_planning',
-        ]);
-    }
-
-    public function test_store_can_target_a_phase_status(): void
-    {
-        $user = User::factory()->create();
-        $project = $this->project($user);
-
-        $this->actingAs($user)
-            ->post("/projects/{$project->id}/tasks", ['title' => 'Q', 'status' => 'ready_for_dev'])
-            ->assertRedirect();
-
-        $this->assertDatabaseHas('tasks', [
-            'project_id' => $project->id,
-            'title' => 'Q',
-            'status' => 'ready_for_dev',
-        ]);
-    }
-
     public function test_new_card_gets_a_status_changed_at_stamp(): void
     {
         $user = User::factory()->create();
         $project = $this->project($user);
 
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->assertNotNull($task->fresh()->status_changed_at);
     }

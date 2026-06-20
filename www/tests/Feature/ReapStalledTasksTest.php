@@ -17,7 +17,7 @@ class ReapStalledTasksTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p-'.uniqid()]);
-        $task = $project->tasks()->create([
+        $task = $this->makeTask($project, [
             'title' => 'T', 'status' => $status, 'position' => 0,
             'claimed_by' => 'loop', 'claimed_at' => now(),
         ]);

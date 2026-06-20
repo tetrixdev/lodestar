@@ -24,7 +24,7 @@ class McpDeliverableToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'Readable', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'Readable', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 0]);
 
         LodestarServer::actingAs($user)
             ->tool(GetTaskTool::class, ['task_ids' => [$task->id, 99999]])
@@ -89,11 +89,11 @@ class McpDeliverableToolsTest extends TestCase
         $this->assertSame(Deliverable::STATUS_BUILDING, $d->fresh()->status);
     }
 
-    public function test_claim_work_takes_a_standalone_task(): void
+    public function test_claim_work_takes_a_child_task(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'Solo', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 0]);
+        $task = $this->makeTask($project, ['title' => 'Solo', 'status' => Task::STATUS_READY_FOR_DEV, 'position' => 0]);
 
         LodestarServer::actingAs($user)
             ->tool(ClaimWorkTool::class, ['agent_id' => 'loop'])

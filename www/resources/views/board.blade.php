@@ -53,13 +53,12 @@
             <x-input-error :messages="$errors->get('status')" />
             <x-input-error :messages="$errors->get('title')" />
 
-            {{-- 5 phase columns; deliverable cards + standalone task cards mix in each --}}
+            {{-- 5 phase columns; the board is deliverable-only — deliverable cards in each --}}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
                 @foreach ($phases as $phaseKey => $phase)
                     @php
                         $dels = $deliverableCardsByPhase[$phaseKey] ?? collect();
-                        $tks = $tasksByPhase[$phaseKey] ?? collect();
-                        $count = $dels->count() + $tks->count();
+                        $count = $dels->count();
                     @endphp
                     <div class="rounded-lg bg-gray-50 border border-gray-100 p-2 space-y-2">
                         <div class="flex items-center justify-between px-1">
@@ -70,9 +69,6 @@
                         <div class="space-y-2">
                             @foreach ($dels as $card)
                                 @include('partials.board.deliverable-card', ['deliverable' => $card['deliverable'], 'tasks' => $card['tasks']])
-                            @endforeach
-                            @foreach ($tks as $task)
-                                @include('partials.board.task-card', ['task' => $task])
                             @endforeach
 
                             @if ($count === 0)

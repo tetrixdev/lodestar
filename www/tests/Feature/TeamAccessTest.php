@@ -8,6 +8,7 @@ use App\Mcp\Servers\LodestarServer;
 use App\Mcp\Tools\ListProjectsTool;
 use App\Mcp\Tools\UpsertTaskTool;
 use App\Models\Project;
+use App\Models\Deliverable;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
@@ -47,7 +48,7 @@ class TeamAccessTest extends TestCase
     {
         ['member' => $member, 'project' => $project] = $this->teamProject();
         // A plan_review card surfaces in the dashboard's "Plans to review" bucket.
-        $project->tasks()->create(['title' => 'Needs a human', 'status' => Task::STATUS_PLAN_REVIEW]);
+        $this->makeTask($project, ['title' => 'Needs a human', 'status' => Task::STATUS_PLAN_REVIEW]);
 
         $this->actingAs($member)->get(route('board'))->assertOk()->assertSee('Needs a human');
     }
@@ -79,7 +80,7 @@ class TeamAccessTest extends TestCase
     public function test_team_member_can_view_a_task_detail_in_a_team_project(): void
     {
         ['member' => $member, 'project' => $project] = $this->teamProject();
-        $task = $project->tasks()->create(['title' => 'Shared card', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $task = $this->makeTask($project, ['title' => 'Shared card', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         $this->actingAs($member)
             ->get("/tasks/{$task->id}")
@@ -123,7 +124,7 @@ class TeamAccessTest extends TestCase
     public function test_non_member_gets_403_on_a_task_in_a_team_project(): void
     {
         ['project' => $project] = $this->teamProject();
-        $task = $project->tasks()->create(['title' => 'Secret', 'status' => Task::STATUS_READY_FOR_PLANNING]);
+        $task = $this->makeTask($project, ['title' => 'Secret', 'status' => Task::STATUS_READY_FOR_PLANNING]);
         $stranger = User::factory()->create();
 
         $this->actingAs($stranger)
@@ -161,10 +162,11 @@ class TeamAccessTest extends TestCase
     public function test_mcp_upsert_task_works_on_a_team_project_for_the_member(): void
     {
         ['member' => $member, 'project' => $project] = $this->teamProject();
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
 
         LodestarServer::actingAs($member)
             ->tool(UpsertTaskTool::class, [
-                'project' => $project->slug,
+                'deliverable' => $d->id,
                 'title' => 'Added by teammate',
                 'status' => Task::STATUS_READY_FOR_PLANNING,
             ])
@@ -190,13 +192,14 @@ class TeamAccessTest extends TestCase
     public function test_mcp_upsert_task_is_refused_for_a_non_member(): void
     {
         ['project' => $project] = $this->teamProject();
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
         $stranger = User::factory()->create();
 
-        // A non-member cannot resolve the project, so the tool errors out and
+        // A non-member cannot resolve the deliverable, so the tool errors out and
         // no card is created.
         LodestarServer::actingAs($stranger)
             ->tool(UpsertTaskTool::class, [
-                'project' => $project->slug,
+                'deliverable' => $d->id,
                 'title' => 'Intruder card',
                 'status' => Task::STATUS_READY_FOR_PLANNING,
             ])

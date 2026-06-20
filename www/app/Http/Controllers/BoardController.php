@@ -15,9 +15,9 @@ use Illuminate\View\View;
  * The unified board (task #69): one cross-project board that is the authenticated
  * landing. Cards mix across every accessible project into the 5 shared phase
  * columns, each tagged with a project chip; an optional `?project=` filter narrows
- * to one. Deliverables render as cards (carrying their child-task one-liners);
- * standalone tasks (no deliverable) render as their own cards. A compact "needs
- * you" strip carries the cross-project signals the old dashboard did.
+ * to one. The board is deliverable-only: every task belongs to a deliverable, so
+ * deliverables render as cards carrying their child-task one-liners. A compact
+ * "needs you" strip carries the cross-project signals the old dashboard did.
  */
 class BoardController extends Controller
 {
@@ -37,34 +37,12 @@ class BoardController extends Controller
             : $projectIds;
         $selectedId = $activeIds->count() === 1 && $selected !== 'all' && $selected !== null ? (int) $selected : null;
 
-        // status => phase key, inverted from Task::PHASES, so a task lands in its column.
-        $statusPhase = [];
-        foreach (Task::PHASES as $key => $def) {
-            foreach ($def['statuses'] as $status) {
-                $statusPhase[$status] = $key;
-            }
-        }
-
         $deliverables = Deliverable::query()
             ->whereIn('project_id', $activeIds)
             ->whereIn('status', Deliverable::STATUSES) // exclude cancelled
             ->with(['project', 'tasks' => fn ($q) => $q->orderBy('sub_id')])
             ->orderBy('position')
             ->get();
-
-        // Only STANDALONE tasks become their own cards; tasks under a deliverable
-        // live inside the deliverable card.
-        $tasks = Task::query()
-            ->whereIn('project_id', $activeIds)
-            ->whereNull('deliverable_id')
-            ->whereIn('status', Task::STATUSES)
-            ->with(['project', 'reviews:id'])
-            ->orderBy('position')
-            ->get()
-            ->sortBy([
-                fn (Task $a, Task $b) => $b->priorityRank() <=> $a->priorityRank(),
-                fn (Task $a, Task $b) => $a->position <=> $b->position,
-            ]);
 
         // A deliverable PROJECTS onto the board: while active it renders once per
         // column its tasks occupy (Plan + Build at the same time), each card filtered
@@ -115,25 +93,25 @@ class BoardController extends Controller
             }
         }
 
-        $tasksByPhase = $tasks->groupBy(fn (Task $t) => $statusPhase[$t->status] ?? 'backlog');
-
         // "Needs you" — cross-project signals, scoped to the active project set.
+        // Child-task signals come from the deliverables' loaded tasks (the board is
+        // deliverable-only — there are no loose tasks).
+        $allTasks = $deliverables->flatMap->tasks;
         $needs = [
-            'plans' => $tasks->where('status', Task::STATUS_PLAN_REVIEW)->count()
+            'plans' => $allTasks->where('status', Task::STATUS_PLAN_REVIEW)->count()
                 + $deliverables->where('status', Deliverable::STATUS_PLAN_REVIEW)->count(),
-            'reviews' => $tasks->where('status', Task::STATUS_HUMAN_REVIEW)->count()
+            'reviews' => $allTasks->where('status', Task::STATUS_HUMAN_REVIEW)->count()
                 + $deliverables->whereIn('status', [
                     Deliverable::STATUS_HUMAN_ARCHITECTURE_REVIEW,
                     Deliverable::STATUS_HUMAN_FUNCTIONAL_REVIEW,
                 ])->count(),
-            'overdue' => $tasks->filter(fn (Task $t) => $t->isOverdue())->count(),
+            'overdue' => $allTasks->filter(fn (Task $t) => $t->isOverdue())->count(),
         ];
 
         return view('board', [
             'projects' => $projects,
             'phases' => Task::PHASES,
             'deliverableCardsByPhase' => $deliverableCardsByPhase,
-            'tasksByPhase' => $tasksByPhase,
             'selectedId' => $selectedId,
             'needs' => $needs,
             'onboarding' => $this->onboarding($user),

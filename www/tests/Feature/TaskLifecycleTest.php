@@ -56,7 +56,7 @@ class TaskLifecycleTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'D', 'slug' => 'd-'.uniqid()]);
 
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning']);
+        $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning']);
         $firstStamp = $task->fresh()->status_changed_at;
         $this->assertNotNull($firstStamp);
 
@@ -75,14 +75,20 @@ class TaskLifecycleTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'D', 'slug' => 'd-'.uniqid()]);
+        $deliverable = $project->deliverables()->create(['title' => 'D', 'status' => 'building']);
 
         // Insert legacy-shaped rows directly (bypassing the model), as they would
         // have existed before the lifecycle migration, with a known updated_at.
+        // Every task belongs to a deliverable (required FK); sub_id is unique per
+        // deliverable, so give each a distinct one.
         $when = now()->subDays(5);
         $ids = [];
+        $sub = 1;
         foreach ([['open', 'O'], ['doing', 'D'], ['done', 'N'], ['cancelled', 'C']] as [$status, $title]) {
             $ids[$status] = DB::table('tasks')->insertGetId([
                 'project_id' => $project->id,
+                'deliverable_id' => $deliverable->id,
+                'sub_id' => $sub++,
                 'title' => $title,
                 'status' => $status,
                 'position' => 0,

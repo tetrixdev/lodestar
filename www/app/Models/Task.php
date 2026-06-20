@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
@@ -23,6 +24,8 @@ use Illuminate\Support\Str;
  */
 class Task extends Model
 {
+    use SoftDeletes;
+
     protected $guarded = [];
 
     protected $casts = [
@@ -288,12 +291,11 @@ class Task extends Model
             }
         });
 
-        // Assign the per-deliverable sub_id (1,2,3…) when a task is first attached
-        // to a deliverable. Drives the nested branch name D{deliverable}/T{sub_id}.
+        // Assign the per-deliverable sub_id (1,2,3…) on create. Every task belongs
+        // to a deliverable (required FK), so this always runs. Drives the nested
+        // branch name D{deliverable}/T{sub_id}.
         static::creating(function (Task $task): void {
-            if ($task->deliverable_id !== null && $task->sub_id === null) {
-                $task->sub_id = $task->deliverable->nextSubId();
-            }
+            $task->sub_id ??= $task->deliverable->nextSubId();
         });
 
         // Hard-logic: a deliverable's status is DERIVED from its tasks. Re-sync it
@@ -322,24 +324,19 @@ class Task extends Model
         return $this->belongsTo(Project::class);
     }
 
-    /** The deliverable this task belongs to (null = standalone task). */
+    /** The deliverable this task belongs to (required — every task has one). */
     public function deliverable(): BelongsTo
     {
         return $this->belongsTo(Deliverable::class);
     }
 
     /**
-     * The branch convention: a task under a deliverable nests its branch as
-     * D{deliverable:06d}/T{sub_id:02d}-slug; a standalone task is flat
-     * T{id:06d}-slug. See docs/deliverable-workflow.md §3.
+     * The branch convention: a task nests its branch under its deliverable as
+     * D{deliverable:06d}/T{sub_id:02d}-slug. See docs/deliverable-workflow.md §3.
      */
     public function branchName(): string
     {
-        $slug = Str::slug($this->title);
-
-        return $this->deliverable_id !== null
-            ? sprintf('D%06d/T%02d-%s', $this->deliverable_id, (int) $this->sub_id, $slug)
-            : sprintf('T%06d-%s', $this->id, $slug);
+        return sprintf('D%06d/T%02d-%s', $this->deliverable_id, (int) $this->sub_id, Str::slug($this->title));
     }
 
     /** The reviews that cover this card (openable from the card). */
@@ -416,19 +413,19 @@ class Task extends Model
         $this->events()->create(['type' => $type, 'actor' => $actor, 'description' => $description]);
     }
 
-    /** Is this task a child of a deliverable (vs a standalone card)? */
+    /** Every task is a child of a deliverable (required FK) — always true. */
     public function isDeliverableChild(): bool
     {
-        return $this->deliverable_id !== null;
+        return true;
     }
 
     /**
      * The human-review gate for this task: a deliverable child's human review is
-     * the FUNCTIONAL review (business/UX/UI); a standalone task's is the code review.
+     * the FUNCTIONAL review (business/UX/UI). Every task is a deliverable child.
      */
     public function humanGateType(): string
     {
-        return $this->isDeliverableChild() ? 'functional' : 'code';
+        return 'functional';
     }
 
     /** The legal target statuses from this card's current status. */
