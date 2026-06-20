@@ -184,6 +184,37 @@ class TaskController extends Controller
     }
 
     /**
+     * Per-task plan decision, made from the deliverable's plan-review walkthrough.
+     * Approve → the task's plan is accepted and it joins the dev queue
+     * (ready_for_dev); request changes → back to the planning queue with a note for
+     * the planner. Tasks are decided individually (some can start while others wait).
+     */
+    public function planDecision(Request $request, Task $task): RedirectResponse
+    {
+        abort_unless($task->project->isAccessibleBy($request->user()), 403);
+        abort_unless($task->status === Task::STATUS_PLAN_REVIEW, 422, 'This task is not awaiting plan review.');
+
+        $data = $request->validate([
+            'decision' => ['required', 'in:approve,changes'],
+            'note' => ['nullable', 'string'],
+        ]);
+
+        $target = $data['decision'] === 'approve' ? Task::STATUS_READY_FOR_DEV : Task::STATUS_READY_FOR_PLANNING;
+        $task->status = $target;
+        $task->rework_notes = $data['decision'] === 'approve' ? null : ($data['note'] ?? null);
+        $task->position = (int) $task->project->tasks()->where('status', $target)->max('position') + 1;
+        $task->save();
+
+        $task->logEvent(
+            $data['decision'] === 'approve' ? 'plan_approved' : 'plan_changes_requested',
+            $request->user()->name,
+            $data['decision'] === 'approve' ? 'Task plan approved.' : 'Task plan sent back for changes.',
+        );
+
+        return back();
+    }
+
+    /**
      * Intra-column reordering (drag within a single status). Receives the status
      * the cards sit in and the full, ordered list of task ids now in that status,
      * and rewrites `position` to match. This endpoint does NOT change status —

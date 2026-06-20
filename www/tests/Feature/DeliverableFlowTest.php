@@ -62,6 +62,39 @@ class DeliverableFlowTest extends TestCase
         $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'New deliverable', 'status' => 'new']);
     }
 
+    public function test_per_task_plan_decision_approve_and_request_changes(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user, 'Alpha');
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
+        $approve = $d->tasks()->create(['project_id' => $project->id, 'title' => 'Approve me', 'status' => Task::STATUS_PLAN_REVIEW, 'position' => 0]);
+        $reject = $d->tasks()->create(['project_id' => $project->id, 'title' => 'Send back', 'status' => Task::STATUS_PLAN_REVIEW, 'position' => 1]);
+
+        // Approve → joins the build queue.
+        $this->actingAs($user)->patch(route('tasks.plan-decision', $approve), ['decision' => 'approve'])->assertRedirect();
+        $this->assertSame(Task::STATUS_READY_FOR_DEV, $approve->fresh()->status);
+
+        // Request changes → back to planning with a note.
+        $this->actingAs($user)->patch(route('tasks.plan-decision', $reject), ['decision' => 'changes', 'note' => 'split this'])->assertRedirect();
+        $fresh = $reject->fresh();
+        $this->assertSame(Task::STATUS_READY_FOR_PLANNING, $fresh->status);
+        $this->assertSame('split this', $fresh->rework_notes);
+    }
+
+    public function test_plan_review_walkthrough_renders_unapproved_tasks(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user, 'Alpha');
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
+        $d->tasks()->create(['project_id' => $project->id, 'title' => 'Awaiting plan approval', 'status' => Task::STATUS_PLAN_REVIEW, 'position' => 0]);
+
+        $this->actingAs($user)->get(route('deliverables.show', $d))
+            ->assertOk()
+            ->assertSee('Plan review')
+            ->assertSee('Awaiting plan approval')
+            ->assertSee('Approve plan');
+    }
+
     public function test_dashboard_redirects_to_board(): void
     {
         $user = User::factory()->create();

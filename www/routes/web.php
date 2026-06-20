@@ -70,6 +70,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('/tasks/{task}/move', [TaskController::class, 'move'])->name('tasks.move');
     Route::patch('/tasks/{task}/release', [TaskController::class, 'release'])->name('tasks.release');
+    Route::patch('/tasks/{task}/plan-decision', [TaskController::class, 'planDecision'])->name('tasks.plan-decision');
 
     // Deliverables — the optional task-grouping layer + its funnel lifecycle.
     Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store'])->name('deliverables.store');

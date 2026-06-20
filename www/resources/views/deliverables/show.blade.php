@@ -4,7 +4,7 @@
         $T = \App\Models\Task::class;
         $statusLabel = $D::LABELS[$deliverable->status] ?? $deliverable->status;
         $unanswered = $deliverable->questions->whereNull('answered_at')->count();
-        $atPlanReview = $deliverable->status === $D::STATUS_PLAN_REVIEW;
+        $planReviewTasks = $deliverable->tasks->where('status', $T::STATUS_PLAN_REVIEW);
     @endphp
 
     <x-slot name="header">
@@ -93,6 +93,46 @@
                         <span class="text-gray-400">— derived from its tasks; it advances on its own and through review decisions.</span>
                     </p>
                 </div>
+
+                {{-- plan-review walkthrough: one section per task awaiting plan approval --}}
+                @if ($planReviewTasks->isNotEmpty())
+                    <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-4 border-l-4 border-amber-300">
+                        <div>
+                            <p class="text-[11px] font-medium text-amber-700 uppercase tracking-wide">Plan review — {{ $planReviewTasks->count() }} task(s)</p>
+                            <p class="text-xs text-gray-500">Approve each task's plan to send it to the build queue, or request changes to send it back to planning. Tasks are decided individually — approved ones can start while others wait.</p>
+                        </div>
+                        @foreach ($planReviewTasks as $task)
+                            <div class="rounded-lg border border-gray-200 p-4 space-y-3" x-data="{ changes: false }">
+                                <a href="{{ route('tasks.show', $task) }}" class="text-sm font-medium text-gray-800 hover:text-indigo-700">
+                                    <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span> {{ $task->title }}
+                                </a>
+                                <div>
+                                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Client-facing</p>
+                                    <x-detail-block title="Client-facing" :summary="$task->body_summary" :full="$task->body" empty="—" />
+                                </div>
+                                <div>
+                                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Technical / architecture</p>
+                                    <x-detail-block title="Technical" :summary="$task->plan_summary" :full="$task->plan" empty="—" />
+                                </div>
+                                <div class="flex items-center gap-2 pt-1 border-t border-gray-100">
+                                    <form method="POST" action="{{ route('tasks.plan-decision', $task) }}">
+                                        @csrf @method('PATCH')
+                                        <input type="hidden" name="decision" value="approve">
+                                        <button class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">Approve plan</button>
+                                    </form>
+                                    <button type="button" @click="changes = !changes" class="text-xs font-medium text-amber-700 hover:text-amber-900 px-2 py-1.5">Request changes</button>
+                                    <form x-show="changes" x-cloak method="POST" action="{{ route('tasks.plan-decision', $task) }}" class="flex-1 flex items-center gap-2">
+                                        @csrf @method('PATCH')
+                                        <input type="hidden" name="decision" value="changes">
+                                        <input name="note" type="text" placeholder="What to change…"
+                                               class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+                                        <button class="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50">Send back</button>
+                                    </form>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
 
                 {{-- concept / spec / plan --}}
                 <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
