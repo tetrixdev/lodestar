@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 /**
  * A review of a change against a base. The walkthrough the human reviews is its
@@ -26,10 +27,10 @@ class Review extends Model
         return $this->belongsTo(Project::class);
     }
 
-    /** The repository this review's comparison is within (null = doc-only review). */
-    public function repository(): BelongsTo
+    /** The repo comparisons this review spans (one per repo; ordered). */
+    public function comparisons(): HasMany
     {
-        return $this->belongsTo(Repository::class);
+        return $this->hasMany(ReviewComparison::class)->orderBy('position');
     }
 
     /** @return HasMany<ReviewSection, $this> */
@@ -38,16 +39,29 @@ class Review extends Model
         return $this->hasMany(ReviewSection::class)->orderBy('position');
     }
 
-    /** The changed files of this review's comparison (GitHub order). */
-    public function files(): HasMany
+    /**
+     * Every changed file across all this review's comparisons, in (comparison,
+     * GitHub) order — the flat list the coverage guard and the file-tree use.
+     */
+    public function files(): HasManyThrough
     {
-        return $this->hasMany(ReviewFile::class)->orderBy('position');
+        return $this->hasManyThrough(ReviewFile::class, ReviewComparison::class)
+            ->orderBy('review_comparisons.position')
+            ->orderBy('review_files.position');
+    }
+
+    /** Does this review have at least one comparison (≥1 diff)? */
+    public function hasComparison(): bool
+    {
+        return $this->comparisons()->exists();
     }
 
     /**
-     * The coverage guard: every changed file must be allocated to at least one
-     * section. Returns the totals + the still-uncovered file paths. A review with
-     * no files (a doc-only review) is trivially complete.
+     * The coverage guard: every changed file (across all comparisons) must be
+     * allocated to at least one section. Returns the totals + the still-uncovered
+     * file paths. A review whose comparisons changed no files is trivially covered
+     * — but a review still needs ≥1 comparison to reach a human (see hasComparison
+     * / the human-review gate in AdvanceTaskTool).
      */
     public function coverage(): array
     {

@@ -52,6 +52,14 @@ class AdvanceTaskTool extends LodestarTool
                 );
             }
             foreach ($reviews as $review) {
+                // ≥1 diff per review: a review with no comparison can't be handed
+                // off (no actual change was reviewed).
+                if (! $review->hasComparison()) {
+                    return Response::error(
+                        "Review #{$review->id} has no comparison — a review must compare at least one repo "
+                        .'(create it with comparisons / repo+base_ref+head_ref) before handing off to a human.'
+                    );
+                }
                 $coverage = $review->coverage();
                 if (! $coverage['complete']) {
                     return Response::error(

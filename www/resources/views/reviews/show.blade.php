@@ -13,13 +13,17 @@
                 ]" />
                 <div>
                     <h2 class="font-semibold text-xl text-gray-800 leading-tight">{{ $review->title }}</h2>
-                    @if ($review->base_ref || $review->head_ref)
-                        <p class="text-xs text-gray-500">Comparing
-                            <code class="bg-gray-100 px-1 rounded">{{ $review->base_ref ?? '?' }}</code>
+                    @foreach ($review->comparisons as $c)
+                        <p class="text-xs text-gray-500">
+                            @if ($c->repository)
+                                <span class="font-medium text-gray-600">{{ $c->repository->full_name }}</span>
+                            @endif
+                            Comparing
+                            <code class="bg-gray-100 px-1 rounded">{{ $c->base_ref ?? '?' }}</code>
                             &hellip;
-                            <code class="bg-gray-100 px-1 rounded">{{ $review->head_ref ?? '?' }}</code>
+                            <code class="bg-gray-100 px-1 rounded">{{ $c->head_ref ?? '?' }}</code>
                         </p>
-                    @endif
+                    @endforeach
                 </div>
             </div>
 

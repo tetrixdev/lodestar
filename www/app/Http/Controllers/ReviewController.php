@@ -25,7 +25,10 @@ class ReviewController extends Controller
     {
         abort_unless($project->isAccessibleBy($request->user()), 403);
 
-        $reviews = $project->reviews()->latest()->withCount('sections')->get();
+        $reviews = $project->reviews()->latest()
+            ->withCount('sections')
+            ->with('comparisons.repository')
+            ->get();
 
         return view('reviews.index', ['project' => $project, 'reviews' => $reviews]);
     }
@@ -36,7 +39,8 @@ class ReviewController extends Controller
         abort_unless($review->project->isAccessibleBy($request->user()), 403);
 
         $review->load([
-            'sections.files:id,path', 'sections.findings', 'project', 'assignee', 'files',
+            'sections.files:id,path', 'sections.findings', 'project', 'assignee',
+            'comparisons.repository', 'comparisons.files',
             'tasks' => fn ($q) => $q->orderBy('title'),
         ]);
 
@@ -58,13 +62,17 @@ class ReviewController extends Controller
     {
         abort_unless($review->project->isAccessibleBy($request->user()), 403);
 
+        // A file is reviewed within its own comparison (repo + base/head SHAs).
+        abort_unless($file->comparison?->review_id === $review->id, 404);
+        $comparison = $file->comparison;
+
         $mode = $request->query('mode', 'diff');
         if (! in_array($mode, ['diff', 'rich', 'full', 'preview'], true)) {
             $mode = 'diff';
         }
 
-        $repo = $review->repository?->full_name;
-        $linkSha = $review->head_sha ?: $review->head_ref;
+        $repo = $comparison->repository?->full_name;
+        $linkSha = $comparison->head_sha ?: $comparison->head_ref;
         $githubUrl = $repo && $linkSha
             ? "https://github.com/{$repo}/blob/{$linkSha}/{$file->path}"
             : null;
@@ -89,7 +97,7 @@ class ReviewController extends Controller
         // rich / full / preview all need the blob(s); for a removed file the head
         // blob is gone, so read the base side instead.
         $removed = $file->status === 'removed';
-        $sha = $removed ? $review->base_sha : $review->head_sha;
+        $sha = $removed ? $comparison->base_sha : $comparison->head_sha;
         if (! $repo || ! $sha) {
             // For markdown rich mode, degrade to the stored patch rather than a
             // GitHub-only dead end when we can't fetch blobs.
@@ -102,7 +110,7 @@ class ReviewController extends Controller
 
         try {
             $blob = app(GitHubComparison::class)->blob(
-                $repo, $sha, $blobPath, $review->repository?->token(),
+                $repo, $sha, $blobPath, $comparison->repository?->token(),
             );
         } catch (\Throwable $e) {
             return $mode === 'rich' && $file->patch !== null
@@ -132,7 +140,7 @@ class ReviewController extends Controller
             // so fall back to the raw patch.
             $richHtml = $removed
                 ? $renderer->renderRichMarkdown($blob['content'], null)
-                : $renderer->renderRichMarkdown($this->baseContentFor($review, $file), $blob['content']);
+                : $renderer->renderRichMarkdown($this->baseContentFor($file), $blob['content']);
 
             return $richHtml === null
                 ? $renderPatch()
@@ -144,28 +152,29 @@ class ReviewController extends Controller
         // A null result means the file exceeds the LCS line guard → raw patch.
         $rows = $removed
             ? $renderer->renderFullFile($blob['content'], '')
-            : $renderer->renderFullFile($this->baseContentFor($review, $file), $blob['content']);
+            : $renderer->renderFullFile($this->baseContentFor($file), $blob['content']);
 
         return $rows === null ? $renderPatch() : $view(['rows' => $rows]);
     }
 
     /**
-     * The base-side content of a (modified/renamed) file, for the full-file diff.
-     * Added files have no base; a fetch failure degrades to "all added" rather
-     * than failing the view.
+     * The base-side content of a (modified/renamed) file, for the full-file diff,
+     * read from its own comparison. Added files have no base; a fetch failure
+     * degrades to "all added" rather than failing the view.
      */
-    private function baseContentFor(Review $review, ReviewFile $file): ?string
+    private function baseContentFor(ReviewFile $file): ?string
     {
-        if ($file->status === 'added' || ! $review->base_sha || ! $review->repository) {
+        $comparison = $file->comparison;
+        if ($file->status === 'added' || ! $comparison?->base_sha || ! $comparison->repository) {
             return null;
         }
 
         try {
             $blob = app(GitHubComparison::class)->blob(
-                $review->repository->full_name,
-                $review->base_sha,
+                $comparison->repository->full_name,
+                $comparison->base_sha,
                 $file->old_path ?? $file->path,
-                $review->repository->token(),
+                $comparison->repository->token(),
             );
 
             return $blob['content'];

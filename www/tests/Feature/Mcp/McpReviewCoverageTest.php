@@ -183,17 +183,67 @@ class McpReviewCoverageTest extends TestCase
         $this->assertSame(250, $project->reviews()->sole()->files()->count());
     }
 
-    public function test_a_doc_only_review_with_no_files_is_trivially_complete(): void
+    public function test_a_review_with_no_comparison_cannot_reach_a_human(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $this->linkRepo($project);
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
-        // No base/head → no file fetch, no files.
+        // No base/head and no comparisons → create_review refuses (≥1 diff rule).
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'task_ids' => [$task->id],
+        ])->assertHasErrors();
+
+        $this->assertSame(0, $project->reviews()->count());
+
+        // Even if a bare review somehow exists, the hand-off gate refuses it.
+        $bare = $project->reviews()->create(['title' => 'bare', 'status' => 'draft']);
+        $bare->tasks()->attach($task);
+        LodestarServer::actingAs($user)->tool(AdvanceTaskTool::class, [
+            'task_id' => $task->id, 'to' => Task::STATUS_HUMAN_REVIEW,
+        ])->assertHasErrors();
+        $this->assertSame(Task::STATUS_AI_REVIEW, $task->fresh()->status);
+    }
+
+    public function test_a_multi_repo_review_pulls_every_comparison_and_covers_across_repos(): void
+    {
+        // Two comparisons, two repos: the compare endpoint is keyed by the repo in
+        // the URL so each repo returns its own file list.
+        Http::fake([
+            'api.github.com/repos/o/a/compare/*' => Http::response([
+                'files' => [['filename' => 'a/X.php', 'status' => 'modified']],
+            ], 200),
+            'api.github.com/repos/o/b/compare/*' => Http::response([
+                'files' => [['filename' => 'b/Y.php', 'status' => 'modified']],
+            ], 200),
+            'api.github.com/*/commits/*' => Http::response(['sha' => 'deadbeef'], 200),
+        ]);
+
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $this->linkRepo($project, 'o/a');
+        $this->linkRepo($project, 'o/b');
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
+
+        LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
+            'project' => 'p', 'title' => 'R', 'task_ids' => [$task->id],
+            'comparisons' => [
+                ['repo' => 'o/a', 'base_ref' => 'main', 'head_ref' => 'feat'],
+                ['repo' => 'o/b', 'base_ref' => 'main', 'head_ref' => 'feat'],
+            ],
+        ])->assertOk()->assertSee('"total":2');
+
+        $review = $project->reviews()->sole();
+        $this->assertSame(2, $review->comparisons()->count());
+        $this->assertEqualsCanonicalizing(['a/X.php', 'b/Y.php'], $review->files()->pluck('path')->all());
+
+        // One section covers both files across the two repos → fully covered → hand off.
+        LodestarServer::actingAs($user)->tool(UpsertReviewSectionTool::class, [
+            'review_id' => $review->id, 'title' => 'S', 'mode' => 'direct',
+            'files' => ['a/X.php', 'b/Y.php'],
         ])->assertOk();
+        $this->assertTrue($review->fresh()->isFullyCovered());
 
         LodestarServer::actingAs($user)->tool(AdvanceTaskTool::class, [
             'task_id' => $task->id, 'to' => Task::STATUS_HUMAN_REVIEW,

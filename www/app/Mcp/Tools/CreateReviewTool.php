@@ -15,7 +15,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Throwable;
 
-#[Description('Create a review on one of your projects and get back the URL a human opens to walk through it. Provide base_ref + head_ref (and repo "owner/name" if the project has several) to pull the authoritative changed-file list from GitHub via that repo\'s connection — every changed file must then be covered by a section before the review can reach a human. Add sections with upsert_review_section.')]
+#[Description('Create a review on one of your projects and get back the URL a human opens to walk through it. A review needs at least one comparison: pass `comparisons` (a list of {repo, base_ref, head_ref}) to review a change that spans several repos, or the single `repo`/`base_ref`/`head_ref` for a one-repo change. Lodestar pulls each comparison\'s authoritative changed-file list from GitHub via that repo\'s connection; every changed file must then be covered by a section before the review can reach a human. Add sections with upsert_review_section.')]
 #[Name('create_review')]
 class CreateReviewTool extends LodestarTool
 {
@@ -24,9 +24,15 @@ class CreateReviewTool extends LodestarTool
         $data = $request->validate([
             'project' => ['required', 'string'],
             'title' => ['required', 'string', 'max:255'],
+            // Legacy single-comparison shape (still accepted).
             'repo' => ['nullable', 'string', 'max:255'],
             'base_ref' => ['nullable', 'string', 'max:255'],
             'head_ref' => ['nullable', 'string', 'max:255'],
+            // Multi-repo shape: one entry per comparison.
+            'comparisons' => ['nullable', 'array'],
+            'comparisons.*.repo' => ['nullable', 'string', 'max:255'],
+            'comparisons.*.base_ref' => ['required_with:comparisons', 'string', 'max:255'],
+            'comparisons.*.head_ref' => ['required_with:comparisons', 'string', 'max:255'],
             'intro' => ['nullable', 'string'],
             'task_ids' => ['nullable', 'array'],
             'task_ids.*' => ['integer'],
@@ -37,48 +43,64 @@ class CreateReviewTool extends LodestarTool
             return Response::error('No project "'.$data['project'].'" belongs to you.');
         }
 
-        // A comparison review resolves to one of the project's linked repositories
-        // and reads GitHub through that repo's connection token.
-        $files = [];
-        $repository = null;
-        $baseSha = null;
-        $headSha = null;
-        if (! empty($data['base_ref']) && ! empty($data['head_ref'])) {
-            $repository = $this->resolveRepository($project, $data['repo'] ?? null);
+        // Normalise both shapes into one list of {repo?, base_ref, head_ref}.
+        $requested = $data['comparisons'] ?? [];
+        if ($requested === [] && ! empty($data['base_ref']) && ! empty($data['head_ref'])) {
+            $requested = [['repo' => $data['repo'] ?? null, 'base_ref' => $data['base_ref'], 'head_ref' => $data['head_ref']]];
+        }
+
+        // Resolve + fetch each comparison up front so a bad ref/repo fails the
+        // whole create rather than leaving a half-built review.
+        $prepared = [];
+        $github = app(GitHubComparison::class);
+        foreach ($requested as $i => $c) {
+            $repository = $this->resolveRepository($project, $c['repo'] ?? null);
             if (! $repository) {
                 return Response::error(
-                    'No matching repository is linked to this project. Link one in the project\'s Repositories, '
-                    .'or pass repo="owner/name" of a linked repo.'
+                    'Comparison #'.($i + 1).': no matching repository is linked to this project. '
+                    .'Link one in the project\'s Repositories, or pass repo="owner/name" of a linked repo.'
                 );
             }
             try {
-                $comparison = app(GitHubComparison::class);
-                // Pin both refs to commit SHAs so the file viewer can fetch the
-                // exact blobs the diff was taken against, even as the ref moves.
-                $baseSha = $comparison->resolveSha($repository->full_name, $data['base_ref'], $repository->token());
-                $headSha = $comparison->resolveSha($repository->full_name, $data['head_ref'], $repository->token());
-                $files = $comparison->files(
-                    $repository->full_name, $data['base_ref'], $data['head_ref'], $repository->token()
-                );
+                $prepared[] = [
+                    'repository' => $repository,
+                    'base_ref' => $c['base_ref'],
+                    'head_ref' => $c['head_ref'],
+                    'base_sha' => $github->resolveSha($repository->full_name, $c['base_ref'], $repository->token()),
+                    'head_sha' => $github->resolveSha($repository->full_name, $c['head_ref'], $repository->token()),
+                    'files' => $github->files($repository->full_name, $c['base_ref'], $c['head_ref'], $repository->token()),
+                ];
             } catch (Throwable $e) {
-                return Response::error('Could not fetch the comparison: '.$e->getMessage());
+                return Response::error('Could not fetch comparison #'.($i + 1).': '.$e->getMessage());
             }
         }
 
-        $review = DB::transaction(function () use ($project, $data, $repository, $files, $baseSha, $headSha) {
+        if ($prepared === []) {
+            return Response::error(
+                'A review needs at least one comparison. Pass `comparisons` (a list of {repo, base_ref, head_ref}) '
+                .'or the single repo/base_ref/head_ref.'
+            );
+        }
+
+        $review = DB::transaction(function () use ($project, $data, $prepared) {
             $review = $project->reviews()->create([
                 'title' => $data['title'],
-                'repository_id' => $repository?->id,
-                'base_ref' => $data['base_ref'] ?? null,
-                'base_sha' => $baseSha,
-                'head_ref' => $data['head_ref'] ?? null,
-                'head_sha' => $headSha,
                 'intro' => $data['intro'] ?? null,
                 'status' => 'draft',
             ]);
 
-            if ($files !== []) {
-                $review->files()->createMany($files);
+            foreach ($prepared as $position => $c) {
+                $comparison = $review->comparisons()->create([
+                    'repository_id' => $c['repository']->id,
+                    'base_ref' => $c['base_ref'],
+                    'base_sha' => $c['base_sha'],
+                    'head_ref' => $c['head_ref'],
+                    'head_sha' => $c['head_sha'],
+                    'position' => $position,
+                ]);
+                if ($c['files'] !== []) {
+                    $comparison->files()->createMany($c['files']);
+                }
             }
 
             if (! empty($data['task_ids'])) {
@@ -92,16 +114,21 @@ class CreateReviewTool extends LodestarTool
         return Response::json([
             'id' => $review->id,
             'url' => route('reviews.show', $review),
-            'repository' => $repository?->full_name,
+            'comparisons' => collect($prepared)->map(fn ($c) => [
+                'repository' => $c['repository']->full_name,
+                'base_ref' => $c['base_ref'],
+                'head_ref' => $c['head_ref'],
+                'files' => count($c['files']),
+            ])->all(),
             'linked_tasks' => $review->tasks()->count(),
             // The full worklist up front (same shape as upsert_review_section /
             // get_review): coverage.uncovered is every changed file you must
             // allocate to a section. It shrinks as you add sections; the review
             // can't reach a human until coverage.complete is true.
             'coverage' => $review->coverage(),
-            'next' => $files !== []
+            'next' => $review->files()->exists()
                 ? 'Group coverage.uncovered into sections with upsert_review_section (pass each section its "files" + a review mode). Each call returns the remaining uncovered list. The review cannot reach a human until coverage is complete.'
-                : 'Add sections with upsert_review_section.',
+                : 'No files changed in any comparison. Add sections with upsert_review_section.',
         ]);
     }
 
@@ -122,9 +149,10 @@ class CreateReviewTool extends LodestarTool
         return [
             'project' => $schema->string()->description('Project id or slug.')->required(),
             'title' => $schema->string()->description('Review title.')->required(),
-            'repo' => $schema->string()->description('Which linked repo ("owner/name") the comparison is in. Optional if the project has exactly one repo.'),
-            'base_ref' => $schema->string()->description('Base ref of the comparison, e.g. "main". Required (with head_ref) to pull the file list.'),
-            'head_ref' => $schema->string()->description('Head ref under review, e.g. "feat/x".'),
+            'repo' => $schema->string()->description('Single-comparison shape: which linked repo ("owner/name"). Optional if the project has exactly one repo.'),
+            'base_ref' => $schema->string()->description('Single-comparison base ref, e.g. "main".'),
+            'head_ref' => $schema->string()->description('Single-comparison head ref, e.g. "feat/x".'),
+            'comparisons' => $schema->array()->description('Multi-repo shape: a list of {repo, base_ref, head_ref} — one per repository the change spans. Use this instead of the single repo/base_ref/head_ref for a multi-repo review.'),
             'intro' => $schema->string()->description('Optional preamble shown at the top of the walkthrough.'),
             'task_ids' => $schema->array()->description('Optional task ids (in this project) this review covers.'),
         ];

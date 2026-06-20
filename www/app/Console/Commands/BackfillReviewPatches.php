@@ -35,61 +35,68 @@ class BackfillReviewPatches extends Command
             return self::FAILURE;
         }
 
-        $repo = $review->repository;
-        if (! $repo) {
-            $this->error("Review #{$review->id} has no linked repository — nothing to fetch.");
+        $comparisons = $review->comparisons()->with('repository')->get();
+        if ($comparisons->isEmpty()) {
+            $this->error("Review #{$review->id} has no comparison — nothing to fetch.");
 
             return self::FAILURE;
         }
-        if (! $review->base_ref || ! $review->head_ref) {
-            $this->error("Review #{$review->id} has no base_ref/head_ref comparison to re-fetch.");
-
-            return self::FAILURE;
-        }
-
-        $token = $repo->token();
-        $fullName = $repo->full_name;
-
-        // Resolve + persist the SHAs if missing, so the viewer can fetch blobs.
-        $shaUpdate = [];
-        if (! $review->base_sha) {
-            $shaUpdate['base_sha'] = $github->resolveSha($fullName, $review->base_ref, $token);
-        }
-        if (! $review->head_sha) {
-            $shaUpdate['head_sha'] = $github->resolveSha($fullName, $review->head_ref, $token);
-        }
-        if ($shaUpdate !== []) {
-            $review->update($shaUpdate);
-            $this->info('Resolved SHAs: '.collect($shaUpdate)->map(fn ($v, $k) => "{$k}={$v}")->join(', '));
-        }
-
-        // Re-run the comparison and index by path.
-        $files = collect($github->files($fullName, $review->base_ref, $review->head_ref, $token))
-            ->keyBy('path');
 
         $updated = 0;
+        $total = 0;
         $missing = [];
-        foreach ($review->files as $row) {
-            $fresh = $files->get($row->path);
-            if ($fresh === null) {
-                // The current comparison no longer reports this path — leave the
-                // row untouched (we don't change the file set).
-                $missing[] = $row->path;
+
+        foreach ($comparisons as $comparison) {
+            $repo = $comparison->repository;
+            if (! $repo || ! $comparison->base_ref || ! $comparison->head_ref) {
+                $this->warn("Comparison #{$comparison->id} has no repo/base_ref/head_ref — skipped.");
 
                 continue;
             }
 
-            $row->update([
-                'patch' => $fresh['patch'],
-                'additions' => $fresh['additions'],
-                'deletions' => $fresh['deletions'],
-            ]);
-            $updated++;
+            $token = $repo->token();
+            $fullName = $repo->full_name;
+
+            // Resolve + persist the SHAs if missing, so the viewer can fetch blobs.
+            $shaUpdate = [];
+            if (! $comparison->base_sha) {
+                $shaUpdate['base_sha'] = $github->resolveSha($fullName, $comparison->base_ref, $token);
+            }
+            if (! $comparison->head_sha) {
+                $shaUpdate['head_sha'] = $github->resolveSha($fullName, $comparison->head_ref, $token);
+            }
+            if ($shaUpdate !== []) {
+                $comparison->update($shaUpdate);
+                $this->info("[{$fullName}] Resolved SHAs: ".collect($shaUpdate)->map(fn ($v, $k) => "{$k}={$v}")->join(', '));
+            }
+
+            // Re-run the comparison and index by path.
+            $files = collect($github->files($fullName, $comparison->base_ref, $comparison->head_ref, $token))
+                ->keyBy('path');
+
+            foreach ($comparison->files as $row) {
+                $total++;
+                $fresh = $files->get($row->path);
+                if ($fresh === null) {
+                    // The current comparison no longer reports this path — leave the
+                    // row untouched (we don't change the file set).
+                    $missing[] = $row->path;
+
+                    continue;
+                }
+
+                $row->update([
+                    'patch' => $fresh['patch'],
+                    'additions' => $fresh['additions'],
+                    'deletions' => $fresh['deletions'],
+                ]);
+                $updated++;
+            }
         }
 
-        $this->info("Updated {$updated} of {$review->files->count()} file row(s) on review #{$review->id}.");
+        $this->info("Updated {$updated} of {$total} file row(s) on review #{$review->id}.");
         if ($missing !== []) {
-            $this->warn(count($missing).' stored file(s) are no longer in the comparison (left untouched): '
+            $this->warn(count($missing).' stored file(s) are no longer in their comparison (left untouched): '
                 .implode(', ', array_slice($missing, 0, 10)).(count($missing) > 10 ? ' …' : ''));
         }
 

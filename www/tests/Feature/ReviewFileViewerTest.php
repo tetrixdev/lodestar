@@ -108,8 +108,9 @@ class ReviewFileViewerTest extends TestCase
         ])->assertOk();
 
         $review = $project->reviews()->sole();
-        $this->assertSame('base-sha', $review->base_sha);
-        $this->assertSame('head-sha', $review->head_sha);
+        $comparison = $review->comparisons()->sole();
+        $this->assertSame('base-sha', $comparison->base_sha);
+        $this->assertSame('head-sha', $comparison->head_sha);
 
         $file = $review->files()->sole();
         $this->assertSame('@@ -1 +1 @@', $file->patch);
@@ -125,11 +126,15 @@ class ReviewFileViewerTest extends TestCase
         $repo = $project->repositories()->first();
 
         $review = $project->reviews()->create(array_merge([
-            'title' => 'R', 'status' => 'in_review', 'repository_id' => $repo->id,
-            'base_ref' => 'main', 'base_sha' => 'base-sha', 'head_ref' => 'feat', 'head_sha' => 'head-sha',
+            'title' => 'R', 'status' => 'in_review',
         ], $reviewAttrs));
 
-        $review->files()->create(array_merge([
+        $comparison = $review->comparisons()->create([
+            'repository_id' => $repo->id, 'position' => 0,
+            'base_ref' => 'main', 'base_sha' => 'base-sha', 'head_ref' => 'feat', 'head_sha' => 'head-sha',
+        ]);
+
+        $comparison->files()->create(array_merge([
             'path' => 'a.php', 'status' => 'modified', 'position' => 0,
             'patch' => "@@ -1,2 +1,2 @@\n-old\n+new\n ctx", 'additions' => 1, 'deletions' => 1,
         ], $fileAttrs));

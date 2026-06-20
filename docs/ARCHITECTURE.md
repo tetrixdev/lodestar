@@ -41,7 +41,9 @@ signed-in user.
     (called from the walkthrough via `fetch`), **gated** on the caller holding the
     review. The walkthrough page matches the playbooks pages at `max-w-7xl`.
   - `file()` serves the **changed-file viewer** — a per-mode HTML fragment the
-    modal injects. `diff` renders the stored unified patch (no GitHub call);
+    modal injects. It resolves the file's **comparison** (repo + base/head SHAs)
+    so a multi-repo review fetches each file's blobs from the right repo. `diff`
+    renders the stored unified patch (no GitHub call);
     `full` fetches the head blob and renders the whole file with changed lines
     inline; `preview` renders a markdown file clean; and **`rich`** (the default
     for markdown) renders base→head markdown to HTML with the same engine
@@ -340,19 +342,26 @@ agent's input crosses into our data writes.
      stays pinnable for rollback. AI clients may *propose* a version over MCP but
      can never make one `active` (human-gated approval — task #53 P3).
 
-2. **The GitHub compare API (BUILT).** When a review is created from a comparison
-   (`repo` + `base_ref`…`head_ref`), Lodestar fetches the changed-file list
-   server-side from GitHub's compare endpoint (`App\Services\GitHubComparison`,
-   the `Http` client + a `GITHUB_TOKEN`). This is deliberately the boundary's
+2. **The GitHub compare API (BUILT).** A review's change is one or more
+   **comparisons** (`review_comparisons` — each `repo` + `base_ref`…`head_ref`),
+   so a single review can span several repositories (multi-repo). For each,
+   Lodestar fetches the changed-file list server-side from GitHub's compare
+   endpoint (`App\Services\GitHubComparison`, the `Http` client, read through the
+   repo's connection token). `create_review` accepts a `comparisons` list (or the
+   legacy single `repo`/`base_ref`/`head_ref`, folded into one comparison) and
+   resolves + fetches each up front, so a bad ref fails the whole create rather
+   than leaving a half-built review. This is deliberately the boundary's
    *authority*: the file set is ground truth from GitHub, **not** the AI's claim,
    so the agent can only group files it cannot omit. What holds it:
-   - **Coverage guard.** Each `review_files` row must be allocated to ≥1
+   - **≥1-diff + coverage guard.** A review must compare **at least one** repo
+     (`Review::hasComparison()`); each `review_files` row must be allocated to ≥1
      `ReviewSection` (`review_file_section`); `upsert_review_section` rejects any
-     path not in the comparison, and `advance_task → human_review` is refused
-     while any linked review has uncovered files. The human sees a GitHub-ordered
-     **file-tree** at the top of the walkthrough, each file tagged with its
-     covering section(s) and uncovered files flagged — so "I stepped through every
-     section" provably means "every changed file was reviewed".
+     path not in the review's comparisons, and `advance_task → human_review` is
+     refused while any linked review has no comparison or has uncovered files. The
+     human sees a GitHub-ordered **file-tree** at the top of the walkthrough
+     (grouped per repo when multi-repo), each file tagged with its covering
+     section(s) and uncovered files flagged — so "I stepped through every section"
+     provably means "every changed file was reviewed".
    - **Token scope.** Repos are first-class: a user links **GitHub connections**
      (one per account/token, stored encrypted) and attaches **repositories** to a
      project (many-to-many — a project = a "stack" of repos). Each repo is read
@@ -365,10 +374,11 @@ agent's input crosses into our data writes.
    - **Backfilling old reviews.** Reviews created before patches/SHAs were
      stored have null `patch` rows and null `base_sha`/`head_sha`, so the viewer
      can't render their diffs. `php artisan reviews:backfill-patches {review}`
-     resolves+persists the SHAs (if null), re-fetches the comparison, and
-     enriches each **existing** `review_files` row (matched by path) with its
-     patch/additions/deletions. It never adds or removes rows — the file set
-     (and its coverage allocation) is left exactly as it was — and is idempotent.
+     walks each of the review's comparisons: resolves+persists its SHAs (if null),
+     re-fetches it, and enriches each **existing** `review_files` row (matched by
+     path) with its patch/additions/deletions. It never adds or removes rows — the
+     file set (and its coverage allocation) is left exactly as it was — and is
+     idempotent.
 
 **Rendering the diff (`App\Support\DiffRenderer`).** Turns diffs into render-ready
 rows for the viewer's Blade partials. `renderPatch()` parses a stored unified

@@ -17,9 +17,10 @@ class ReviewFileTreeTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $review = $project->reviews()->create(['title' => 'R', 'status' => 'draft']);
+        $comparison = $review->comparisons()->create(['position' => 0]);
 
-        $covered = $review->files()->create(['path' => 'app/Covered.php', 'status' => 'modified', 'position' => 0]);
-        $review->files()->create(['path' => 'app/Uncovered.php', 'status' => 'added', 'position' => 1]);
+        $covered = $comparison->files()->create(['path' => 'app/Covered.php', 'status' => 'modified', 'position' => 0]);
+        $comparison->files()->create(['path' => 'app/Uncovered.php', 'status' => 'added', 'position' => 1]);
 
         $section = $review->sections()->create(['title' => 'S', 'mode' => 'direct', 'status' => 'open', 'position' => 1]);
         $section->files()->attach($covered);
@@ -37,8 +38,9 @@ class ReviewFileTreeTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $review = $project->reviews()->create(['title' => 'R', 'status' => 'draft']);
+        $comparison = $review->comparisons()->create(['position' => 0]);
 
-        $covered = $review->files()->create([
+        $covered = $comparison->files()->create([
             'path' => 'app/Service.php', 'status' => 'modified', 'position' => 0,
             'additions' => 7, 'deletions' => 2,
         ]);
@@ -67,7 +69,8 @@ class ReviewFileTreeTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $review = $project->reviews()->create(['title' => 'R', 'status' => 'draft']);
-        $review->files()->create(['path' => 'docs/README.md', 'status' => 'modified', 'position' => 0]);
+        $comparison = $review->comparisons()->create(['position' => 0]);
+        $comparison->files()->create(['path' => 'docs/README.md', 'status' => 'modified', 'position' => 0]);
 
         $html = $this->actingAs($user)->get(route('reviews.show', $review))
             ->assertOk()->getContent();

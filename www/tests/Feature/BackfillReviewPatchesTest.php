@@ -22,13 +22,15 @@ class BackfillReviewPatchesTest extends TestCase
         $repo = $conn->repositories()->create(['full_name' => 'o/r', 'default_branch' => 'main']);
         $project->repositories()->attach($repo);
 
-        // A pre-backfill review: refs but no SHAs, file rows with null patch.
-        $review = $project->reviews()->create([
-            'title' => 'R', 'status' => 'in_review', 'repository_id' => $repo->id,
+        // A pre-backfill review: a comparison with refs but no SHAs, file rows
+        // with null patch.
+        $review = $project->reviews()->create(['title' => 'R', 'status' => 'in_review']);
+        $comparison = $review->comparisons()->create([
+            'repository_id' => $repo->id, 'position' => 0,
             'base_ref' => 'main', 'base_sha' => null, 'head_ref' => 'feat', 'head_sha' => null,
         ]);
-        $review->files()->create(['path' => 'a.php', 'status' => 'modified', 'position' => 0, 'patch' => null]);
-        $review->files()->create(['path' => 'b.php', 'status' => 'added', 'position' => 1, 'patch' => null]);
+        $comparison->files()->create(['path' => 'a.php', 'status' => 'modified', 'position' => 0, 'patch' => null]);
+        $comparison->files()->create(['path' => 'b.php', 'status' => 'added', 'position' => 1, 'patch' => null]);
 
         return $review;
     }
@@ -54,8 +56,9 @@ class BackfillReviewPatchesTest extends TestCase
             ->assertSuccessful();
 
         $review->refresh();
-        $this->assertSame('base-sha', $review->base_sha);
-        $this->assertSame('head-sha', $review->head_sha);
+        $comparison = $review->comparisons()->sole();
+        $this->assertSame('base-sha', $comparison->base_sha);
+        $this->assertSame('head-sha', $comparison->head_sha);
 
         // The file set is unchanged (c.php was NOT added).
         $this->assertSame(2, $review->files()->count());
@@ -87,11 +90,11 @@ class BackfillReviewPatchesTest extends TestCase
         $this->assertSame('@@ -1 +1 @@', $review->files()->where('path', 'a.php')->sole()->patch);
     }
 
-    public function test_backfill_fails_cleanly_without_a_repository(): void
+    public function test_backfill_fails_cleanly_without_a_comparison(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $review = $project->reviews()->create(['title' => 'R', 'status' => 'draft', 'base_ref' => 'main', 'head_ref' => 'feat']);
+        $review = $project->reviews()->create(['title' => 'R', 'status' => 'draft']);
 
         $this->artisan('reviews:backfill-patches', ['review' => $review->id])
             ->assertFailed();

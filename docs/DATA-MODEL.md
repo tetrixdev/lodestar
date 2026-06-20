@@ -44,25 +44,33 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   happened), and an optional `task_id` (a session can log against a specific
   task). Named `work_sessions` so it never collides with Laravel's framework
   `sessions` table.
-- **Review** — a change reviewed against a base (e.g. a branch vs main). Carries
-  `base_ref`/`head_ref` (the intended comparison), a `status` (draft / in_review
-  / done), an `intro` preamble, and `assigned_to_user_id` — the human currently
-  holding the review. A human must **atomically self-assign** a review before
-  they may sign off its sections (the human mirror of an agent claiming a task).
-  A review covers many tasks and a task can appear in many reviews (the
-  `review_task` pivot).
+- **Review** — a change reviewed by a human. Carries a `status` (draft /
+  in_review / done), an `intro` preamble, and `assigned_to_user_id` — the human
+  currently holding the review. A human must **atomically self-assign** a review
+  before they may sign off its sections (the human mirror of an agent claiming a
+  task). A review covers many tasks and a task can appear in many reviews (the
+  `review_task` pivot). The actual change is its **comparisons** — a review spans
+  **one or more `review_comparisons`** (multi-repo), and needs at least one to be
+  handed to a human.
+- **ReviewComparison** — one repo comparison within a review: `repository_id` +
+  `base_ref`…`head_ref` (the intended comparison) and the resolved `base_sha`/
+  `head_sha` that pin the blobs the file viewer fetches even as the refs move,
+  plus a `position`. A review's changed-file set is the union of all its
+  comparisons' `review_files`, so one human review can walk a change that touches
+  several repositories.
 - **GithubConnection** — one GitHub account/token a user has linked. `label`
   ("work"/"personal"), the resolved `github_login`, and the `token` (stored
   **encrypted**). A user may have several; each Repository is read through one.
 - **Repository** — a GitHub repo (`full_name` = "owner/name", `default_branch`),
   read through a `github_connection`. Linked to projects many-to-many via
   `project_repository`. A Review's comparison is within one Repository.
-- **ReviewFile** — one file the review's comparison changed, as reported by the
-  **GitHub compare API** (`repo` + `base_ref`…`head_ref` on the Review). `path`,
-  `status` (added/modified/removed/renamed), `old_path` for renames, and
-  `position` (GitHub's own ordering, so the UI file-tree matches GitHub). This set
-  is the **ground truth** the coverage guard checks against — the AI never
-  supplies it.
+- **ReviewFile** — one file a **review comparison** changed, as reported by the
+  **GitHub compare API** (`repo` + `base_ref`…`head_ref` on the ReviewComparison).
+  `path`, `status` (added/modified/removed/renamed), `old_path` for renames, and
+  `position` (GitHub's own ordering, so the UI file-tree matches GitHub). Belongs
+  to a `review_comparison`, so the same path can appear once per repo in a
+  multi-repo review. The union of these (across a review's comparisons) is the
+  **ground truth** the coverage guard checks against — the AI never supplies it.
 - **ReviewSection** — one ordered step of a review walkthrough — the data behind
   the HTML walkthrough screen. `position` orders the sections; `mode` is the
   review mode (`skip` / `behavioural` / `direct` / `direct_doc` / `mirror_guard`);
@@ -167,15 +175,18 @@ These are the rules the column list alone won't tell you:
   personal layer. Named (non-phase) keys don't compose — they resolve to the
   most-specific scope. So editing the system layer updates every loop on its next
   call, with no client change.
-- **Every changed file must be covered by a section (the coverage guard).** A
-  review built from a GitHub comparison stores its changed files as `review_files`
-  (fetched server-side from GitHub — never the AI's claim). Each ReviewSection
-  declares which files it covers (`review_file_section`); a file may sit in several
-  sections but must sit in **at least one**. `Review::coverage()` computes the
-  uncovered set, and `advance_task → human_review` is **rejected** while any linked
-  review has uncovered files — so a review can only reach a human once it provably
-  accounts for every changed file. A review with no files (doc-only) is trivially
-  complete.
+- **A review needs ≥1 comparison, and every changed file must be covered (the
+  coverage guard).** A review's change is its **comparisons** (one per repo); each
+  comparison stores its changed files as `review_files` (fetched server-side from
+  GitHub — never the AI's claim). Each ReviewSection declares which files it covers
+  (`review_file_section`); a file may sit in several sections but must sit in **at
+  least one**. `Review::coverage()` computes the uncovered set across all
+  comparisons, and `advance_task → human_review` is **rejected** if any linked
+  review has **no comparison** (`Review::hasComparison()` — the ≥1-diff rule) or
+  has uncovered files — so a review can only reach a human once it provably
+  compares at least one repo and accounts for every changed file. A comparison
+  whose diff changed no files contributes nothing but still satisfies the ≥1-diff
+  rule.
 - **A review is claimed by a single human at a time.** `assigned_to_user_id` is
   set by a **conditional UPDATE guarded on `WHERE assigned_to_user_id IS NULL`**
   (`Review::claimFor`), making claim a single atomic check-and-set — no
@@ -301,22 +312,32 @@ are informational — the test checks Field **names** only.
 | id | bigint | PK | Primary key. |
 | project_id | bigint | FK → projects | The owning project. |
 | title | string | not null | The review's display title. |
-| base_ref | string | nullable | The base of the comparison (e.g. `main`). |
-| head_ref | string | nullable | The head of the comparison (e.g. `feat/x`). |
 | status | string | not null · default `draft` | `draft` / `in_review` / `done`. |
 | intro | text | nullable | The review preamble. |
 | assigned_to_user_id | bigint | FK → users · nullable | The human currently holding the review (atomic self-assign before sign-off). |
-| repository_id | bigint | FK → repositories · nullable | The repository the comparison runs within. |
 | outcome | string | nullable | `approved` / `changes_requested`, set when the human concludes the review. |
+
+> The repo/refs/SHAs that used to live here moved to **`review_comparisons`** — a review now spans one or more comparisons (multi-repo).
+
+### `review_comparisons`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| review_id | bigint | FK → reviews | The owning review. A review has **one row per repo comparison** (≥1 to reach a human). |
+| repository_id | bigint | FK → repositories · nullable | The repository this comparison runs within. |
+| base_ref | string | nullable | The base of the comparison (e.g. `main`). |
 | base_sha | string | nullable | The resolved commit SHA of `base_ref`. |
+| head_ref | string | nullable | The head of the comparison (e.g. `feat/x`). |
 | head_sha | string | nullable | The resolved commit SHA of `head_ref`. |
+| position | integer | not null · default 0 | Orders the comparisons within the review. |
 
 ### `review_files`
 
 | Field | Type | Constraints | Notes |
 |-------|------|-------------|-------|
 | id | bigint | PK | Primary key. |
-| review_id | bigint | FK → reviews | The owning review. |
+| review_comparison_id | bigint | FK → review_comparisons | The comparison (repo + base…head) this file changed within. |
 | path | string | not null | The changed file's path. |
 | status | string | not null | `added` / `modified` / `removed` / `renamed`, per the GitHub compare API. |
 | old_path | string | nullable | The previous path, for renames. |
@@ -527,7 +548,8 @@ erDiagram
     PROJECT ||--o{ WORK_SESSION : "work log"
     PROJECT ||--o{ REVIEW : has
     REVIEW ||--o{ REVIEW_SECTION : "walkthrough steps"
-    REVIEW ||--o{ REVIEW_FILE : "changed files (GitHub)"
+    REVIEW ||--o{ REVIEW_COMPARISON : "compares (≥1, multi-repo)"
+    REVIEW_COMPARISON ||--o{ REVIEW_FILE : "changed files (GitHub)"
     REVIEW_FILE }o--o{ REVIEW_SECTION : "review_file_section (covered by)"
     REVIEW }o--o{ TASK : "review_task (covers)"
     USER ||--o{ REVIEW : "assigned (nullable)"
@@ -544,7 +566,7 @@ erDiagram
     USER ||--o{ GITHUB_CONNECTION : connects
     GITHUB_CONNECTION ||--o{ REPOSITORY : reads
     PROJECT }o--o{ REPOSITORY : "project_repository (stack)"
-    REPOSITORY ||--o{ REVIEW : "compared in"
+    REPOSITORY ||--o{ REVIEW_COMPARISON : "compared in"
     REVIEW_SECTION ||--o{ REVIEW_FINDING : raises
     TASK ||--o{ WORK_SESSION : "logged on (nullable)"
     TASK ||--o{ TASK_COMMENT : has
@@ -620,20 +642,26 @@ erDiagram
         bigint id PK
         bigint project_id FK
         string title
-        bigint repository_id FK "nullable, the compared repo"
-        string base_ref "nullable, e.g. main"
-        string base_sha "nullable, resolved commit of base_ref"
-        string head_ref "nullable, e.g. feat/x"
-        string head_sha "nullable, resolved commit of head_ref"
         string status "draft|in_review|done"
         string outcome "nullable, approved|changes_requested"
         bigint assigned_to_user_id FK "nullable, current holder"
         text intro "nullable, preamble"
     }
 
-    REVIEW_FILE {
+    REVIEW_COMPARISON {
         bigint id PK
         bigint review_id FK
+        bigint repository_id FK "nullable, the compared repo"
+        string base_ref "nullable, e.g. main"
+        string base_sha "nullable, resolved commit of base_ref"
+        string head_ref "nullable, e.g. feat/x"
+        string head_sha "nullable, resolved commit of head_ref"
+        integer position "order within the review"
+    }
+
+    REVIEW_FILE {
+        bigint id PK
+        bigint review_comparison_id FK
         string path
         string status "added|modified|removed|renamed"
         string old_path "nullable, for renames"

@@ -16,6 +16,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class McpDataToolsTest extends TestCase
@@ -73,8 +74,15 @@ class McpDataToolsTest extends TestCase
 
     public function test_create_review_returns_url_and_links_only_owned_tasks(): void
     {
+        Http::fake([
+            'api.github.com/*/commits/*' => Http::response(['sha' => 'sha'], 200),
+            'api.github.com/*/compare/*' => Http::response(['files' => [['filename' => 'a.php', 'status' => 'modified']]], 200),
+        ]);
+
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $conn = $user->githubConnections()->create(['label' => 't', 'token' => 'tok', 'github_login' => 'u']);
+        $project->repositories()->attach($conn->repositories()->create(['full_name' => 'o/r', 'default_branch' => 'main']));
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
 
         // A task in someone else's project must NOT get linked.
@@ -86,6 +94,7 @@ class McpDataToolsTest extends TestCase
             ->tool(CreateReviewTool::class, [
                 'project' => 'p',
                 'title' => 'First review',
+                'repo' => 'o/r', 'base_ref' => 'main', 'head_ref' => 'feat',
                 'task_ids' => [$task->id, $foreign->id],
             ])
             ->assertOk()

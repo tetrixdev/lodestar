@@ -22,9 +22,14 @@
                         <div>
                             <div class="font-medium text-gray-900">{{ $review->title }}</div>
                             <div class="text-xs text-gray-500">
-                                <code class="bg-gray-100 px-1 rounded">{{ $review->base_ref ?? '?' }}</code>
-                                &hellip;
-                                <code class="bg-gray-100 px-1 rounded">{{ $review->head_ref ?? '?' }}</code>
+                                @if ($review->comparisons->count() > 1)
+                                    {{ $review->comparisons->count() }} repos
+                                @else
+                                    @php $c = $review->comparisons->first(); @endphp
+                                    <code class="bg-gray-100 px-1 rounded">{{ $c->base_ref ?? '?' }}</code>
+                                    &hellip;
+                                    <code class="bg-gray-100 px-1 rounded">{{ $c->head_ref ?? '?' }}</code>
+                                @endif
                                 · {{ ucfirst(str_replace('_', ' ', $review->status)) }}
                             </div>
                         </div>
