@@ -366,8 +366,11 @@ class SystemPlaybookSeeder extends Seeder
                 (base_branch...deliverable branch) for architecture + code quality — the
                 batched technical review (this IS the code review). On pass, advance_deliverable
                 to `human_architecture_review`. On issues, advance_deliverable back to
-                `building` and create corrective task(s) (upsert_task on the deliverable)
-                describing the fixes — there is no separate deliverable dev cycle.
+                `building` and create corrective task(s) with upsert_task
+                (deliverable:<id>, corrective:true) describing the fixes — they enter the
+                dev cycle directly and skip the task-level human functional review (the
+                deliverable's final functional sanity re-checks everything). There is no
+                separate deliverable dev cycle.
                 MD],
 
             'merge' => ['Merge & deploy a task', <<<'MD'

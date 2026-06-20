@@ -166,6 +166,37 @@ class McpDeliverableToolsTest extends TestCase
         $this->assertTrue($second->dependencies->contains($first->id));
     }
 
+    public function test_corrective_task_skips_functional_review_and_enters_dev(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
+
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, [
+                'deliverable' => $d->id,
+                'title' => 'Fix the thing AI review flagged',
+                'corrective' => true,
+            ])
+            ->assertOk()
+            ->assertSee('"status":"ready_for_dev"');
+
+        $t = Task::where('title', 'Fix the thing AI review flagged')->sole();
+        $this->assertTrue($t->is_corrective);
+        $this->assertFalse($t->needs_functional_review);
+        $this->assertSame($d->id, $t->deliverable_id);
+    }
+
+    public function test_corrective_requires_a_deliverable(): void
+    {
+        $user = User::factory()->create();
+        $user->projects()->create(['name' => 'P', 'slug' => 'p']);
+
+        LodestarServer::actingAs($user)
+            ->tool(UpsertTaskTool::class, ['project' => 'p', 'title' => 'Orphan fix', 'corrective' => true])
+            ->assertHasErrors();
+    }
+
     public function test_claim_work_takes_a_deliverable_for_planning(): void
     {
         $user = User::factory()->create();

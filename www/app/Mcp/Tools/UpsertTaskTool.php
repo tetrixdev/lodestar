@@ -22,6 +22,7 @@ class UpsertTaskTool extends LodestarTool
             'project' => ['required_without_all:id,deliverable', 'string'],
             'id' => ['nullable', 'integer'],
             'deliverable' => ['nullable', 'integer'],
+            'corrective' => ['nullable', 'boolean'],
             'depends_on' => ['nullable', 'array'],
             'depends_on.*' => ['integer'],
             'title' => ['required_without:id', 'string', 'max:255'],
@@ -66,6 +67,16 @@ class UpsertTaskTool extends LodestarTool
             }
         }
 
+        // A corrective task is spawned from deliverable-review feedback: it belongs
+        // to the deliverable, enters the dev cycle directly, and SKIPS the task-level
+        // human functional review (the deliverable's final functional sanity re-checks
+        // everything; the human didn't request this fix). It still gets the automated
+        // task-level AI review.
+        $corrective = ! empty($data['corrective']);
+        if ($corrective && ! $deliverable) {
+            return Response::error('A corrective task must belong to a deliverable (pass deliverable=<id>).');
+        }
+
         if (! empty($data['id'])) {
             $task = $this->ownedTask($request, (int) $data['id']);
             if (! $task) {
@@ -89,6 +100,12 @@ class UpsertTaskTool extends LodestarTool
                 'status' => $status,
                 'position' => (int) $project->tasks()->where('status', $status)->max('position') + 1,
             ]);
+        }
+
+        if ($corrective) {
+            $task->is_corrective = true;
+            $task->needs_functional_review = false;
+            $task->status = Task::STATUS_READY_FOR_DEV; // a fix skips planning
         }
 
         foreach (['title', 'category', 'body', 'body_summary', 'plan', 'plan_summary'] as $field) {
@@ -122,6 +139,7 @@ class UpsertTaskTool extends LodestarTool
             'project' => $schema->string()->description('Project id or slug (required when creating; ignored if `deliverable` is given — a child lives in its deliverable\'s project).'),
             'id' => $schema->integer()->description('Existing task id to update. Omit to create.'),
             'deliverable' => $schema->integer()->description('Attach this task to a deliverable as a child. Child tasks skip planning (enter at ready_for_dev) and get a per-deliverable sub_id automatically.'),
+            'corrective' => $schema->boolean()->description('Mark this a corrective task from deliverable-review feedback (requires deliverable). It enters at ready_for_dev and SKIPS the task-level human functional review (the deliverable\'s final functional sanity re-checks everything); it still gets the automated task-level AI review.'),
             'depends_on' => $schema->array()->items($schema->integer())->description('Task ids this task is blocked by (same project). The loop will not hand it out until they are done.'),
             'title' => $schema->string()->description('Card title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix, e.g. "mcp", "infra".'),
