@@ -143,10 +143,10 @@ class UpsertTaskTool extends LodestarTool
             'depends_on' => $schema->array()->items($schema->integer())->description('Task ids this task is blocked by (same project). The loop will not hand it out until they are done.'),
             'title' => $schema->string()->description('Card title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix, e.g. "mcp", "infra".'),
-            'body' => $schema->string()->description('Full markdown card detail — the human-readable spec for this work. Structure it skimmably under short headers: **Why** (the goal / problem this solves), **What** (scope — what is in, and what is explicitly out), and **Done when** (acceptance — how we know it works). Link related cards by #id. Keep it tight; the plan is where the file-by-file structure map goes, not here. If you set this you MUST also pass body_summary.'),
-            'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the card, shown by default (the full body opens on demand).'),
-            'plan' => $schema->string()->description('The planning artifact (markdown). If you set this you MUST also pass plan_summary. Write this BEFORE choosing status — a card that has a plan defaults to the plan_review gate.'),
-            'plan_summary' => $schema->string()->description('Required whenever plan is set: a 1–2 sentence scannable TL;DR of the plan.'),
+            'body' => $schema->string()->description('The CLIENT-FACING description (markdown): what this delivers in user terms — **Why** (the goal/problem), **What** (scope: in and out), **Done when** (acceptance). No file-level detail (that goes in `plan`). If set you MUST also pass body_summary.'),
+            'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the client-facing description.'),
+            'plan' => $schema->string()->description('The TECHNICAL / ARCHITECTURE description (markdown): the structure map — files added/moved/deleted, the flow, conventions, and how it is built. If set you MUST also pass plan_summary.'),
+            'plan_summary' => $schema->string()->description('Required whenever plan is set: a 1–2 sentence scannable TL;DR of the technical/architecture description.'),
             // Listed last on purpose: decide the entry state AFTER writing the body/plan.
             'status' => $schema->string()->enum([
                 Task::STATUS_NEW,

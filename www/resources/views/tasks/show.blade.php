@@ -109,7 +109,7 @@
                     </div>
 
                     <div>
-                        <x-input-label for="edit-body-summary" value="Description summary" />
+                        <x-input-label for="edit-body-summary" value="Client-facing summary" />
                         <p class="text-xs text-gray-400">A 1–2 sentence TL;DR — required when there's a description.</p>
                         <textarea id="edit-body-summary" name="body_summary" rows="2"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body_summary', $task->body_summary) }}</textarea>
@@ -117,13 +117,13 @@
                     </div>
 
                     <div>
-                        <x-input-label for="edit-body" value="Description (full)" />
+                        <x-input-label for="edit-body" value="Client-facing description (full)" />
                         <textarea id="edit-body" name="body" rows="4"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('body', $task->body) }}</textarea>
                     </div>
 
                     <div>
-                        <x-input-label for="edit-plan-summary" value="Plan summary" />
+                        <x-input-label for="edit-plan-summary" value="Technical / architecture summary" />
                         <p class="text-xs text-gray-400">A 1–2 sentence TL;DR — required when there's a plan.</p>
                         <textarea id="edit-plan-summary" name="plan_summary" rows="2"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('plan_summary', $task->plan_summary) }}</textarea>
@@ -131,7 +131,7 @@
                     </div>
 
                     <div>
-                        <x-input-label for="edit-plan" value="Plan (full)" />
+                        <x-input-label for="edit-plan" value="Technical / architecture (full)" />
                         <textarea id="edit-plan" name="plan" rows="6"
                                   class="mt-1 block w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ old('plan', $task->plan) }}</textarea>
                     </div>
@@ -176,14 +176,14 @@
 
             {{-- plan --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
-                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Plan</p>
-                <x-detail-block title="Plan" :summary="$task->plan_summary" :full="$task->plan" empty="No plan yet." />
+                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Technical / architecture</p>
+                <x-detail-block title="Technical / architecture" :summary="$task->plan_summary" :full="$task->plan" empty="No plan yet." />
             </div>
 
             {{-- description --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
-                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Description</p>
-                <x-detail-block title="Description" :summary="$task->body_summary" :full="$task->body" empty="No description." />
+                <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Client-facing description</p>
+                <x-detail-block title="Client-facing description" :summary="$task->body_summary" :full="$task->body" empty="No description." />
             </div>
 
             {{-- rework notes --}}

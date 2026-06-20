@@ -210,8 +210,11 @@ class SystemPlaybookSeeder extends Seeder
                 2. Write the `plan` (+ plan_summary): the structure map across the
                    deliverable and how it DECOMPOSES into tasks.
                 3. Create each child task with upsert_task, passing `deliverable:<id>` so it
-                   attaches as a child — child tasks SKIP planning and enter at ready_for_dev.
-                   Use `depends_on:[ids]` where one task must finish before another.
+                   attaches as a child. Give each task BOTH a `body` (client-facing
+                   description: why/what/done-when, in user terms) AND a `plan` (technical /
+                   architecture description: the file-level structure map + how it's built).
+                   Use `depends_on:[ids]` where one task must finish before another. Each
+                   task is then approved individually by the human in the plan review.
                 4. Raise every decision the human must make as QUESTIONS
                    (upsert_deliverable questions:[...]). The plan CANNOT be approved until
                    all are answered — encode questions, never ask in your response.
