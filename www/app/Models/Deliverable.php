@@ -34,6 +34,13 @@ class Deliverable extends Model
         'claimed_at' => 'datetime',
     ];
 
+    /**
+     * Transient placeholder written to the NOT NULL `branch` column during INSERT;
+     * the `created` hook rewrites it to branchName() once the id exists. It should
+     * never survive a successful create.
+     */
+    private const PENDING_BRANCH = '__pending__';
+
     // ── Statuses (the funnel) ────────────────────────────────────────────────
 
     public const STATUS_NEW = 'new';
@@ -195,6 +202,26 @@ class Deliverable extends Model
         static::saving(function (Deliverable $deliverable): void {
             if ($deliverable->isDirty('status') || ! $deliverable->exists) {
                 $deliverable->status_changed_at = now();
+            }
+        });
+
+        // base_branch is required and defaults to `main` when not provided; both
+        // branches are stamped at CREATION, not lazily when entering building.
+        // branch derives from branchName() (D{id:06d}-slug) which needs the assigned
+        // id, so on create we insert a placeholder (the column is NOT NULL) and then
+        // rewrite it with the real name once the id exists.
+        static::creating(function (Deliverable $deliverable): void {
+            if (blank($deliverable->base_branch)) {
+                $deliverable->base_branch = 'main';
+            }
+            if (blank($deliverable->branch)) {
+                $deliverable->branch = self::PENDING_BRANCH; // placeholder; rewritten in `created`
+            }
+        });
+
+        static::created(function (Deliverable $deliverable): void {
+            if ($deliverable->branch === self::PENDING_BRANCH) {
+                $deliverable->forceFill(['branch' => $deliverable->branchName()])->saveQuietly();
             }
         });
     }

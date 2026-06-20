@@ -12,7 +12,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Move a deliverable along a LEGAL funnel transition (illegal jumps rejected). Gates enforced server-side: approving the plan (plan_review → building) needs every open question answered; entering building stamps the integration branch; leaving building for AI review needs all child tasks done/cancelled. The claim is cleared when the deliverable leaves a working state.')]
+#[Description('Move a deliverable along a LEGAL funnel transition (illegal jumps rejected). Gates enforced server-side: approving the plan (plan_review → building) needs every open question answered; leaving building for AI review needs all child tasks done/cancelled. The branch / base_branch are set when the deliverable is created (branch defaults to D{id:06d}-slug, base_branch to main), so building no longer stamps them. The claim is cleared when the deliverable leaves a working state.')]
 #[Name('advance_deliverable')]
 class AdvanceDeliverableTool extends LodestarTool
 {
@@ -74,7 +74,8 @@ class AdvanceDeliverableTool extends LodestarTool
             }
         }
 
-        // Entering build: cut the integration branch identity if not set yet.
+        // branch / base_branch are set at creation (and are now NOT NULL). Keep a
+        // belt-and-braces fallback for any legacy deliverable that predates that.
         if ($to === Deliverable::STATUS_BUILDING) {
             if (! $deliverable->branch) {
                 $deliverable->branch = $deliverable->branchName();

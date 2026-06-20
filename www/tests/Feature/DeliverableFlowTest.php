@@ -59,10 +59,10 @@ class DeliverableFlowTest extends TestCase
         $project = $this->project($user, 'Alpha');
 
         $this->actingAs($user)
-            ->post(route('deliverables.store', $project), ['title' => 'New deliverable'])
+            ->post(route('deliverables.store', $project), ['title' => 'New deliverable', 'base_branch' => 'main'])
             ->assertRedirect();
 
-        $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'New deliverable', 'status' => 'new']);
+        $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'New deliverable', 'status' => 'new', 'base_branch' => 'main']);
     }
 
     public function test_per_task_plan_decision_approve_and_request_changes(): void
