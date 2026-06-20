@@ -18,14 +18,20 @@ signed-in user.
 
 **The app (`lodestar`, Laravel 13 + Blade + Alpine + Tailwind)**
 
-- **ProjectController** — the project list and the **board**. `show()` loads a
-  project's live (non-archived) cards grouped by status, the archived
-  (`cancelled`) cards, and the distinct categories for the filter. It hands the
-  view `Task::PHASES` so the board can lay the 11 live statuses into 5 phase
-  columns.
-- **TaskController** — the card write paths:
-  - `store()` adds a card to a project (defaults to `ready_for_planning`, lands at
-    the bottom of its status).
+- **BoardController** — the **unified board**, the authenticated landing.
+  `index()` loads every accessible project's **deliverables** (with their child
+  tasks) and projects each onto the 5 shared phase columns. The board is
+  **deliverable-only**: every task belongs to a deliverable, so there are no
+  loose task cards — a deliverable renders as a card carrying its child-task
+  one-liners, and where it sits is **derived from its tasks** (see the lifecycle
+  flow). A compact "needs you" strip carries the cross-project signals the old
+  dashboard did.
+- **ProjectController** — the project list and a **per-project board** (`show()`)
+  that still groups that one project's live tasks by lifecycle status (a
+  secondary, task-level view); plus the Gantt. It hands the view `Task::PHASES`
+  so the board can lay the 11 live statuses into 5 phase columns.
+- **TaskController** — the card write paths (tasks are created/decomposed by the
+  planning agent under a deliverable, not added loose from the board):
   - `update()` is the **lifecycle move** — it rejects any status change that
     isn't a legal transition from the card's current status (422 JSON for
     programmatic callers, a validation error for the HTML board), then places the
@@ -67,28 +73,35 @@ signed-in user.
 - **Models** (`app/Models/`) — thin Eloquent models; the lifecycle rules live as
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
   `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
-  `queueStateFor()`), the claim/release rules live as guarded conditional-UPDATE
-  helpers on **`Review`** (`claimFor()`, `releaseFor()`), and playbook composition
-  lives on **`Playbook`** (`compose()`, `resolveNamed()`, `slotFor()`).
+  `queueStateFor()`, `requiresHumanReview()`), the deliverable funnel + the
+  build-derived status live on **`Deliverable`** (`STATUSES`, `syncStatus()`,
+  `branchName()` → its `D{id:06d}-slug` integration branch), the claim/release
+  rules live as guarded conditional-UPDATE helpers on **`Review`** (`claimFor()`,
+  `releaseFor()`), and playbook composition lives on **`Playbook`** (`compose()`,
+  `resolveNamed()`, `slotFor()`). Both `Task` and `Deliverable` use **SoftDeletes**
+  — nothing is ever hard-deleted.
 
 **The MCP server (`app/Mcp/`, laravel/mcp)** — the agent-facing surface, mirror
 of the web UI. `LodestarServer` is registered at `POST /mcp` in `routes/ai.php`
-behind `auth:sanctum`, and exposes 16 tools (all extend `LodestarTool`, which
+behind `auth:sanctum`, and exposes 20 tools (all extend `LodestarTool`, which
 holds the tenancy helpers):
 
-- **Data tools** — `list_projects`, `upsert_project`, `upsert_task`,
-  `upsert_session`, `create_review` (returns the URL a human opens),
-  `upsert_review_section`, `add_finding`, `get_review`. The agent's read/write
-  access to the board, the exact data the controllers serve to the browser.
+- **Data tools** — `list_projects`, `upsert_project`, `upsert_task` (a
+  deliverable is **required on create** — there are no loose tasks),
+  `upsert_deliverable`, `get_task`, `upsert_session`, `create_review` (returns the
+  URL a human opens), `upsert_review_section`, `add_finding`, `get_review`. The
+  agent's read/write access to the board, the exact data the controllers serve to
+  the browser.
 - **Repository tools** — `link_repository`, `unlink_repository` (attach a repo to
   a project through a GitHub connection).
-- **Loop tools** — `claim_task` (atomic claim, by next or by id), `get_playbook`
-  (composes the phase prompt — incl. the `main` bootstrap), `propose_playbook_change`
-  (proposes a playbook version — always `proposed`, never live), `remember` (captures
-  a durable learning as a proposed playbook-layer edit, linked to its work-session),
-  `advance_task`
-  (legal-transition-only move), `report` (logs a WorkSession, linked to the task
-  it reports on so the work shows on that card).
+- **Loop tools** — `claim_work` (atomically claims the next available **unit** — a
+  deliverable or a child task — for the loop), `claim_task` (atomic claim, by next
+  or by id), `get_playbook` (composes the phase prompt — incl. the `main`
+  bootstrap), `propose_playbook_change` (proposes a playbook version — always
+  `proposed`, never live), `remember` (captures a durable learning as a proposed
+  playbook-layer edit, linked to its work-session), `advance_task` /
+  `advance_deliverable` (legal-transition-only moves), `report` (logs a
+  WorkSession, linked to the task it reports on so the work shows on that card).
 
 **Playbooks (`app/Models/Playbook.php`, `PlaybookVersion`, `SystemPlaybookSeeder`)** — playbooks
 are **layered**. A `Playbook` is a slot at one scope (`system` / `team` / `project`
@@ -169,10 +182,10 @@ reached through the Project.
 
 ### The lifecycle state machine + board
 
-A Task rides 12 states (11 live + `cancelled`). The board renders the 11 live
-states as **5 phase columns**; each card shows the **actor** it waits on (the
-colour: needs-human / queued / ai-working / done) and a "Nh in status" timer.
-(Tasks have no `new` state — `new` is a deliverable-only backlog status.)
+A Task rides 12 states (11 live + `cancelled`). Each card shows the **actor** it
+waits on (the colour: needs-human / queued / ai-working / done) and a "Nh in
+status" timer. (Tasks have no `new` state — `new` is a deliverable-only backlog
+status.)
 
 ```mermaid
 flowchart LR
@@ -190,6 +203,63 @@ flowchart LR
   mirrored in the per-card transition buttons. `status_changed_at` is stamped
   automatically by a `saving` hook on the model, so the timer is honest no matter
   which path moved the card.
+- **Nothing is ever hard-deleted.** `cancelled` is the archive state, and both
+  Task and Deliverable use Laravel **SoftDeletes** (`deleted_at`) — physical
+  deletion is never an app path, so work and history are never lost.
+
+### The deliverable-only board
+
+The unified board (`BoardController`) carries **only deliverable cards** — there
+are **no loose/standalone tasks**: every task has a required `deliverable_id`, so
+a task is always a child of some deliverable. A deliverable PROJECTS onto the 5
+phase columns, and **where it lands is derived from its TASKS, not its own
+status**, until all the child work is done:
+
+- **BACKLOG** = a deliverable with **zero non-cancelled tasks** (nothing planned
+  yet).
+- A deliverable with open work renders **once per column its tasks occupy**, each
+  card filtered to that column's tasks. A child task projects to a column by
+  status: the planning statuses — **including `ready_for_planning`** — map to
+  **PLAN**; everything from `ready_for_dev` through `merged` maps to **BUILD**;
+  `cancelled` maps nowhere. So a deliverable mid-flight can sit in PLAN and BUILD
+  at once.
+- **Merged tasks stay VISIBLE in BUILD, rendered green**, until **every**
+  non-cancelled task is merged — you can see how much of the increment has landed
+  on its integration branch without the cards vanishing.
+- Once **all** tasks are merged, the deliverable **leaves the task-derived
+  columns** and shows as a single **own card** in its own review/ship column,
+  driven now by its **own** status (the deliverable review chain below). A
+  corrective task (see below) pulls it back to `building`, at which point
+  task-derived placement resumes.
+
+A Deliverable rides its own funnel — `new → ready_for_planning → planning →
+plan_review → building → ready_for_ai_review → ai_review →
+human_architecture_review → human_functional_review → approved → merging →
+merged` — but most of it is **derived in build**: `Deliverable::syncStatus()` (run
+on every child-task save) sets the deliverable to `planning` while any child is
+unapproved, `building` once all are approved, and `ready_for_ai_review` once all
+child work is merged — handing off to the explicit review/ship chain. The board's
+`$ownCardStates` (the review-chain + ship statuses) are exactly the states a
+deliverable only reaches after its tasks are all merged.
+
+### Per-task human review vs the deliverable review, and corrective tasks
+
+A child task's per-task human gate is the **functional** review
+(`needs_functional_review`, default true): code/architecture review is **batched
+once at the deliverable level**, not repeated per task. A task may **skip its
+human functional review** when `needs_functional_review` is false — its
+`ai_review` phase then advances straight `ai_review → approved` (AI review stays
+mandatory; only the human gate is skipped). `Task::requiresHumanReview()` and the
+dynamic edge in `Task::allowedTransitions()` enforce this.
+
+When a **deliverable-level** review (architecture / functional) requests changes,
+`ReviewController::concludeDeliverable` pulls the deliverable back to `building`
+and **spawns a corrective task** under it: `is_corrective = true`,
+`needs_functional_review = false` (it skips the per-task human gate — the
+deliverable's own final functional review re-checks everything), entering at
+`ready_for_dev` with the compiled change-requested notes + must_fix findings as
+its body. The corrective task re-enters the dev cycle directly, and because it's
+new open work, `syncStatus()` flips the deliverable back into BUILD.
 
 ### The review walkthrough + atomic assignment
 

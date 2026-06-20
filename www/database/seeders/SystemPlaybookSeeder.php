@@ -230,15 +230,17 @@ class SystemPlaybookSeeder extends Seeder
                 WORKSPACE: work inside the project's directory at
                 `~/lodestar-workspaces/<project-slug>/<repo-name>/` that the main playbook set
                 up (clone/fetch it there if it is missing). Do all work on the task's
-                branch — create it from the up-to-date default branch if it does not exist,
-                otherwise check it out.
+                branch. EVERY task belongs to a deliverable, so its BASE branch is the
+                deliverable's integration branch (`D<deliverable:06d>-<slug>`), NEVER main —
+                see DELIVERABLE CHILD TASKS below for the exact branch + merge target.
 
                 FIRST: if the task has **rework_notes** (a review sent it back), address
                 every point in them before anything else — that is the human's change
                 request from the last round. They're on the task (claim_task returns
                 them, and they show on the task page).
 
-                1. Build the change on a branch.
+                1. Build the change on the task branch (cut from the DELIVERABLE branch —
+                   see DELIVERABLE CHILD TASKS).
                 2. Write and run automated tests; then actually run the thing to confirm
                    it behaves.
                 3. If you changed the structure (tables, components, flows), update
@@ -249,7 +251,8 @@ class SystemPlaybookSeeder extends Seeder
                 When tests are green, the docs mirror reality, and the branch is pushed,
                 advance the task to `ready_for_ai_review` and `report` a work-session
                 LINKED TO THIS TASK (pass task_id) that names the branch and its merge
-                target (e.g. feat/x → main).
+                target — the DELIVERABLE branch, e.g. `D000007/T03-slug → D000007-slug`,
+                never main.
 
                 IF YOU STOP BEFORE FINISHING (blocked, out of scope, ran out of room):
                 advance the task back to `ready_for_dev` and `report` a session (task_id)
@@ -258,12 +261,26 @@ class SystemPlaybookSeeder extends Seeder
                 working state is the one thing the loop cannot recover on its own.
 
                 ── DELIVERABLE CHILD TASKS ──
-                If this task belongs to a deliverable (get_task shows it), it shares the
-                deliverable's INTEGRATION branch:
-                - Branch naming (BNC): the task branch is `D<deliverable:06d>/T<sub:02d>-<slug>`,
-                  cut from the deliverable branch `D<deliverable:06d>-<slug>` — NOT from main.
+                Every task belongs to a deliverable (get_task shows it), and it shares the
+                deliverable's INTEGRATION branch — it branches OFF it and merges BACK INTO
+                it, so the integration branch accumulates the whole increment and main is
+                never touched until the deliverable itself ships:
+                - Base branch (EXPLICIT — never defaults to main): the deliverable branch
+                  `D<deliverable:06d>-<slug>` (Deliverable::branchName()). Make sure it
+                  exists and is up to date first — if the deliverable branch is missing,
+                  cut it from the deliverable's `base_branch` (get_deliverable shows it)
+                  and push it before cutting any task branch.
+                - Task branch (BNC): `D<deliverable:06d>/T<sub:02d>-<slug>`, cut EXPLICITLY
+                  from the deliverable branch — e.g.
+                  `git fetch origin && git checkout D<deliverable:06d>-<slug> &&
+                   git checkout -b D<deliverable:06d>/T<sub:02d>-<slug>`. Pass the base
+                  explicitly; do not let `git checkout -b` default to whatever is checked
+                  out.
                 - Work in your OWN git worktree for that branch (`git worktree add ...`), so
                   parallel workers never share a checkout.
+                - MERGE TARGET = the deliverable branch, NOT main. The merge playbook merges
+                  the task branch back into `D<deliverable:06d>-<slug>` (never main); the
+                  deliverable→base merge happens once, later, at the deliverable level.
                 - The human gate for a child is the FUNCTIONAL review (not code review) — the
                   ai_review phase builds a functional walkthrough; code/architecture review
                   happens once, later, at the deliverable level.

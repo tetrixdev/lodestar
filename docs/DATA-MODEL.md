@@ -30,9 +30,11 @@ authenticated by a per-machine **PersonalAccessToken** (Sanctum).
   changes go through the team). Members + their `can_approve_prompts` rights live
   in the `team_user` pivot (the owner is always a member with approval). The
   `project_user` pivot does the same for project-level playbook approval.
-- **Task** — a kanban card. `status` is one of the **13 lifecycle states** (see
-  Invariants); `position` orders cards within a single status; `category` is a
-  free-text grouping prefix (e.g. `mcp`, `infra`); `body` is the card detail.
+- **Task** — a kanban card, always a **child of a Deliverable** (`deliverable_id`
+  is required — there are no loose/standalone tasks). `status` is one of the **12
+  lifecycle states** (11 live + `cancelled`, see Invariants); `position` orders
+  cards within a single status; `category` is a free-text grouping prefix (e.g.
+  `mcp`, `infra`); `body` is the card detail.
   `status_changed_at` records when the card last entered its current status (the
   "Nh in status" timer) and is stamped automatically on every status change.
   `claimed_by` / `claimed_at` record which agent currently holds a working
@@ -137,9 +139,15 @@ These are the rules the column list alone won't tell you:
   it waits on (needs-human / queued / ai-working / done / archived).
 - **Status moves are legal-only.** A Task may only move to a status in its
   allowed-transition set (`Task::TRANSITIONS`); an illegal jump is rejected (422
-  / validation error). The transition map is forward · back · cancel per state,
-  with `cancelled` restoring to `new`. The lists, phases, actors, labels and
-  transition map all live as constants on `App\Models\Task`.
+  / validation error). The transition map is forward · back · cancel per state;
+  the task backlog state is `ready_for_planning` (tasks have no `new`), and
+  `cancelled` is a permanent archive (no restore edge). The lists, phases, actors,
+  labels and transition map all
+  live as constants on `App\Models\Task`. A task is **always a deliverable
+  child** (`deliverable_id` is a required FK, `restrictOnDelete`); there are no
+  loose/standalone tasks, and nothing is hard-deleted (Task + Deliverable both use
+  **SoftDeletes** — `cancelled` is the archive state, `deleted_at` the soft-delete
+  marker).
 - **`status_changed_at` is stamped automatically.** A `saving` model hook stamps
   it whenever `status` is dirty (or on first save), so every code path — the
   board, tinker, a future agent loop — keeps the timer honest. A non-status edit
@@ -268,7 +276,7 @@ are informational — the test checks Field **names** only.
 | title | string | not null | The card title. |
 | category | string | nullable | Free-text grouping prefix (e.g. `mcp`, `infra`). |
 | body | text | nullable | The card detail, markdown. |
-| status | string | not null | One of the **13 lifecycle states** (see Invariants). |
+| status | string | not null | One of the **12 lifecycle states** (11 live + `cancelled`, see Invariants). |
 | position | integer | not null · default 0 | Orders cards **within a single status** (not across the board). |
 | status_changed_at | timestamp | nullable | When the card last entered its current status (the "Nh in status" timer); stamped automatically on every status change. |
 | claimed_by | string | nullable | The agent currently holding a working (`*-ing`) card; set by the atomic claim, cleared when the card moves on. |
@@ -572,8 +580,8 @@ erDiagram
     USER }o--o{ TEAM : "team_user (member)"
     USER }o--o{ PROJECT : "project_user (member)"
     PROJECT ||--o{ TASK : has
-    PROJECT ||--o{ DELIVERABLE : "groups tasks (optional)"
-    DELIVERABLE ||--o{ TASK : "child tasks (nullable)"
+    PROJECT ||--o{ DELIVERABLE : "groups tasks"
+    DELIVERABLE ||--|{ TASK : "child tasks (required)"
     DELIVERABLE ||--o{ DELIVERABLE_QUESTION : "open questions"
     DELIVERABLE ||--o{ REVIEW : "deliverable-scoped (nullable)"
     PROJECT ||--o{ WORK_SESSION : "work log"
@@ -656,7 +664,7 @@ erDiagram
         text plan "nullable, planning artifact (markdown)"
         text plan_summary "nullable, TL;DR of plan; required when plan is set"
         text rework_notes "nullable, what a review sent back"
-        string status "one of 13 lifecycle states"
+        string status "one of 12 lifecycle states (11 live + cancelled)"
         timestamp status_changed_at "nullable, entered-current-status time"
         string claimed_by "nullable, agent holding a *-ing card"
         timestamp claimed_at "nullable, when it was claimed"
