@@ -27,7 +27,7 @@ class GetTaskTool extends LodestarTool
         $tasks = Task::query()
             ->whereHas('project', fn ($q) => $q->accessibleBy($this->currentUser($request)))
             ->whereIn('id', $ids)
-            ->with(['project:id,name,slug', 'deliverable:id,title,status,branch,base_branch', 'dependencies:id,title,status', 'dependents:id,title,status', 'reviews:id,title,status,outcome'])
+            ->with(['project:id,name,slug', 'deliverable:id,title,status,branch,base_branch,comparison_ref', 'dependencies:id,title,status', 'dependents:id,title,status', 'reviews:id,title,status,outcome'])
             ->get()
             ->keyBy('id');
 

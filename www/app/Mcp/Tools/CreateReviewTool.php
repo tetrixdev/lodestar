@@ -17,7 +17,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Throwable;
 
-#[Description('Create a review (or refresh one) and get back the URL a human opens. TASK reviews: pass task_ids + base_ref/head_ref (+ repo if the project has several). DELIVERABLE reviews: pass scope="deliverable" + deliverable=<id>; the comparison defaults to base_branch...deliverable branch. review_type is functional (per-task behaviour/UX) or code/architecture (technical). Every changed file must be covered by a section before a human can see it. Pass review_id to REFRESH an existing review\'s comparison — newly-changed files auto-flag their sections for re-review.')]
+#[Description('Create a review (or refresh one) and get back the URL a human opens. TASK reviews: pass task_ids + base_ref/head_ref (+ repo if the project has several). DELIVERABLE reviews: pass scope="deliverable" + deliverable=<id>; the comparison defaults to comparison_ref...deliverable branch. review_type is functional (per-task behaviour/UX) or code/architecture (technical). Every changed file must be covered by a section before a human can see it. Pass review_id to REFRESH an existing review\'s comparison — newly-changed files auto-flag their sections for re-review.')]
 #[Name('create_review')]
 class CreateReviewTool extends LodestarTool
 {
@@ -53,7 +53,9 @@ class CreateReviewTool extends LodestarTool
         $baseRef = $data['base_ref'] ?? null;
         $headRef = $data['head_ref'] ?? null;
 
-        // A deliverable review diffs base_branch...deliverable branch by default.
+        // A deliverable review diffs comparison_ref...deliverable branch by default
+        // (the review DIFF-BASE is comparison_ref, which may be a tag; the merge
+        // target base_branch is a separate concern handled at merge time).
         if ($scope === Review::SCOPE_DELIVERABLE) {
             if (empty($data['deliverable'])) {
                 return Response::error('A deliverable-scoped review needs deliverable=<id>.');
@@ -62,7 +64,7 @@ class CreateReviewTool extends LodestarTool
             if (! $deliverable) {
                 return Response::error('No deliverable with that id belongs to you.');
             }
-            $baseRef = $baseRef ?: $deliverable->base_branch;
+            $baseRef = $baseRef ?: $deliverable->comparison_ref;
             $headRef = $headRef ?: $deliverable->branch;
         }
 
@@ -91,7 +93,7 @@ class CreateReviewTool extends LodestarTool
                 'scope' => $scope,
                 'deliverable_id' => $deliverable?->id,
                 'review_type' => $reviewType,
-                'base_branch' => $scope === Review::SCOPE_DELIVERABLE ? $deliverable?->base_branch : null,
+                'base_branch' => $scope === Review::SCOPE_DELIVERABLE ? $deliverable?->comparison_ref : null,
                 'repository_id' => $repository?->id,
                 'base_ref' => $baseRef,
                 'base_sha' => $baseSha,
@@ -224,11 +226,11 @@ class CreateReviewTool extends LodestarTool
             'project' => $schema->string()->description('Project id or slug (required unless refreshing with review_id).'),
             'review_id' => $schema->integer()->description('Refresh this existing review\'s comparison (re-fetch files; sections covering changed files auto-flag for re-review).'),
             'scope' => $schema->string()->enum([Review::SCOPE_TASK, Review::SCOPE_DELIVERABLE])->description('task (default) or deliverable (whole-deliverable diff).'),
-            'deliverable' => $schema->integer()->description('For a deliverable review: the deliverable id. Comparison defaults to its base_branch...branch.'),
+            'deliverable' => $schema->integer()->description('For a deliverable review: the deliverable id. Comparison defaults to its comparison_ref...branch.'),
             'review_type' => $schema->string()->enum([Review::TYPE_FUNCTIONAL, Review::TYPE_CODE, Review::TYPE_ARCHITECTURE])->description('functional (per-task behaviour/UX/UI), code (task technical), or architecture (deliverable technical). Defaults: task→code, deliverable→architecture.'),
             'title' => $schema->string()->description('Review title.'),
             'repo' => $schema->string()->description('Which linked repo ("owner/name") the comparison is in. Optional if the project has one repo.'),
-            'base_ref' => $schema->string()->description('Base ref, e.g. "main". For a deliverable, defaults to its base_branch.'),
+            'base_ref' => $schema->string()->description('Base ref, e.g. "main". For a deliverable, defaults to its comparison_ref (the review diff-base).'),
             'head_ref' => $schema->string()->description('Head ref under review. For a deliverable, defaults to its branch.'),
             'intro' => $schema->string()->description('Optional preamble shown at the top of the walkthrough.'),
             'task_ids' => $schema->array()->description('Task ids (in this project) this review covers.'),

@@ -388,9 +388,9 @@ class SystemPlaybookSeeder extends Seeder
                 for architecture + code quality — the batched technical review (this IS the
                 code review). Create the review with create_review scope:"deliverable"
                 deliverable:<id>; the diff defaults to the deliverable's
-                `base_branch`...`branch` (base_ref = deliverable.base_branch, head_ref =
-                deliverable.branch) — you do NOT pass refs. The base may be a TAG / whole-app
-                baseline (e.g. v0.5 → `baseline-laravel`, which diffs the whole app against
+                `comparison_ref`...`branch` (base_ref = deliverable.comparison_ref, head_ref =
+                deliverable.branch) — you do NOT pass refs. `comparison_ref` is the REVIEW
+                DIFF-BASE and may be a TAG / whole-app baseline (e.g. v0.5 → `baseline-laravel`, which diffs the whole app against
                 the baseline); a tag is a valid diff base. On pass, advance_deliverable
                 to `human_architecture_review`. On issues, advance_deliverable back to
                 `building` and create corrective task(s) with upsert_task
@@ -429,25 +429,18 @@ class SystemPlaybookSeeder extends Seeder
                 4. report (task_id) and advance_task to `done`. When the LAST child task is
                    done, advance_deliverable from `building` to `ready_for_ai_review`.
 
-                ── DELIVERABLE MERGE (into base) ──
+                ── DELIVERABLE MERGE (into base_branch) ──
                 If you claimed a DELIVERABLE in merge, merge the deliverable branch
                 (`D<deliverable:06d>-<slug>`) into its `base_branch` (merge-commit),
                 run the full suite once more, then advance_deliverable to `done`. Both
                 refs are on the deliverable (get_deliverable shows `branch` and
                 `base_branch`); they were set when the deliverable was created.
 
-                NOTE — base_branch may be a TAG / whole-app baseline, not a branch.
-                `base_branch` is primarily the REVIEW DIFF-BASE (what the deliverable
-                review diffs `branch` against). For most deliverables it is a real
-                branch (e.g. `main`) you merge into as above. But a deliverable whose
-                base is a TAG or a whole-app baseline (e.g. v0.5 → `baseline-laravel`,
-                used to review the entire app against the baseline) does NOT merge into
-                that tag — you can't move a tag. Such a deliverable integrates on
-                `main`, and its "merge" is effectively a no-op / confirmation when the
-                work already lives there: verify the work is on `main`, run the suite,
-                and advance_deliverable to `done` (don't try to merge into the tag).
-                When in doubt whether base_branch is a branch or a tag, check the repo
-                (`git show-ref`) before merging.
+                `base_branch` is the MERGE TARGET: a REAL branch the deliverable
+                integrates into. Do NOT assume it is `main` — read it off the
+                deliverable. (The review diff-base is a SEPARATE field, `comparison_ref`,
+                which may be a tag; it has no bearing on the merge — you merge into
+                `base_branch`, full stop.)
                 MD],
 
             'work' => ['Work the backlog (the loop)', <<<'MD'

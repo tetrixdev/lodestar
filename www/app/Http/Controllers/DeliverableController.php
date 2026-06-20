@@ -28,17 +28,21 @@ class DeliverableController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'max:60'],
             'concept' => ['nullable', 'string'],
-            // The diff-base — required. A branch, or a tag / whole-app baseline.
+            // The MERGE TARGET — required. A real branch the deliverable merges into.
             'base_branch' => ['required', 'string', 'max:200'],
+            // The REVIEW DIFF-BASE — optional; defaults to base_branch. May be a tag.
+            'comparison_ref' => ['nullable', 'string', 'max:200'],
         ]);
 
         // `branch` is stamped automatically at creation (D{id:06d}-slug); base_branch
-        // is required input (the form defaults it to main).
+        // is required input (the form defaults it to main). comparison_ref defaults
+        // to base_branch (the model also enforces this) but may be overridden.
         $deliverable = $project->deliverables()->create([
             'title' => $data['title'],
             'category' => $data['category'] ?? null,
             'concept' => $data['concept'] ?? null,
             'base_branch' => $data['base_branch'],
+            'comparison_ref' => $data['comparison_ref'] ?? $data['base_branch'],
             'status' => Deliverable::STATUS_NEW,
             'position' => (int) $project->deliverables()->where('status', Deliverable::STATUS_NEW)->max('position') + 1,
         ]);
@@ -71,6 +75,7 @@ class DeliverableController extends Controller
             'title' => ['nullable', 'string', 'max:200'],
             'category' => ['nullable', 'string', 'max:60'],
             'base_branch' => ['nullable', 'string', 'max:200'],
+            'comparison_ref' => ['nullable', 'string', 'max:200'],
             'concept' => ['nullable', 'string'],
             'concept_summary' => ['nullable', 'string', 'required_with:concept'],
             'body' => ['nullable', 'string'],
@@ -79,7 +84,7 @@ class DeliverableController extends Controller
             'plan_summary' => ['nullable', 'string', 'required_with:plan'],
         ]);
 
-        $fields = ['title', 'category', 'base_branch', 'concept', 'concept_summary', 'body', 'body_summary', 'plan', 'plan_summary'];
+        $fields = ['title', 'category', 'base_branch', 'comparison_ref', 'concept', 'concept_summary', 'body', 'body_summary', 'plan', 'plan_summary'];
         $update = [];
         foreach ($fields as $field) {
             if ($request->has($field)) {
