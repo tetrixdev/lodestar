@@ -22,10 +22,12 @@ class UpsertReviewSectionTool extends LodestarTool
             'id' => ['nullable', 'integer'],
             'title' => ['required_without:id', 'string', 'max:255'],
             'mode' => ['required_without:id', 'string', 'in:'.implode(',', ReviewSection::MODES)],
+            'kind' => ['nullable', 'string', 'in:'.implode(',', ReviewSection::KINDS)],
             'position' => ['nullable', 'integer'],
             'context' => ['nullable', 'string'],
             'link' => ['nullable', 'string', 'max:255'],
             'checks' => ['nullable', 'array'],
+            'manual_steps' => ['nullable', 'string'],
             'status' => ['nullable', 'string', 'in:open,signed_off'],
             'note' => ['nullable', 'string'],
             'files' => ['nullable', 'array'],
@@ -56,7 +58,7 @@ class UpsertReviewSectionTool extends LodestarTool
             ]);
         }
 
-        foreach (['title', 'mode', 'position', 'context', 'link', 'checks', 'status', 'note'] as $field) {
+        foreach (['title', 'mode', 'kind', 'position', 'context', 'link', 'checks', 'manual_steps', 'status', 'note'] as $field) {
             if (array_key_exists($field, $data)) {
                 $section->{$field} = $data[$field];
             }
@@ -93,10 +95,12 @@ class UpsertReviewSectionTool extends LodestarTool
             'id' => $schema->integer()->description('Existing section id to update. Omit to append.'),
             'title' => $schema->string()->description('Section title (required when creating).'),
             'mode' => $schema->string()->enum(ReviewSection::MODES)->description('Review mode (required when creating).'),
+            'kind' => $schema->string()->enum(ReviewSection::KINDS)->description('For functional sections: input_screen / command / outbound_effect / other — frames the change as input→output.'),
             'position' => $schema->integer()->description('Order in the walkthrough. Defaults to the end.'),
             'context' => $schema->string()->description('Prose that rebuilds the reviewer\'s context for this step.'),
             'link' => $schema->string()->description('What to open — a doc, file path, or route.'),
             'checks' => $schema->array()->description('List of "what to confirm" strings.'),
+            'manual_steps' => $schema->string()->description('Functional review: a SHORT but COMPLETE step-by-step the human follows to test this — exactly what to run and where to look (incl. dry-run previews of invisible outputs like mail).'),
             'status' => $schema->string()->enum(['open', 'signed_off'])->description('Sign-off state (humans set this in the UI; usually leave as open).'),
             'note' => $schema->string()->description('Optional note / change request.'),
             'files' => $schema->array()->description('Changed-file paths this section covers (must be paths from the review\'s comparison). Replaces the section\'s current set.'),

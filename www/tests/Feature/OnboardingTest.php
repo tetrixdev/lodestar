@@ -17,7 +17,7 @@ class OnboardingTest extends TestCase
         $user = User::factory()->create();
 
         $this->actingAs($user)
-            ->get(route('dashboard'))
+            ->get(route('board'))
             ->assertOk()
             ->assertSee('Get set up')
             ->assertSee('Connect a GitHub account')
@@ -42,7 +42,7 @@ class OnboardingTest extends TestCase
         $user->createToken('laptop', ['agent']);
 
         $this->actingAs($user)
-            ->get(route('dashboard'))
+            ->get(route('board'))
             ->assertOk()
             ->assertDontSee('Get set up');
     }

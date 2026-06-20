@@ -190,16 +190,18 @@ class McpReviewCoverageTest extends TestCase
         $this->linkRepo($project);
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_AI_REVIEW]);
 
-        // No base/head and no comparisons → create_review refuses (≥1 diff rule).
+        // A review can be created diff-less (a typed review whose comparison is
+        // added later) — but the ≥1-diff rule is enforced at the hand-off gate:
+        // AdvanceTaskTool refuses `→ human review` while a linked review has no
+        // comparison. (Deliverable/functional reviews rely on the same gate.)
         LodestarServer::actingAs($user)->tool(CreateReviewTool::class, [
             'project' => 'p', 'title' => 'R', 'task_ids' => [$task->id],
-        ])->assertHasErrors();
+        ])->assertOk();
 
-        $this->assertSame(0, $project->reviews()->count());
+        $bare = $project->reviews()->sole();
+        $this->assertFalse($bare->hasComparison());
 
-        // Even if a bare review somehow exists, the hand-off gate refuses it.
-        $bare = $project->reviews()->create(['title' => 'bare', 'status' => 'draft']);
-        $bare->tasks()->attach($task);
+        // The hand-off gate refuses the comparison-less review.
         LodestarServer::actingAs($user)->tool(AdvanceTaskTool::class, [
             'task_id' => $task->id, 'to' => Task::STATUS_HUMAN_REVIEW,
         ])->assertHasErrors();

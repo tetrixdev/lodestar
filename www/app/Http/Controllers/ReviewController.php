@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\Review;
 use App\Models\ReviewFile;
@@ -268,6 +269,13 @@ class ReviewController extends Controller
         }
 
         $verdict = $summary['verdict'];
+
+        // A deliverable-scoped review drives the DELIVERABLE through its human gates
+        // (architecture → functional → approved), not individual tasks.
+        if ($review->isDeliverableScoped()) {
+            return $this->concludeDeliverable($review, $verdict);
+        }
+
         $moved = 0;
 
         DB::transaction(function () use ($review, $verdict, &$moved) {
@@ -313,6 +321,53 @@ class ReviewController extends Controller
             ->with('status', ($verdict === 'approved'
                 ? 'Review approved'
                 : 'Changes requested — rework notes written').$tasksNote.'.');
+    }
+
+    /**
+     * Apply a deliverable-scoped review's verdict to the deliverable. Approving
+     * the architecture review advances it to the final functional sanity; approving
+     * that advances it to `approved` (ready to merge). Changes-requested sends the
+     * deliverable back to `building`, where the rework becomes corrective task(s).
+     */
+    private function concludeDeliverable(Review $review, ?string $verdict): RedirectResponse
+    {
+        $deliverable = $review->deliverable;
+        if (! $deliverable) {
+            return redirect()->route('reviews.show', $review)
+                ->with('status', 'This review has no linked deliverable.');
+        }
+
+        $message = '';
+
+        DB::transaction(function () use ($review, $verdict, $deliverable, &$message) {
+            if ($verdict === 'approved') {
+                $review->update(['outcome' => 'approved', 'status' => 'done']);
+                $next = match ($deliverable->status) {
+                    Deliverable::STATUS_HUMAN_ARCHITECTURE_REVIEW => Deliverable::STATUS_HUMAN_FUNCTIONAL_REVIEW,
+                    Deliverable::STATUS_HUMAN_FUNCTIONAL_REVIEW => Deliverable::STATUS_APPROVED,
+                    default => null,
+                };
+                if ($next && $deliverable->canTransitionTo($next)) {
+                    $deliverable->update(['status' => $next]);
+                    $message = $next === Deliverable::STATUS_APPROVED
+                        ? 'Approved — deliverable is ready to merge.'
+                        : 'Approved — deliverable advanced to the final functional sanity check.';
+                } else {
+                    $message = 'Approved.';
+                }
+
+                return;
+            }
+
+            // changes_requested → back to building; rework lands as corrective task(s).
+            $review->update(['outcome' => 'changes_requested', 'status' => 'done']);
+            if ($deliverable->canTransitionTo(Deliverable::STATUS_BUILDING)) {
+                $deliverable->update(['status' => Deliverable::STATUS_BUILDING]);
+            }
+            $message = 'Changes requested — deliverable sent back to building; add corrective task(s) for the fixes.';
+        });
+
+        return redirect()->route('reviews.show', $review)->with('status', $message);
     }
 
     /** Markdown rework brief: each changes_requested section's note + every must_fix finding. */
