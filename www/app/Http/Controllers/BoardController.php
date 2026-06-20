@@ -44,12 +44,22 @@ class BoardController extends Controller
             ->orderBy('position')
             ->get();
 
-        // A deliverable PROJECTS onto the board: while active it renders once per
-        // column its tasks occupy (Plan + Build at the same time), each card filtered
-        // to that column's tasks; task-level reviews sit under Build. Once it's in its
-        // OWN review/ship state it's a single card in that column. Backlog = no tasks.
+        // A deliverable PROJECTS onto the board. Placement in BACKLOG / PLAN / BUILD
+        // is derived from its TASKS, not its own status: while it still has open work
+        // it renders once per column its tasks occupy (Plan + Build at the same time),
+        // each card filtered to that column's tasks. Merged tasks stay VISIBLE (green)
+        // under Build until EVERY non-cancelled task is merged. Once all tasks are
+        // merged the deliverable LEAVES the task-derived columns and shows as a single
+        // OWN card in its review/ship column, driven by its own status. Backlog = a
+        // deliverable with zero non-cancelled tasks.
         // $deliverableCardsByPhase[phase] = [ ['deliverable'=>D, 'tasks'=>subset], ... ]
+        //
+        // Own-card states = the deliverable review-chain + ship statuses. A deliverable
+        // only reaches these once all its tasks are merged (syncStatus derives
+        // ready_for_ai_review when all child work is done); a corrective task pulls it
+        // back to building, at which point task-derived placement takes over again.
         $ownCardStates = [
+            Deliverable::STATUS_READY_FOR_AI_REVIEW,
             Deliverable::STATUS_AI_REVIEW,
             Deliverable::STATUS_HUMAN_ARCHITECTURE_REVIEW,
             Deliverable::STATUS_HUMAN_FUNCTIONAL_REVIEW,
@@ -57,13 +67,14 @@ class BoardController extends Controller
             Deliverable::STATUS_MERGING,
             Deliverable::STATUS_MERGED,
         ];
-        // A child task's projection column: planning phases → plan; everything from
-        // dev through its task-level reviews → build; done → nowhere.
+        // A child task's projection column: planning phases (incl. ready_for_planning)
+        // → plan; everything from ready_for_dev through merged → build; cancelled →
+        // nowhere. Merged maps to BUILD so it stays visible there (rendered green).
         $taskProjection = function (string $status): ?string {
             if (in_array($status, [Task::STATUS_READY_FOR_PLANNING, Task::STATUS_PLANNING, Task::STATUS_PLAN_REVIEW], true)) {
                 return 'plan';
             }
-            if (in_array($status, [Task::STATUS_MERGED, Task::STATUS_CANCELLED], true)) {
+            if ($status === Task::STATUS_CANCELLED) {
                 return null;
             }
 
@@ -75,18 +86,27 @@ class BoardController extends Controller
             $deliverableCardsByPhase[$phaseKey] = collect();
         }
         foreach ($deliverables as $d) {
+            // Own-card state (review/ship) → a single card in its own status column.
             if (in_array($d->status, $ownCardStates, true)) {
                 $deliverableCardsByPhase[$d->phaseColumn()]->push(['deliverable' => $d, 'tasks' => $d->tasks]);
 
                 continue;
             }
-            $incomplete = $d->tasks->whereNotIn('status', [Task::STATUS_MERGED, Task::STATUS_CANCELLED]);
-            if ($incomplete->isEmpty()) {
+
+            // Task-derived placement: ignore cancelled tasks entirely.
+            $active = $d->tasks->where('status', '!=', Task::STATUS_CANCELLED);
+
+            // BACKLOG: a deliverable with zero non-cancelled tasks.
+            if ($active->isEmpty()) {
                 $deliverableCardsByPhase['backlog']->push(['deliverable' => $d, 'tasks' => collect()]);
 
                 continue;
             }
-            foreach ($incomplete->groupBy(fn (Task $t) => $taskProjection($t->status)) as $col => $subset) {
+
+            // Merged tasks remain visible (green) in BUILD until ALL are merged; once
+            // every task is merged the deliverable has handed off to its own review/ship
+            // card above (its status is no longer task-derived), so it won't reach here.
+            foreach ($active->groupBy(fn (Task $t) => $taskProjection($t->status)) as $col => $subset) {
                 if ($col !== null && isset($deliverableCardsByPhase[$col])) {
                     $deliverableCardsByPhase[$col]->push(['deliverable' => $d, 'tasks' => $subset->values()]);
                 }

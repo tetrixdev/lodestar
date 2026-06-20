@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Deliverable;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +20,42 @@ class BoardTest extends TestCase
             'name' => 'Demo',
             'slug' => 'demo-'.uniqid(),
         ]);
+    }
+
+    /** Create a deliverable with child tasks of the given statuses (one task per status entry). */
+    private function deliverableWith(Project $project, array $taskStatuses): Deliverable
+    {
+        $d = $project->deliverables()->create([
+            'title' => 'Deliv '.uniqid(),
+            'status' => Deliverable::STATUS_NEW,
+            'position' => 0,
+        ]);
+        foreach ($taskStatuses as $i => $status) {
+            $this->makeTask($project, [
+                'deliverable' => $d,
+                'title' => "T-{$status}-{$i}",
+                'status' => $status,
+                'position' => $i,
+            ]);
+        }
+
+        return $d->fresh();
+    }
+
+    /** Fetch the board's column => cards map (the derived placement) for the given user. */
+    private function placement(User $user): array
+    {
+        $response = $this->actingAs($user)->get('/board');
+        $response->assertOk();
+
+        return $response->viewData('deliverableCardsByPhase');
+    }
+
+    private function cardTitlesIn(array $byPhase, string $phase): array
+    {
+        return collect($byPhase[$phase])
+            ->map(fn ($c) => $c['deliverable']->title)
+            ->all();
     }
 
     // ── intra-status reordering (the move endpoint) ──────────────────────────
@@ -180,5 +218,139 @@ class BoardTest extends TestCase
         $task = $this->makeTask($project, ['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->assertNotNull($task->fresh()->status_changed_at);
+    }
+
+    // ── deliverable-only board placement (W4) ────────────────────────────────
+
+    public function test_zero_task_deliverable_appears_only_in_backlog(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        $d = $project->deliverables()->create([
+            'title' => 'Empty deliverable',
+            'status' => Deliverable::STATUS_NEW,
+            'position' => 0,
+        ]);
+
+        $byPhase = $this->placement($user);
+
+        $this->assertContains($d->title, $this->cardTitlesIn($byPhase, 'backlog'));
+        foreach (['plan', 'build', 'review', 'ship'] as $col) {
+            $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, $col));
+        }
+    }
+
+    public function test_ready_for_planning_task_places_deliverable_in_plan_not_backlog(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        $d = $this->deliverableWith($project, [Task::STATUS_READY_FOR_PLANNING]);
+
+        $byPhase = $this->placement($user);
+
+        $this->assertContains($d->title, $this->cardTitlesIn($byPhase, 'plan'));
+        $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, 'backlog'));
+        $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, 'build'));
+    }
+
+    public function test_deliverable_with_mixed_planning_and_build_tasks_appears_in_both(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        $d = $this->deliverableWith($project, [
+            Task::STATUS_PLANNING,
+            Task::STATUS_DEVELOPING,
+        ]);
+
+        $byPhase = $this->placement($user);
+
+        $this->assertContains($d->title, $this->cardTitlesIn($byPhase, 'plan'));
+        $this->assertContains($d->title, $this->cardTitlesIn($byPhase, 'build'));
+
+        // The PLAN card carries only the planning task; the BUILD card only the build task.
+        $planCard = collect($byPhase['plan'])->firstWhere('deliverable.id', $d->id);
+        $buildCard = collect($byPhase['build'])->firstWhere('deliverable.id', $d->id);
+        $this->assertSame([Task::STATUS_PLANNING], $planCard['tasks']->pluck('status')->all());
+        $this->assertSame([Task::STATUS_DEVELOPING], $buildCard['tasks']->pluck('status')->all());
+    }
+
+    public function test_merged_tasks_stay_visible_in_build_until_all_merged(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        // One merged + one still developing → not all merged, so the deliverable
+        // stays task-derived and the merged task remains visible in BUILD.
+        $d = $this->deliverableWith($project, [
+            Task::STATUS_MERGED,
+            Task::STATUS_DEVELOPING,
+        ]);
+
+        $byPhase = $this->placement($user);
+
+        $buildCard = collect($byPhase['build'])->firstWhere('deliverable.id', $d->id);
+        $this->assertNotNull($buildCard, 'deliverable should be in BUILD');
+        $this->assertEqualsCanonicalizing(
+            [Task::STATUS_MERGED, Task::STATUS_DEVELOPING],
+            $buildCard['tasks']->pluck('status')->all(),
+        );
+
+        // Not an own-card review/ship column yet.
+        $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, 'review'));
+        $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, 'ship'));
+    }
+
+    public function test_merged_tasks_render_green_in_build(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        $this->deliverableWith($project, [
+            Task::STATUS_MERGED,
+            Task::STATUS_DEVELOPING,
+        ]);
+
+        $this->actingAs($user)->get('/board')
+            ->assertOk()
+            ->assertSee('text-emerald-600', false);
+    }
+
+    public function test_all_tasks_merged_deliverable_leaves_build_for_its_review_or_ship_column(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        // All tasks merged → syncStatus derives ready_for_ai_review (review column),
+        // and the deliverable leaves the task-derived BUILD column entirely.
+        $d = $this->deliverableWith($project, [
+            Task::STATUS_MERGED,
+            Task::STATUS_MERGED,
+        ]);
+
+        $this->assertSame(Deliverable::STATUS_READY_FOR_AI_REVIEW, $d->status);
+
+        $byPhase = $this->placement($user);
+
+        $this->assertContains($d->title, $this->cardTitlesIn($byPhase, 'review'));
+        $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, 'build'));
+        $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, 'backlog'));
+    }
+
+    public function test_all_merged_then_advanced_to_ship_shows_in_ship_column(): void
+    {
+        $user = User::factory()->create();
+        $project = $this->project($user);
+
+        $d = $this->deliverableWith($project, [Task::STATUS_MERGED]);
+        // Drive its own status into the ship phase.
+        $d->forceFill(['status' => Deliverable::STATUS_APPROVED])->save();
+
+        $byPhase = $this->placement($user);
+
+        $this->assertContains($d->title, $this->cardTitlesIn($byPhase, 'ship'));
+        $this->assertNotContains($d->title, $this->cardTitlesIn($byPhase, 'build'));
     }
 }
