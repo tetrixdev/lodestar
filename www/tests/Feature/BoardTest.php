@@ -27,13 +27,13 @@ class BoardTest extends TestCase
         $user = User::factory()->create();
         $project = $this->project($user);
 
-        $a = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
-        $b = $project->tasks()->create(['title' => 'B', 'status' => 'new', 'position' => 1]);
-        $c = $project->tasks()->create(['title' => 'C', 'status' => 'new', 'position' => 2]);
+        $a = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $b = $project->tasks()->create(['title' => 'B', 'status' => 'ready_for_planning', 'position' => 1]);
+        $c = $project->tasks()->create(['title' => 'C', 'status' => 'ready_for_planning', 'position' => 2]);
 
         // Drag C to the front: new order C, A, B.
         $this->actingAs($user)->patchJson("/tasks/{$c->id}/move", [
-            'status' => 'new',
+            'status' => 'ready_for_planning',
             'order' => [$c->id, $a->id, $b->id],
         ])->assertOk()->assertJson(['ok' => true]);
 
@@ -46,7 +46,7 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         // move is reorder-only: claiming a different status is rejected.
         $this->actingAs($user)->patchJson("/tasks/{$task->id}/move", [
@@ -54,7 +54,7 @@ class BoardTest extends TestCase
             'order' => [$task->id],
         ])->assertStatus(422);
 
-        $this->assertSame('new', $task->fresh()->status);
+        $this->assertSame('ready_for_planning', $task->fresh()->status);
     }
 
     public function test_move_is_blocked_for_other_users(): void
@@ -62,10 +62,10 @@ class BoardTest extends TestCase
         $owner = User::factory()->create();
         $intruder = User::factory()->create();
         $project = $this->project($owner);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($intruder)
-            ->patchJson("/tasks/{$task->id}/move", ['status' => 'new', 'order' => [$task->id]])
+            ->patchJson("/tasks/{$task->id}/move", ['status' => 'ready_for_planning', 'order' => [$task->id]])
             ->assertForbidden();
     }
 
@@ -75,11 +75,11 @@ class BoardTest extends TestCase
         $project = $this->project($user);
         $other = $this->project($user);
 
-        $a = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
-        $foreign = $other->tasks()->create(['title' => 'X', 'status' => 'new', 'position' => 0]);
+        $a = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
+        $foreign = $other->tasks()->create(['title' => 'X', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)->patchJson("/tasks/{$a->id}/move", [
-            'status' => 'new',
+            'status' => 'ready_for_planning',
             'order' => [$foreign->id, $a->id],
         ])->assertOk();
 
@@ -94,18 +94,18 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         // Backdate the stamp so we can detect a fresh stamp on transition.
         $past = now()->subDays(3);
         DB::table('tasks')->where('id', $task->id)->update(['status_changed_at' => $past]);
 
         $this->actingAs($user)
-            ->patch("/tasks/{$task->id}", ['status' => 'ready_for_planning'])
+            ->patch("/tasks/{$task->id}", ['status' => 'planning'])
             ->assertRedirect();
 
         $fresh = $task->fresh();
-        $this->assertSame('ready_for_planning', $fresh->status);
+        $this->assertSame('planning', $fresh->status);
         $this->assertTrue($fresh->status_changed_at->greaterThan($past));
     }
 
@@ -113,27 +113,27 @@ class BoardTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
-        // new may only go to ready_for_planning or cancelled — not straight to done.
+        // ready_for_planning may only go to planning or cancelled — not straight to merged.
         $this->actingAs($user)
-            ->patch("/tasks/{$task->id}", ['status' => 'done'])
+            ->patch("/tasks/{$task->id}", ['status' => 'merged'])
             ->assertSessionHasErrors('status');
 
-        $this->assertSame('new', $task->fresh()->status);
+        $this->assertSame('ready_for_planning', $task->fresh()->status);
     }
 
     public function test_illegal_transition_returns_422_for_json(): void
     {
         $user = User::factory()->create();
         $project = $this->project($user);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)
             ->patchJson("/tasks/{$task->id}", ['status' => 'developing'])
             ->assertStatus(422);
 
-        $this->assertSame('new', $task->fresh()->status);
+        $this->assertSame('ready_for_planning', $task->fresh()->status);
     }
 
     public function test_cancel_is_a_permanent_archive(): void
@@ -151,7 +151,7 @@ class BoardTest extends TestCase
         // Cancelled is a permanent archive — it cannot be restored to a live state.
         $this->actingAs($user)
             ->from("/tasks/{$task->id}")
-            ->patch("/tasks/{$task->id}", ['status' => 'new'])
+            ->patch("/tasks/{$task->id}", ['status' => 'ready_for_planning'])
             ->assertSessionHasErrors('status');
         $this->assertSame('cancelled', $task->fresh()->status);
     }
@@ -161,13 +161,13 @@ class BoardTest extends TestCase
         $owner = User::factory()->create();
         $intruder = User::factory()->create();
         $project = $this->project($owner);
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($intruder)
-            ->patch("/tasks/{$task->id}", ['status' => 'ready_for_planning'])
+            ->patch("/tasks/{$task->id}", ['status' => 'planning'])
             ->assertForbidden();
 
-        $this->assertSame('new', $task->fresh()->status);
+        $this->assertSame('ready_for_planning', $task->fresh()->status);
     }
 
     // ── creating cards ───────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ class BoardTest extends TestCase
         $user = User::factory()->create();
         $project = $this->project($user);
 
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new', 'position' => 0]);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->assertNotNull($task->fresh()->status_changed_at);
     }

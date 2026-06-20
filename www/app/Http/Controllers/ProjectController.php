@@ -29,7 +29,7 @@ class ProjectController extends Controller
             $tasks = $project->tasks()->get();
 
             $live = $tasks->whereNotIn('status', [Task::STATUS_CANCELLED]);
-            $done = $live->where('status', Task::STATUS_DONE)->count();
+            $done = $live->where('status', Task::STATUS_MERGED)->count();
             $liveCount = $live->count();
 
             $phaseCounts = [];
@@ -40,7 +40,7 @@ class ProjectController extends Controller
             $overdue = $live->filter(fn (Task $t) => $t->isOverdue())->count();
 
             $nextDue = $live
-                ->filter(fn (Task $t) => $t->due_date !== null && ! in_array($t->status, [Task::STATUS_DONE], true))
+                ->filter(fn (Task $t) => $t->due_date !== null && ! in_array($t->status, [Task::STATUS_MERGED], true))
                 ->sortBy('due_date')
                 ->first()?->due_date;
 

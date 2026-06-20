@@ -81,12 +81,12 @@ class McpLoopToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_PLAN_REVIEW]);
 
         LodestarServer::actingAs($user)
             ->tool(ClaimTaskTool::class, ['task_id' => $task->id])
             ->assertHasErrors();
-        $this->assertSame(Task::STATUS_NEW, $task->fresh()->status);
+        $this->assertSame(Task::STATUS_PLAN_REVIEW, $task->fresh()->status);
     }
 
     public function test_phase_filter_only_claims_matching_queue(): void
@@ -112,7 +112,7 @@ class McpLoopToolsTest extends TestCase
 
         // Illegal jump rejected, task untouched.
         LodestarServer::actingAs($user)
-            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_DONE])
+            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_MERGED])
             ->assertHasErrors();
         $this->assertSame(Task::STATUS_DEVELOPING, $task->fresh()->status);
 
@@ -134,7 +134,7 @@ class McpLoopToolsTest extends TestCase
         $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_CANCELLED]);
 
         LodestarServer::actingAs($user)
-            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_NEW])
+            ->tool(AdvanceTaskTool::class, ['task_id' => $task->id, 'to' => Task::STATUS_READY_FOR_PLANNING])
             ->assertHasErrors();
 
         $this->assertSame(Task::STATUS_CANCELLED, $task->fresh()->status);

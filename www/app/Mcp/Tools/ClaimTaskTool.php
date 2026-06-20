@@ -57,7 +57,7 @@ class ClaimTaskTool extends LodestarTool
             if (! in_array($target->status, Task::claimableStatuses(), true)) {
                 return Response::error(
                     "Task #{$taskId} is '{$target->status}', which isn't claimable — only a ready_* card can be claimed."
-                    .($target->status === Task::STATUS_NEW || $target->status === Task::STATUS_PLAN_REVIEW
+                    .($target->status === Task::STATUS_PLAN_REVIEW
                         ? ' Move it forward to a ready_* state first.' : '')
                 );
             }

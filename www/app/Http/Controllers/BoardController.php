@@ -76,16 +76,16 @@ class BoardController extends Controller
             Deliverable::STATUS_HUMAN_ARCHITECTURE_REVIEW,
             Deliverable::STATUS_HUMAN_FUNCTIONAL_REVIEW,
             Deliverable::STATUS_APPROVED,
-            Deliverable::STATUS_MERGE_DEPLOY,
-            Deliverable::STATUS_DONE,
+            Deliverable::STATUS_MERGING,
+            Deliverable::STATUS_MERGED,
         ];
         // A child task's projection column: planning phases → plan; everything from
         // dev through its task-level reviews → build; done → nowhere.
         $taskProjection = function (string $status): ?string {
-            if (in_array($status, [Task::STATUS_NEW, Task::STATUS_READY_FOR_PLANNING, Task::STATUS_PLANNING, Task::STATUS_PLAN_REVIEW], true)) {
+            if (in_array($status, [Task::STATUS_READY_FOR_PLANNING, Task::STATUS_PLANNING, Task::STATUS_PLAN_REVIEW], true)) {
                 return 'plan';
             }
-            if (in_array($status, [Task::STATUS_DONE, Task::STATUS_CANCELLED], true)) {
+            if (in_array($status, [Task::STATUS_MERGED, Task::STATUS_CANCELLED], true)) {
                 return null;
             }
 
@@ -102,7 +102,7 @@ class BoardController extends Controller
 
                 continue;
             }
-            $incomplete = $d->tasks->whereNotIn('status', [Task::STATUS_DONE, Task::STATUS_CANCELLED]);
+            $incomplete = $d->tasks->whereNotIn('status', [Task::STATUS_MERGED, Task::STATUS_CANCELLED]);
             if ($incomplete->isEmpty()) {
                 $deliverableCardsByPhase['backlog']->push(['deliverable' => $d, 'tasks' => collect()]);
 

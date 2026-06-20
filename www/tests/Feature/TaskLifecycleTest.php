@@ -22,8 +22,8 @@ class TaskLifecycleTest extends TestCase
             $this->assertArrayHasKey($status, Task::LABELS, "$status missing a label");
         }
 
-        // 13 statuses total (12 live + cancelled).
-        $this->assertCount(12, Task::STATUSES);
+        // 12 statuses total (11 live + cancelled).
+        $this->assertCount(11, Task::STATUSES);
         $this->assertArrayHasKey(Task::STATUS_CANCELLED, Task::ACTORS);
     }
 
@@ -47,8 +47,8 @@ class TaskLifecycleTest extends TestCase
         $this->assertTrue($task->canTransitionTo(Task::STATUS_READY_FOR_AI_REVIEW)); // back
         $this->assertTrue($task->canTransitionTo(Task::STATUS_READY_FOR_DEV));       // back to dev (rework)
         $this->assertTrue($task->canTransitionTo(Task::STATUS_CANCELLED));           // cancel
-        $this->assertFalse($task->canTransitionTo(Task::STATUS_DONE));               // illegal jump
-        $this->assertFalse($task->canTransitionTo(Task::STATUS_NEW));                // illegal jump
+        $this->assertFalse($task->canTransitionTo(Task::STATUS_MERGED));             // illegal jump
+        $this->assertFalse($task->canTransitionTo(Task::STATUS_PLANNING));           // illegal jump
     }
 
     public function test_saving_stamps_status_changed_at_only_when_status_changes(): void
@@ -56,7 +56,7 @@ class TaskLifecycleTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'D', 'slug' => 'd-'.uniqid()]);
 
-        $task = $project->tasks()->create(['title' => 'A', 'status' => 'new']);
+        $task = $project->tasks()->create(['title' => 'A', 'status' => 'ready_for_planning']);
         $firstStamp = $task->fresh()->status_changed_at;
         $this->assertNotNull($firstStamp);
 
@@ -67,7 +67,7 @@ class TaskLifecycleTest extends TestCase
         $this->assertTrue($task->fresh()->status_changed_at->lessThan(now()->subHours(20)));
 
         // A status change DOES re-stamp.
-        $task->update(['status' => 'ready_for_planning']);
+        $task->update(['status' => 'planning']);
         $this->assertTrue($task->fresh()->status_changed_at->greaterThan(now()->subMinute()));
     }
 
@@ -95,12 +95,13 @@ class TaskLifecycleTest extends TestCase
         // Re-run the lifecycle migration's data transform (the column already
         // exists from RefreshDatabase; this mirrors the up() body exactly).
         DB::table('tasks')->whereNull('status_changed_at')->update(['status_changed_at' => DB::raw('updated_at')]);
-        DB::table('tasks')->where('status', 'open')->update(['status' => 'new']);
+        DB::table('tasks')->where('status', 'open')->update(['status' => 'ready_for_planning']);
         DB::table('tasks')->where('status', 'doing')->update(['status' => 'developing']);
+        DB::table('tasks')->where('status', 'done')->update(['status' => 'merged']);
 
-        $this->assertSame('new', Task::find($ids['open'])->status);
+        $this->assertSame('ready_for_planning', Task::find($ids['open'])->status);
         $this->assertSame('developing', Task::find($ids['doing'])->status);
-        $this->assertSame('done', Task::find($ids['done'])->status);
+        $this->assertSame('merged', Task::find($ids['done'])->status);
         $this->assertSame('cancelled', Task::find($ids['cancelled'])->status);
 
         // status_changed_at backfilled from updated_at.

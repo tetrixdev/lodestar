@@ -48,7 +48,7 @@
                                         @foreach ($rows as $row)
                                             @php
                                                 $task = $row['task'];
-                                                $isDone = $task->status === $T::STATUS_DONE;
+                                                $isDone = $task->status === $T::STATUS_MERGED;
                                                 $isOverdue = $task->isOverdue();
                                                 $barColor = $isDone ? 'bg-gray-300' : ($isOverdue ? 'bg-red-400' : 'bg-indigo-400');
                                                 $statusLabel = $T::LABELS[$task->status] ?? $task->status;

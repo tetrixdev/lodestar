@@ -68,7 +68,7 @@ class ReviewAssignmentTest extends TestCase
     {
         $owner = User::factory()->create();
         $review = $this->review($owner);
-        $task = $review->project->tasks()->create(['title' => 'Reviewed card', 'status' => 'new', 'position' => 0]);
+        $task = $review->project->tasks()->create(['title' => 'Reviewed card', 'status' => 'ready_for_planning', 'position' => 0]);
         $review->tasks()->attach($task);
 
         $this->actingAs($owner)

@@ -14,7 +14,7 @@ use Illuminate\Support\Str;
 /**
  * A kanban card moving through the Lodestar lifecycle.
  *
- * `status` is one of the 13 lifecycle states (see STATUSES). The board groups
+ * `status` is one of the 11 lifecycle states (see STATUSES). The board groups
  * them into 5 phase columns (see PHASES) and colours each by who it is waiting
  * on (see ACTORS). `cancelled` is the archive (soft-delete). `position` orders
  * cards within a single status. `status_changed_at` records when the card last
@@ -70,12 +70,10 @@ class Task extends Model
     {
         return $this->due_date !== null
             && $this->due_date->isPast()
-            && ! in_array($this->status, [self::STATUS_DONE, self::STATUS_CANCELLED], true);
+            && ! in_array($this->status, [self::STATUS_MERGED, self::STATUS_CANCELLED], true);
     }
 
-    // ── The 13 statuses ──────────────────────────────────────────────────────
-
-    public const STATUS_NEW = 'new';
+    // ── The 11 statuses ──────────────────────────────────────────────────────
 
     public const STATUS_READY_FOR_PLANNING = 'ready_for_planning';
 
@@ -95,15 +93,14 @@ class Task extends Model
 
     public const STATUS_APPROVED = 'approved';
 
-    public const STATUS_MERGE_DEPLOY = 'merge_deploy';
+    public const STATUS_MERGING = 'merging';
 
-    public const STATUS_DONE = 'done';
+    public const STATUS_MERGED = 'merged';
 
     public const STATUS_CANCELLED = 'cancelled';
 
     /** Every lifecycle status, in pipeline order (cancelled excluded — it's the archive). */
     public const STATUSES = [
-        self::STATUS_NEW,
         self::STATUS_READY_FOR_PLANNING,
         self::STATUS_PLANNING,
         self::STATUS_PLAN_REVIEW,
@@ -113,8 +110,8 @@ class Task extends Model
         self::STATUS_AI_REVIEW,
         self::STATUS_HUMAN_REVIEW,
         self::STATUS_APPROVED,
-        self::STATUS_MERGE_DEPLOY,
-        self::STATUS_DONE,
+        self::STATUS_MERGING,
+        self::STATUS_MERGED,
     ];
 
     /**
@@ -138,7 +135,6 @@ class Task extends Model
 
     /** status => actor category. */
     public const ACTORS = [
-        self::STATUS_NEW => self::ACTOR_NEEDS_HUMAN,
         self::STATUS_READY_FOR_PLANNING => self::ACTOR_QUEUED,
         self::STATUS_PLANNING => self::ACTOR_AI_WORKING,
         self::STATUS_PLAN_REVIEW => self::ACTOR_NEEDS_HUMAN,
@@ -148,8 +144,8 @@ class Task extends Model
         self::STATUS_AI_REVIEW => self::ACTOR_AI_WORKING,
         self::STATUS_HUMAN_REVIEW => self::ACTOR_NEEDS_HUMAN,
         self::STATUS_APPROVED => self::ACTOR_QUEUED,
-        self::STATUS_MERGE_DEPLOY => self::ACTOR_AI_WORKING,
-        self::STATUS_DONE => self::ACTOR_DONE,
+        self::STATUS_MERGING => self::ACTOR_AI_WORKING,
+        self::STATUS_MERGED => self::ACTOR_DONE,
         self::STATUS_CANCELLED => self::ACTOR_ARCHIVED,
     ];
 
@@ -159,7 +155,7 @@ class Task extends Model
     public const PHASES = [
         'backlog' => [
             'label' => 'Backlog',
-            'statuses' => [self::STATUS_NEW, self::STATUS_READY_FOR_PLANNING],
+            'statuses' => [self::STATUS_READY_FOR_PLANNING],
         ],
         'plan' => [
             'label' => 'Plan',
@@ -175,13 +171,12 @@ class Task extends Model
         ],
         'ship' => [
             'label' => 'Ship',
-            'statuses' => [self::STATUS_APPROVED, self::STATUS_MERGE_DEPLOY, self::STATUS_DONE],
+            'statuses' => [self::STATUS_APPROVED, self::STATUS_MERGING, self::STATUS_MERGED],
         ],
     ];
 
     /** Human-readable label per status (for badges). */
     public const LABELS = [
-        self::STATUS_NEW => 'New',
         self::STATUS_READY_FOR_PLANNING => 'Ready for planning',
         self::STATUS_PLANNING => 'Planning',
         self::STATUS_PLAN_REVIEW => 'Plan review',
@@ -191,8 +186,8 @@ class Task extends Model
         self::STATUS_AI_REVIEW => 'AI review',
         self::STATUS_HUMAN_REVIEW => 'Human review',
         self::STATUS_APPROVED => 'Approved',
-        self::STATUS_MERGE_DEPLOY => 'Merge & deploy',
-        self::STATUS_DONE => 'Done',
+        self::STATUS_MERGING => 'Merging',
+        self::STATUS_MERGED => 'Merged',
         self::STATUS_CANCELLED => 'Cancelled',
     ];
 
@@ -203,8 +198,7 @@ class Task extends Model
      * forward · back · cancel, which the UI relies on for control ordering.
      */
     public const TRANSITIONS = [
-        self::STATUS_NEW => [self::STATUS_READY_FOR_PLANNING, self::STATUS_CANCELLED],
-        self::STATUS_READY_FOR_PLANNING => [self::STATUS_PLANNING, self::STATUS_NEW, self::STATUS_CANCELLED],
+        self::STATUS_READY_FOR_PLANNING => [self::STATUS_PLANNING, self::STATUS_CANCELLED],
         self::STATUS_PLANNING => [self::STATUS_PLAN_REVIEW, self::STATUS_READY_FOR_PLANNING, self::STATUS_CANCELLED],
         self::STATUS_PLAN_REVIEW => [self::STATUS_READY_FOR_DEV, self::STATUS_READY_FOR_PLANNING, self::STATUS_CANCELLED],
         self::STATUS_READY_FOR_DEV => [self::STATUS_DEVELOPING, self::STATUS_PLAN_REVIEW, self::STATUS_CANCELLED],
@@ -212,9 +206,9 @@ class Task extends Model
         self::STATUS_READY_FOR_AI_REVIEW => [self::STATUS_AI_REVIEW, self::STATUS_DEVELOPING, self::STATUS_CANCELLED],
         self::STATUS_AI_REVIEW => [self::STATUS_HUMAN_REVIEW, self::STATUS_READY_FOR_DEV, self::STATUS_CANCELLED],
         self::STATUS_HUMAN_REVIEW => [self::STATUS_APPROVED, self::STATUS_READY_FOR_AI_REVIEW, self::STATUS_READY_FOR_DEV, self::STATUS_CANCELLED],
-        self::STATUS_APPROVED => [self::STATUS_MERGE_DEPLOY, self::STATUS_HUMAN_REVIEW, self::STATUS_CANCELLED],
-        self::STATUS_MERGE_DEPLOY => [self::STATUS_DONE, self::STATUS_APPROVED, self::STATUS_CANCELLED],
-        self::STATUS_DONE => [self::STATUS_CANCELLED],
+        self::STATUS_APPROVED => [self::STATUS_MERGING, self::STATUS_HUMAN_REVIEW, self::STATUS_CANCELLED],
+        self::STATUS_MERGING => [self::STATUS_MERGED, self::STATUS_APPROVED, self::STATUS_CANCELLED],
+        self::STATUS_MERGED => [self::STATUS_CANCELLED],
         // Cancelled is a permanent archive — no restore. A card stays viewable
         // (and can always be recreated); it never re-enters the live pipeline.
         self::STATUS_CANCELLED => [],
@@ -226,7 +220,6 @@ class Task extends Model
      * the deliverable is still "planning").
      */
     public const PLANNING_PHASE_STATUSES = [
-        self::STATUS_NEW,
         self::STATUS_READY_FOR_PLANNING,
         self::STATUS_PLANNING,
         self::STATUS_PLAN_REVIEW,
@@ -245,7 +238,7 @@ class Task extends Model
         self::STATUS_READY_FOR_PLANNING => self::STATUS_PLANNING,
         self::STATUS_READY_FOR_DEV => self::STATUS_DEVELOPING,
         self::STATUS_READY_FOR_AI_REVIEW => self::STATUS_AI_REVIEW,
-        self::STATUS_APPROVED => self::STATUS_MERGE_DEPLOY,
+        self::STATUS_APPROVED => self::STATUS_MERGING,
     ];
 
     /**
@@ -256,7 +249,7 @@ class Task extends Model
         self::STATUS_PLANNING => 'plan',
         self::STATUS_DEVELOPING => 'develop',
         self::STATUS_AI_REVIEW => 'ai_review',
-        self::STATUS_MERGE_DEPLOY => 'merge',
+        self::STATUS_MERGING => 'merge',
     ];
 
     /** The `ready_*` states an agent may claim. */
@@ -386,7 +379,7 @@ class Task extends Model
     public function isBlocked(): bool
     {
         return $this->dependencies()
-            ->whereNotIn('status', [self::STATUS_DONE, self::STATUS_CANCELLED])
+            ->whereNotIn('status', [self::STATUS_MERGED, self::STATUS_CANCELLED])
             ->exists();
     }
 

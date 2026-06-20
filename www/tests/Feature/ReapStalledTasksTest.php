@@ -49,7 +49,7 @@ class ReapStalledTasksTest extends TestCase
             Task::STATUS_PLANNING => Task::STATUS_READY_FOR_PLANNING,
             Task::STATUS_DEVELOPING => Task::STATUS_READY_FOR_DEV,
             Task::STATUS_AI_REVIEW => Task::STATUS_READY_FOR_AI_REVIEW,
-            Task::STATUS_MERGE_DEPLOY => Task::STATUS_APPROVED,
+            Task::STATUS_MERGING => Task::STATUS_APPROVED,
         ];
 
         foreach ($cases as $working => $queue) {

@@ -35,7 +35,7 @@ class DeliverableLifecycleTest extends TestCase
         return $d->tasks()->create(array_merge([
             'project_id' => $d->project_id,
             'title' => 'A task',
-            'status' => Task::STATUS_NEW,
+            'status' => Task::STATUS_READY_FOR_PLANNING,
             'position' => 0,
         ], $attrs));
     }
@@ -50,7 +50,7 @@ class DeliverableLifecycleTest extends TestCase
         $this->assertTrue($d->canTransitionTo(Deliverable::STATUS_READY_FOR_PLANNING));  // back
         $this->assertTrue($d->canTransitionTo(Deliverable::STATUS_CANCELLED));           // cancel
         $this->assertFalse($d->canTransitionTo(Deliverable::STATUS_AI_REVIEW));          // illegal jump
-        $this->assertFalse($d->canTransitionTo(Deliverable::STATUS_DONE));
+        $this->assertFalse($d->canTransitionTo(Deliverable::STATUS_MERGED));
     }
 
     public function test_review_feedback_routes_back_to_building(): void
@@ -128,7 +128,7 @@ class DeliverableLifecycleTest extends TestCase
             $nested->branchName(),
         );
 
-        $standalone = $project->tasks()->create(['title' => 'Hotfix thing', 'status' => 'new', 'position' => 0]);
+        $standalone = $project->tasks()->create(['title' => 'Hotfix thing', 'status' => 'ready_for_planning', 'position' => 0]);
         $this->assertSame(sprintf('T%06d-hotfix-thing', $standalone->id), $standalone->branchName());
         $this->assertNull($standalone->sub_id);
     }
@@ -144,7 +144,7 @@ class DeliverableLifecycleTest extends TestCase
         $t2 = $this->task($d);
         $this->assertFalse($d->allTasksComplete());
 
-        $t1->update(['status' => Task::STATUS_DONE]);
+        $t1->update(['status' => Task::STATUS_MERGED]);
         $t2->update(['status' => Task::STATUS_CANCELLED]);
         $this->assertTrue($d->fresh()->allTasksComplete());
     }
@@ -168,8 +168,8 @@ class DeliverableLifecycleTest extends TestCase
     public function test_standalone_task_human_gate_is_code(): void
     {
         $project = $this->project(User::factory()->create());
-        $t = $project->tasks()->create(['title' => 'Solo', 'status' => Task::STATUS_NEW, 'position' => 0]);
-        $this->assertTrue($t->canTransitionTo(Task::STATUS_READY_FOR_PLANNING));
+        $t = $project->tasks()->create(['title' => 'Solo', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
+        $this->assertTrue($t->canTransitionTo(Task::STATUS_PLANNING));
         $this->assertSame('code', $t->humanGateType());
     }
 
@@ -195,12 +195,12 @@ class DeliverableLifecycleTest extends TestCase
     {
         $d = $this->deliverable($this->project(User::factory()->create()));
         $dep = $this->task($d, ['title' => 'Dependency', 'status' => Task::STATUS_READY_FOR_DEV]);
-        $doneDependent = $this->task($d, ['title' => 'Shipped', 'status' => Task::STATUS_DONE]);
+        $doneDependent = $this->task($d, ['title' => 'Shipped', 'status' => Task::STATUS_MERGED]);
         $doneDependent->dependencies()->attach($dep->id);
 
         $dep->update(['status' => Task::STATUS_PLAN_REVIEW]);
 
-        $this->assertSame(Task::STATUS_DONE, $doneDependent->fresh()->status); // already shipped — left alone
+        $this->assertSame(Task::STATUS_MERGED, $doneDependent->fresh()->status); // already shipped — left alone
     }
 
     // ── dirty-section watermark ───────────────────────────────────────────────

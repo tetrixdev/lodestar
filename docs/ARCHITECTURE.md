@@ -21,11 +21,11 @@ signed-in user.
 - **ProjectController** — the project list and the **board**. `show()` loads a
   project's live (non-archived) cards grouped by status, the archived
   (`cancelled`) cards, and the distinct categories for the filter. It hands the
-  view `Task::PHASES` so the board can lay the 12 live statuses into 5 phase
+  view `Task::PHASES` so the board can lay the 11 live statuses into 5 phase
   columns.
 - **TaskController** — the card write paths:
-  - `store()` adds a card to a project (defaults to `new`, lands at the bottom of
-    its status).
+  - `store()` adds a card to a project (defaults to `ready_for_planning`, lands at
+    the bottom of its status).
   - `update()` is the **lifecycle move** — it rejects any status change that
     isn't a legal transition from the card's current status (422 JSON for
     programmatic callers, a validation error for the HTML board), then places the
@@ -58,7 +58,7 @@ signed-in user.
   automatically for cards stalled past a lease (see the agent-loop flow).
 - **DashboardController** — the cross-project home, a dense single-screen panel:
   **Overdue / due-soon** full-width on top, then a **2×2 inbox** of *Backlog*
-  (`new`), *Plans to review* (`plan_review`), *Reviews* (open reviews only — the
+  (`ready_for_planning`), *Plans to review* (`plan_review`), *Reviews* (open reviews only — the
   review is the unit you act on at `human_review`, shown with a task count, not
   exploded per task), and *AI working now* (the `*-ing` states), then **recent
   work sessions** full-width at the bottom. Each inbox pane reserves ~5 rows, grows
@@ -169,17 +169,17 @@ reached through the Project.
 
 ### The lifecycle state machine + board
 
-A Task rides 13 states (12 live + `cancelled`). The board renders the 12 live
+A Task rides 12 states (11 live + `cancelled`). The board renders the 11 live
 states as **5 phase columns**; each card shows the **actor** it waits on (the
 colour: needs-human / queued / ai-working / done) and a "Nh in status" timer.
+(Tasks have no `new` state — `new` is a deliverable-only backlog status.)
 
 ```mermaid
 flowchart LR
-    new --> ready_for_planning --> planning --> plan_review --> ready_for_dev
+    ready_for_planning --> planning --> plan_review --> ready_for_dev
     ready_for_dev --> developing --> ready_for_ai_review --> ai_review --> human_review
-    human_review --> approved --> merge_deploy --> done
-    new -.cancel.-> cancelled
-    cancelled -.restore.-> new
+    human_review --> approved --> merging --> merged
+    ready_for_planning -.cancel.-> cancelled
 ```
 
 - **`ready_*`** states are queues an agent loop will claim; **`*-ing`** states
@@ -319,7 +319,7 @@ agent's input crosses into our data writes.
      create and never moves an existing card (every lifecycle move goes through
      `advance_task`). A card created **with a plan** may enter at the `plan_review`
      gate (the default when a plan is given) or, to skip the gate, at
-     `ready_for_dev`; a bare idea enters at `new` / `ready_for_planning`. The
+     `ready_for_dev`; a bare idea enters at `ready_for_planning`. The
      plan-gated entry states require an actual plan (enforced engine-side), and
      working (`*-ing`) states are never seedable. A buggy or hostile client cannot
      put the board in an illegal state.

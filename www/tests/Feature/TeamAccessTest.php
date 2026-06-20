@@ -79,7 +79,7 @@ class TeamAccessTest extends TestCase
     public function test_team_member_can_view_a_task_detail_in_a_team_project(): void
     {
         ['member' => $member, 'project' => $project] = $this->teamProject();
-        $task = $project->tasks()->create(['title' => 'Shared card', 'status' => Task::STATUS_NEW]);
+        $task = $project->tasks()->create(['title' => 'Shared card', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         $this->actingAs($member)
             ->get("/tasks/{$task->id}")
@@ -123,7 +123,7 @@ class TeamAccessTest extends TestCase
     public function test_non_member_gets_403_on_a_task_in_a_team_project(): void
     {
         ['project' => $project] = $this->teamProject();
-        $task = $project->tasks()->create(['title' => 'Secret', 'status' => Task::STATUS_NEW]);
+        $task = $project->tasks()->create(['title' => 'Secret', 'status' => Task::STATUS_READY_FOR_PLANNING]);
         $stranger = User::factory()->create();
 
         $this->actingAs($stranger)

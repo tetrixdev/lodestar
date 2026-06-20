@@ -17,7 +17,7 @@ class TaskDetailTest extends TestCase
 
         return $project->tasks()->create(array_merge([
             'title' => 'Build the thing',
-            'status' => Task::STATUS_NEW,
+            'status' => Task::STATUS_READY_FOR_PLANNING,
             'plan' => '## The plan',
         ], $attrs));
     }

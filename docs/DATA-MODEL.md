@@ -127,11 +127,12 @@ These are the rules the column list alone won't tell you:
   and MCP tool uses (403 otherwise). Personal projects (`team_id` null) are
   owner-only, so this is backward-compatible with the original `user_id` check.
   `(user_id, slug)` is unique, so a slug is unique *per user*, not globally.
-- **A Task's status is one of 13 — 12 live + `cancelled`.** The live pipeline,
-  in order: `new → ready_for_planning → planning → plan_review → ready_for_dev →
+- **A Task's status is one of 12 — 11 live + `cancelled`.** The live pipeline,
+  in order: `ready_for_planning → planning → plan_review → ready_for_dev →
   developing → ready_for_ai_review → ai_review → human_review → approved →
-  merge_deploy → done`. `cancelled` is the archive (a soft-delete; there is no
-  hard delete). The board groups the 12 live states into **5 phase columns**
+  merging → merged`. `cancelled` is the archive (a soft-delete; there is no
+  hard delete). (Tasks have no `new` state — that is a deliverable-only backlog
+  status.) The board groups the 11 live states into **5 phase columns**
   (Backlog · Plan · Build · Review · Ship) and colours each card by the **actor**
   it waits on (needs-human / queued / ai-working / done / archived).
 - **Status moves are legal-only.** A Task may only move to a status in its

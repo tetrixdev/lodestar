@@ -76,12 +76,12 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         // A task in someone else's project must NOT get linked.
         $stranger = User::factory()->create();
         $otherProject = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
-        $foreign = $otherProject->tasks()->create(['title' => 'F', 'status' => Task::STATUS_NEW]);
+        $foreign = $otherProject->tasks()->create(['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         LodestarServer::actingAs($user)
             ->tool(CreateReviewTool::class, [
@@ -150,7 +150,7 @@ class McpDataToolsTest extends TestCase
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
-        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_NEW]);
+        $task = $project->tasks()->create(['title' => 'T', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         LodestarServer::actingAs($user)
             ->tool(UpsertSessionTool::class, ['project' => 'p', 'title' => 'S', 'task_id' => $task->id])
@@ -162,7 +162,7 @@ class McpDataToolsTest extends TestCase
         // A task from another project cannot be linked.
         $stranger = User::factory()->create();
         $other = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
-        $foreign = $other->tasks()->create(['title' => 'F', 'status' => Task::STATUS_NEW]);
+        $foreign = $other->tasks()->create(['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         LodestarServer::actingAs($user)
             ->tool(UpsertSessionTool::class, ['id' => $session->id, 'task_id' => $foreign->id])
@@ -260,7 +260,7 @@ class McpDataToolsTest extends TestCase
         $user = User::factory()->create();
         $stranger = User::factory()->create();
         $otherProject = $stranger->projects()->create(['name' => 'X', 'slug' => 'x']);
-        $foreign = $otherProject->tasks()->create(['title' => 'F', 'status' => Task::STATUS_NEW]);
+        $foreign = $otherProject->tasks()->create(['title' => 'F', 'status' => Task::STATUS_READY_FOR_PLANNING]);
 
         // Update a task that belongs to someone else → rejected, untouched.
         LodestarServer::actingAs($user)

@@ -40,7 +40,7 @@ return new class extends Migration
             $table->string('branch')->nullable();         // D{id:06d}-slug
             $table->string('base_branch')->nullable();    // cut-from / diff-against
 
-            // Agent claim (planning / deliverable ai_review / merge_deploy), mirrors tasks.
+            // Agent claim (planning / deliverable ai_review / merging), mirrors tasks.
             $table->string('claimed_by')->nullable();
             $table->timestamp('claimed_at')->nullable();
 

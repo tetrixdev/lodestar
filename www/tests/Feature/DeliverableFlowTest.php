@@ -27,7 +27,7 @@ class DeliverableFlowTest extends TestCase
 
         $deliverable = $a->deliverables()->create(['title' => 'Ship v1', 'status' => Deliverable::STATUS_BUILDING]);
         $deliverable->tasks()->create(['project_id' => $a->id, 'title' => 'Child task one', 'status' => Task::STATUS_DEVELOPING, 'position' => 0]);
-        $b->tasks()->create(['title' => 'Standalone hotfix', 'status' => Task::STATUS_NEW, 'position' => 0]);
+        $b->tasks()->create(['title' => 'Standalone hotfix', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
 
         $this->actingAs($user)->get(route('board'))
             ->assertOk()
@@ -123,7 +123,7 @@ class DeliverableFlowTest extends TestCase
         $stranger = User::factory()->create();
         $strangerProject = $this->project($stranger, 'Secret');
         $strangerProject->deliverables()->create(['title' => 'Strangers deliverable', 'status' => Deliverable::STATUS_NEW]);
-        $strangerProject->tasks()->create(['title' => 'Strangers task', 'status' => Task::STATUS_NEW, 'position' => 0]);
+        $strangerProject->tasks()->create(['title' => 'Strangers task', 'status' => Task::STATUS_READY_FOR_PLANNING, 'position' => 0]);
 
         $this->actingAs($user)->get(route('board'))
             ->assertOk()
