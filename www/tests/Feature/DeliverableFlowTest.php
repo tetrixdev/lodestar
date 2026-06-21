@@ -98,12 +98,6 @@ class DeliverableFlowTest extends TestCase
             ->assertSee('Approve plan');
     }
 
-    public function test_dashboard_redirects_to_board(): void
-    {
-        $user = User::factory()->create();
-        $this->actingAs($user)->get('/dashboard')->assertRedirect(route('board'));
-    }
-
     public function test_needs_you_strip_reflects_cross_project_signals(): void
     {
         $user = User::factory()->create();

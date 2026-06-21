@@ -3,7 +3,6 @@
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\AgentTokenController;
 use App\Http\Controllers\BoardController;
-use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliverableController;
 use App\Http\Controllers\GithubConnectionController;
 use App\Http\Controllers\McpReferenceController;
@@ -24,12 +23,9 @@ Route::get('/', function () {
     return auth()->check() ? redirect()->route('board') : view('welcome');
 });
 
-// The unified board is the authenticated landing (task #69). The old dashboard
-// inbox is folded into the board's "needs you" strip; /dashboard now redirects
-// here (its controller/views stay dormant until #70 deletes them).
-Route::get('/dashboard', fn () => redirect()->route('board'))
-    ->middleware(['auth', 'verified'])->name('dashboard');
-
+// The unified board is the authenticated landing (task #69): it folds in both the
+// old dashboard inbox (→ the "needs you" strip) and the cross-project projects
+// list, so neither a separate /dashboard nor a /projects index exists anymore.
 Route::middleware('auth')->group(function () {
     Route::get('/board', [BoardController::class, 'index'])->name('board');
 
@@ -41,7 +37,6 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/agents', [AgentController::class, 'index'])->name('agents.index');
 
-    Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store');
     Route::get('/projects/{project}/settings', [ProjectController::class, 'settings'])->name('projects.settings');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');

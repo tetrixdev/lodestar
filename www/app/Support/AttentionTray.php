@@ -23,7 +23,7 @@ use Illuminate\Support\Collection;
  *
  * Deliberately NOT human-gate cards (plan_review / human_review): the board
  * always has some, so a persistent badge for them becomes wallpaper. The board
- * + dashboard already surface those.
+ * already surfaces those.
  */
 class AttentionTray
 {
@@ -46,8 +46,8 @@ class AttentionTray
 
         $buckets = [
             self::bucket('playbooks', 'Playbook proposals to approve', 'amber', route('playbooks.index'), $playbooks),
-            self::bucket('reviews', "Reviews you're holding", 'indigo', route('dashboard'), $reviews),
-            self::bucket('overdue', 'Overdue / due soon', 'red', route('dashboard'), $overdue),
+            self::bucket('reviews', "Reviews you're holding", 'indigo', route('board'), $reviews),
+            self::bucket('overdue', 'Overdue / due soon', 'red', route('board'), $overdue),
         ];
 
         return [

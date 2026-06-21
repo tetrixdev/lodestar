@@ -34,7 +34,7 @@ trait BuildsOnboarding
             [
                 'label' => 'Create a project',
                 'done' => $hasProject,
-                'href' => route('projects.index'),
+                'href' => route('board'),
                 'help' => 'A project groups the repos and tasks that share a goal.',
             ],
             [
@@ -42,7 +42,7 @@ trait BuildsOnboarding
                 'done' => $hasRepo,
                 'href' => $firstProject
                     ? route('repositories.index', $firstProject)
-                    : route('projects.index'),
+                    : route('board'),
                 'help' => 'Point a project at the repo your agents will work in.',
             ],
             [

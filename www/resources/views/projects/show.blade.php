@@ -3,7 +3,7 @@
         <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <div class="min-w-0">
                 <x-breadcrumb :trail="[
-                    ['label' => 'Projects', 'url' => route('projects.index')],
+                    ['label' => 'Board', 'url' => route('board')],
                     ['label' => $project->name],
                 ]" />
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight truncate">{{ $project->name }}</h2>

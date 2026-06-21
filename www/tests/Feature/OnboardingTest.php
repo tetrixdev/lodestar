@@ -12,7 +12,7 @@ class OnboardingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_dashboard_shows_the_setup_checklist_for_a_fresh_user(): void
+    public function test_board_shows_the_setup_checklist_for_a_fresh_user(): void
     {
         $user = User::factory()->create();
 
@@ -26,7 +26,7 @@ class OnboardingTest extends TestCase
             ->assertSee('Connect a coding agent');
     }
 
-    public function test_dashboard_hides_the_checklist_once_every_step_is_done(): void
+    public function test_board_hides_the_checklist_once_every_step_is_done(): void
     {
         $user = User::factory()->create();
 
@@ -66,13 +66,16 @@ class OnboardingTest extends TestCase
         $this->get(route('settings.index'))->assertRedirect(route('login'));
     }
 
-    public function test_a_fresh_projects_index_shows_the_create_cta(): void
+    public function test_the_board_offers_a_create_project_affordance(): void
     {
         $user = User::factory()->create();
 
+        // The projects-list screen is gone (task #70); the board now carries the
+        // create-project affordance the list used to own.
         $this->actingAs($user)
-            ->get(route('projects.index'))
+            ->get(route('board'))
             ->assertOk()
-            ->assertSee('Create your first project');
+            ->assertSee(route('projects.store'))
+            ->assertSee('New project');
     }
 }

@@ -17,7 +17,7 @@
     <x-slot name="header">
         <div>
             <x-breadcrumb :trail="[
-                ['label' => 'Projects', 'url' => route('projects.index')],
+                ['label' => 'Board', 'url' => route('board')],
                 ['label' => $task->project->name, 'url' => route('projects.show', $task->project)],
                 ['label' => '#'.$task->id.' '.$task->title],
             ]" />
