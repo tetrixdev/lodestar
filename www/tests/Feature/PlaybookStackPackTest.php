@@ -45,8 +45,8 @@ class PlaybookStackPackTest extends TestCase
     {
         $user = User::factory()->create();
 
-        // A real stack that has no pack (yet) — still NOT NULL, just not steered.
-        $composed = Playbook::compose($user, $this->project($user, 'python'), 'develop');
+        // The 'none' sentinel — a valid stack that gets no pack.
+        $composed = Playbook::compose($user, $this->project($user, Playbook::STACK_NONE), 'develop');
 
         $this->assertStringNotContainsString('LARAVEL STRUCTURE', $composed['body']);
     }
@@ -75,7 +75,7 @@ class PlaybookStackPackTest extends TestCase
 
         $this->assertStringContainsString(
             'STRUCTURE & COHESION',
-            Playbook::compose($user, $this->project($user, 'python'), 'main')['body']
+            Playbook::compose($user, $this->project($user, Playbook::STACK_NONE), 'main')['body']
         );
     }
 }

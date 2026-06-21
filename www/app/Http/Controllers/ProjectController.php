@@ -93,7 +93,7 @@ class ProjectController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:5000'],
             'primary_goal' => ['nullable', 'string', 'max:2000'],
-            'stack' => ['required', Rule::in(Playbook::STACK_PACKS)],
+            'stack' => ['required', Rule::in(Playbook::STACKS)],
             'team_id' => ['nullable', 'integer'],
         ]);
 

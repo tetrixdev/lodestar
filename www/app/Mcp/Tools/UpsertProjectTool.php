@@ -25,7 +25,7 @@ class UpsertProjectTool extends LodestarTool
             'slug' => ['nullable', 'string', 'max:255', 'alpha_dash'],
             'description' => ['nullable', 'string'],
             'primary_goal' => ['nullable', 'string'],
-            'stack' => ['nullable', Rule::in(Playbook::STACK_PACKS)],
+            'stack' => ['nullable', Rule::in(Playbook::STACKS)],
             'repos' => ['nullable', 'array'],
         ]);
 

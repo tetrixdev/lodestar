@@ -81,6 +81,12 @@ class Playbook extends Model
      */
     public const STACK_PACKS = ['laravel'];
 
+    /** The "no framework pack" sentinel — a valid, selectable stack that gets no steering. */
+    public const STACK_NONE = 'none';
+
+    /** The selectable stack values: the packs that steer + the no-pack sentinel. */
+    public const STACKS = [...self::STACK_PACKS, self::STACK_NONE];
+
     /** The phases a stack pack steers (build + review — not the bootstrap or merge). */
     public const STACK_STEERED_PHASES = ['plan', 'develop', 'ai_review'];
 

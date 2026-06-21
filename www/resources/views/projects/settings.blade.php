@@ -46,11 +46,11 @@
                         <x-input-label for="stack" :value="__('Stack')" />
                         <x-select id="stack" name="stack" required
                                 class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
-                            @foreach (\App\Models\Playbook::STACK_PACKS as $pack)
-                                <option value="{{ $pack }}" @selected($project->stack === $pack)>{{ ucfirst($pack) }}</option>
+                            @foreach (\App\Models\Playbook::STACKS as $stack)
+                                <option value="{{ $stack }}" @selected($project->stack === $stack)>{{ $stack === \App\Models\Playbook::STACK_NONE ? 'None — no framework pack' : ucfirst($stack) }}</option>
                             @endforeach
                         </x-select>
-                        <p class="mt-1 text-xs text-gray-500">Required — tags the project's framework so its structure pack steers plan / develop / review.</p>
+                        <p class="mt-1 text-xs text-gray-500">Required — tags the project's framework so its structure pack steers plan / develop / review. Pick <em>None</em> for a project with no framework pack.</p>
                         <x-input-error :messages="$errors->get('stack')" class="mt-2" />
                     </div>
 

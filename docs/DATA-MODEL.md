@@ -237,7 +237,7 @@ are informational — the test checks Field **names** only.
 | color | string | nullable | Chip colour (#rrggbb[aa]); falls back to a stable id-derived colour when unset. |
 | description | text | nullable | Optional longer description of the project. |
 | primary_goal | text | nullable | The project's headline goal — what the stack of tasks is driving toward. |
-| stack | string | not null · default `laravel` | Required technology-stack tag (e.g. `laravel`). Drives framework "stack pack" playbook composition — a tagged project gets that pack's structure guidance in its plan/develop/ai_review prompts. |
+| stack | string | not null · default `laravel` | Required technology-stack tag — one of `Playbook::STACKS` (a pack like `laravel`, or `none` for no pack). Drives framework "stack pack" playbook composition: a project tagged with a pack gets that pack's structure guidance in its plan/develop/ai_review prompts; `none` gets none. |
 | team_id | bigint | FK → teams · nullable | The owning team, or null for a **personal** project (owner-only access). |
 
 ### `teams`
