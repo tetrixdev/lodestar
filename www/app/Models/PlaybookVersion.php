@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\Embeddable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -16,7 +17,36 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class PlaybookVersion extends Model
 {
+    use Embeddable;
+
     protected $guarded = [];
+
+    public function embeddingText(): string
+    {
+        return trim(implode("\n", array_filter([
+            $this->title,
+            $this->summary,
+            $this->body,
+        ])));
+    }
+
+    /**
+     * Tenancy flows from the owning slot's scope: a SYSTEM playbook is readable
+     * by everyone (`is_system`); team/project/personal versions carry their
+     * owner so the access filter can reach them.
+     */
+    public function embeddingTenant(): array
+    {
+        $slot = $this->playbook;
+
+        return match ($slot?->scope) {
+            Playbook::SCOPE_SYSTEM => ['is_system' => true, 'scope' => 'system'],
+            Playbook::SCOPE_TEAM => ['team_id' => (int) $slot->owner_id, 'scope' => 'team', 'is_system' => false],
+            Playbook::SCOPE_PROJECT => ['project_id' => (int) $slot->owner_id, 'scope' => 'project', 'is_system' => false],
+            Playbook::SCOPE_PERSONAL => ['owner_user_id' => (int) $slot->owner_id, 'scope' => 'personal', 'is_system' => false],
+            default => ['is_system' => false, 'scope' => null],
+        };
+    }
 
     protected $casts = [
         'proposed_by_ai' => 'boolean',

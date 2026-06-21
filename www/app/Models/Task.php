@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\Embeddable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -24,9 +25,32 @@ use Illuminate\Support\Str;
  */
 class Task extends Model
 {
+    use Embeddable;
     use SoftDeletes;
 
     protected $guarded = [];
+
+    public function embeddingText(): string
+    {
+        return trim(implode("\n", array_filter([
+            $this->title,
+            $this->body,
+            $this->plan,
+        ])));
+    }
+
+    public function embeddingTenant(): array
+    {
+        $project = $this->project;
+
+        return [
+            'project_id' => $this->project_id,
+            'team_id' => $project?->team_id,
+            'owner_user_id' => $project?->user_id,
+            'is_system' => false,
+            'scope' => 'project',
+        ];
+    }
 
     protected $casts = [
         'status_changed_at' => 'datetime',

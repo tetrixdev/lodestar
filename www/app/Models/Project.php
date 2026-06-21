@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\Embeddable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -16,7 +17,29 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  */
 class Project extends Model
 {
+    use Embeddable;
+
     protected $guarded = [];
+
+    public function embeddingText(): string
+    {
+        return trim(implode("\n", array_filter([
+            $this->name,
+            $this->description,
+            $this->primary_goal,
+        ])));
+    }
+
+    public function embeddingTenant(): array
+    {
+        return [
+            'project_id' => $this->id,
+            'team_id' => $this->team_id,
+            'owner_user_id' => $this->user_id,
+            'is_system' => false,
+            'scope' => $this->team_id !== null ? 'team' : 'personal',
+        ];
+    }
 
     public function user(): BelongsTo
     {

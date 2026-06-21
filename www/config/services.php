@@ -41,4 +41,14 @@ return [
         'token' => env('GITHUB_TOKEN'),
     ],
 
+    'openai' => [
+        // Operator opt-in: the embeddings / semantic-search pipeline only runs
+        // when a key is present. Absent or invalid, the pipeline fail-safes
+        // (records the error, skips, never crashes the queue) and search
+        // degrades to empty. Text leaves the box to OpenAI's embeddings API only
+        // when this is set — see docs/ARCHITECTURE.md "Boundary: OpenAI".
+        'key' => env('OPENAI_API_KEY'),
+        'base_url' => env('OPENAI_BASE_URL', 'https://api.openai.com/v1'),
+    ],
+
 ];

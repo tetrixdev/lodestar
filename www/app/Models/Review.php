@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\Embeddable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -19,7 +20,30 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class Review extends Model
 {
+    use Embeddable;
+
     protected $guarded = [];
+
+    public function embeddingText(): string
+    {
+        return trim(implode("\n", array_filter([
+            $this->title,
+            $this->intro,
+        ])));
+    }
+
+    public function embeddingTenant(): array
+    {
+        $project = $this->project;
+
+        return [
+            'project_id' => $this->project_id,
+            'team_id' => $project?->team_id,
+            'owner_user_id' => $project?->user_id,
+            'is_system' => false,
+            'scope' => 'project',
+        ];
+    }
 
     // ── Scope (what the review targets) ──────────────────────────────────────
 

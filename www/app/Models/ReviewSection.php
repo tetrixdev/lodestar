@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\Embeddable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -17,7 +18,32 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class ReviewSection extends Model
 {
+    use Embeddable;
+
     protected $guarded = [];
+
+    public function embeddingText(): string
+    {
+        return trim(implode("\n", array_filter([
+            $this->title,
+            $this->context,
+            $this->note,
+            $this->manual_steps,
+        ])));
+    }
+
+    public function embeddingTenant(): array
+    {
+        $project = $this->review?->project;
+
+        return [
+            'project_id' => $project?->id,
+            'team_id' => $project?->team_id,
+            'owner_user_id' => $project?->user_id,
+            'is_system' => false,
+            'scope' => 'project',
+        ];
+    }
 
     /** The review modes, per the protocol (vps-setup dev-method). */
     public const MODES = ['skip', 'behavioural', 'direct', 'direct_doc', 'mirror_guard'];
