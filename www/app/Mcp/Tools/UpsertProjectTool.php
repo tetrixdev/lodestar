@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
+use App\Models\Playbook;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -23,7 +25,7 @@ class UpsertProjectTool extends LodestarTool
             'slug' => ['nullable', 'string', 'max:255', 'alpha_dash'],
             'description' => ['nullable', 'string'],
             'primary_goal' => ['nullable', 'string'],
-            'stack' => ['nullable', 'string', 'max:255'],
+            'stack' => ['nullable', Rule::in(Playbook::STACK_PACKS)],
             'repos' => ['nullable', 'array'],
         ]);
 

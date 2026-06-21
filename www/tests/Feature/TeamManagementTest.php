@@ -167,6 +167,7 @@ class TeamManagementTest extends TestCase
         $this->actingAs($owner)
             ->patch(route('projects.update', $project), [
                 'name' => 'Mine',
+                'stack' => 'laravel',
                 'team_id' => (string) $team->id,
             ])
             ->assertRedirect(route('projects.settings', $project));
@@ -185,6 +186,7 @@ class TeamManagementTest extends TestCase
         $this->actingAs($owner)
             ->patch(route('projects.update', $project), [
                 'name' => 'Mine',
+                'stack' => 'laravel',
                 'team_id' => (string) $otherTeam->id,
             ])
             ->assertSessionHasErrors('team_id');

@@ -24,7 +24,7 @@ class PlaybookStackPackTest extends TestCase
         $this->seed(SystemPlaybookSeeder::class);
     }
 
-    private function project(User $user, ?string $stack): \App\Models\Project
+    private function project(User $user, string $stack): \App\Models\Project
     {
         return $user->projects()->create(['name' => 'P', 'slug' => 'p-'.uniqid(), 'stack' => $stack]);
     }
@@ -45,7 +45,8 @@ class PlaybookStackPackTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $composed = Playbook::compose($user, $this->project($user, null), 'develop');
+        // A real stack that has no pack (yet) — still NOT NULL, just not steered.
+        $composed = Playbook::compose($user, $this->project($user, 'python'), 'develop');
 
         $this->assertStringNotContainsString('LARAVEL STRUCTURE', $composed['body']);
     }
@@ -74,7 +75,7 @@ class PlaybookStackPackTest extends TestCase
 
         $this->assertStringContainsString(
             'STRUCTURE & COHESION',
-            Playbook::compose($user, $this->project($user, null), 'main')['body']
+            Playbook::compose($user, $this->project($user, 'python'), 'main')['body']
         );
     }
 }

@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\BuildsOnboarding;
+use App\Models\Playbook;
 use App\Models\Project;
 use App\Models\Task;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ProjectController extends Controller
@@ -91,7 +93,7 @@ class ProjectController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:5000'],
             'primary_goal' => ['nullable', 'string', 'max:2000'],
-            'stack' => ['nullable', 'string', 'max:255'],
+            'stack' => ['required', Rule::in(Playbook::STACK_PACKS)],
             'team_id' => ['nullable', 'integer'],
         ]);
 
@@ -99,7 +101,7 @@ class ProjectController extends Controller
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'primary_goal' => $data['primary_goal'] ?? null,
-            'stack' => $data['stack'] ?? null,
+            'stack' => $data['stack'],
         ];
 
         // Only the owner can move a project between teams (or to personal). The
