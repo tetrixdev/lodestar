@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Embeddings;
 
+use App\Models\Concerns\Embeddable;
 use App\Models\Embedding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ class EmbeddingService
      * (fail-safe) or when the text hash matches the stored row (skip unchanged).
      * Returns true if a vector was (re)written, false if skipped.
      *
-     * @param  Model&\App\Models\Concerns\Embeddable  $object
+     * @param  Model&Embeddable  $object
      */
     public function embed(Model $object): bool
     {
@@ -67,7 +68,7 @@ class EmbeddingService
      * Batch-embed many objects in one provider round-trip, hash-gating each.
      * Returns the count actually (re)written.
      *
-     * @param  iterable<Model&\App\Models\Concerns\Embeddable>  $objects
+     * @param  iterable<Model&Embeddable>  $objects
      */
     public function embedBatch(iterable $objects): int
     {
@@ -143,7 +144,7 @@ class EmbeddingService
      * columns go through Eloquent (so casts/timestamps apply); the `vector`
      * column is set with a raw UPDATE because Eloquent can't bind it.
      *
-     * @param  Model&\App\Models\Concerns\Embeddable  $object
+     * @param  Model&Embeddable  $object
      * @param  list<float>  $vector
      */
     private function store(Model $object, string $hash, array $vector): void

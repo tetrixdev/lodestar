@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Embeddings;
 
+use App\Models\Embedding;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Database\Query\Builder;
@@ -56,7 +57,7 @@ class EmbeddingSearch
         }
 
         $literal = '['.implode(',', $vector).']';
-        $connection = DB::connection((new \App\Models\Embedding)->getConnectionName());
+        $connection = DB::connection((new Embedding)->getConnectionName());
 
         $builder = $connection->table('embeddings');
         $this->applyAccessFilter($builder, $user);

@@ -31,7 +31,7 @@ return new class extends Migration
     {
         $isPg = DB::connection()->getDriverName() === 'pgsql';
 
-        Schema::create('embeddings', function (Blueprint $table) use ($isPg) {
+        Schema::create('embeddings', function (Blueprint $table) {
             $table->id();
 
             // The polymorphic owner — one embedding per object.

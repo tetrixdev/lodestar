@@ -1,6 +1,14 @@
 <?php
 
 declare(strict_types=1);
+use App\Models\PlaybookVersion;
+use App\Models\Project;
+use App\Models\Review;
+use App\Models\ReviewFinding;
+use App\Models\ReviewSection;
+use App\Models\Task;
+use App\Models\TaskComment;
+use App\Models\WorkSession;
 
 return [
     // How long a task may sit in a working (*-ing) state with no progress before
@@ -32,14 +40,14 @@ return [
         // Each MUST `use App\Models\Concerns\Embeddable`. Keyed by a short label
         // shown on the AI & Embeddings panel.
         'types' => [
-            'projects' => App\Models\Project::class,
-            'tasks' => App\Models\Task::class,
-            'work_sessions' => App\Models\WorkSession::class,
-            'reviews' => App\Models\Review::class,
-            'review_sections' => App\Models\ReviewSection::class,
-            'review_findings' => App\Models\ReviewFinding::class,
-            'task_comments' => App\Models\TaskComment::class,
-            'playbook_versions' => App\Models\PlaybookVersion::class,
+            'projects' => Project::class,
+            'tasks' => Task::class,
+            'work_sessions' => WorkSession::class,
+            'reviews' => Review::class,
+            'review_sections' => ReviewSection::class,
+            'review_findings' => ReviewFinding::class,
+            'task_comments' => TaskComment::class,
+            'playbook_versions' => PlaybookVersion::class,
         ],
     ],
 ];

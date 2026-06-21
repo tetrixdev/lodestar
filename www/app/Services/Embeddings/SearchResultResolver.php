@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\Embeddings;
 
+use App\Models\PlaybookVersion;
 use App\Models\Project;
 use App\Models\Review;
 use App\Models\ReviewFinding;
 use App\Models\ReviewSection;
 use App\Models\Task;
 use App\Models\TaskComment;
-use App\Models\PlaybookVersion;
 use App\Models\WorkSession;
 use Illuminate\Database\Eloquent\Model;
 
@@ -142,8 +142,7 @@ class SearchResultResolver
             $object instanceof Project => route('projects.show', $object),
             $object instanceof Task => route('tasks.show', $object),
             $object instanceof TaskComment => $object->task_id ? route('tasks.show', $object->task_id) : null,
-            $object instanceof Review, $object instanceof ReviewSection, $object instanceof ReviewFinding
-                => $this->reviewUrl($object),
+            $object instanceof Review, $object instanceof ReviewSection, $object instanceof ReviewFinding => $this->reviewUrl($object),
             default => null,
         };
     }

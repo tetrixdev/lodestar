@@ -83,13 +83,15 @@ signed-in user.
 
 **The MCP server (`app/Mcp/`, laravel/mcp)** — the agent-facing surface, mirror
 of the web UI. `LodestarServer` is registered at `POST /mcp` in `routes/ai.php`
-behind `auth:sanctum`, and exposes 20 tools (all extend `LodestarTool`, which
+behind `auth:sanctum`, and exposes 21 tools (all extend `LodestarTool`, which
 holds the tenancy helpers):
 
 - **Data tools** — `list_projects`, `upsert_project`, `upsert_task` (a
   deliverable is **required on create** — there are no loose tasks),
   `upsert_deliverable`, `get_task`, `upsert_session`, `create_review` (returns the
-  URL a human opens), `upsert_review_section`, `add_finding`, `get_review`. The
+  URL a human opens), `upsert_review_section`, `add_finding`, `get_review`,
+  `search` (semantic/meaning-based lookup across everything the caller can reach
+  + the system playbooks — see *The embedding pipeline* below). The
   agent's read/write access to the board, the exact data the controllers serve to
   the browser.
 - **Repository tools** — `link_repository`, `unlink_repository` (attach a repo to
@@ -372,8 +374,10 @@ or cross-project ids rather than trusting the request).
 ## Boundaries
 
 A Boundary is a place where data crosses into a subsystem we don't fully
-control. Lodestar's live boundary is **the MCP server** — where an external AI
-agent's input crosses into our data writes.
+control. Lodestar's boundaries are **the MCP server** (an external AI agent's
+input crossing into our data writes), **the GitHub compare API** (ground-truth
+file lists), and **the OpenAI embeddings API** (operator opt-in; app text
+crossing out to a third party).
 
 1. **The MCP / agent-loop surface (BUILT).** AI agents drive the *same* Project /
    Task / Review / Session data as the web UI, over `POST /mcp` (laravel/mcp),
@@ -439,6 +443,47 @@ agent's input crosses into our data writes.
      enriches each **existing** `review_files` row (matched by path) with its
      patch/additions/deletions. It never adds or removes rows — the file set
      (and its coverage allocation) is left exactly as it was — and is idempotent.
+
+3. **The OpenAI embeddings API (BUILT, operator opt-in).** The embedding
+   pipeline (below) sends object *text* — project names/goals, task titles/
+   bodies/plans, work-session logs, review intros/sections/findings, task
+   comments and playbook bodies — to OpenAI's embeddings API to turn it into
+   vectors for semantic search. What holds it:
+   - **Opt-in by env.** The whole pipeline only runs when `OPENAI_API_KEY`
+     (`config('services.openai.key')`) is set. With no key, embedding is skipped
+     and `search` returns empty — text never leaves the box unless an operator
+     deliberately enables it. This is the one boundary that exports app content to
+     a third party, so it is off by default.
+   - **Fail-safe, never crashes the queue.** `validateKey()` (a cheap GET
+     `/v1/models`) is the sanity check; a missing/invalid key or a flaky API is
+     logged and swallowed by the `EmbedObject`/`ForgetObject` jobs and the
+     `lodestar:embed-sync` reconciler — embedding is skipped, search degrades to
+     empty, nothing throws. A 429 is honoured with a bounded backoff.
+   - **Search is access-filtered.** A query is embedded and KNN-searched, but the
+     candidates are filtered **in SQL** to exactly the caller's reachable set
+     (`project_id IN accessible OR is_system OR personal-owner-is-me OR
+     team-is-mine`) — the same tenancy as every other surface, so the vector index
+     can never leak one user's object to another. System playbooks
+     (`is_system`) are readable by everyone, by design.
+
+**The embedding pipeline (`app/Services/Embeddings/`, `EmbedObject`/`ForgetObject`
+jobs, `lodestar:embed-sync`).** The semantic-search index. A model that
+`use`s `App\Models\Concerns\Embeddable` supplies `embeddingText()` (what to
+embed) and `embeddingTenant()` (the denormalised access-filter columns copied
+onto its `embeddings` row); its `saved`/`deleted` events queue
+`EmbedObject`/`ForgetObject` on a dedicated `embeddings` queue.
+`EmbeddingService` owns the write side — hash-gated embed (unchanged text is
+skipped), store the `vector(1536)` via raw pgvector SQL, forget — behind an
+`EmbeddingProvider` (`OpenAiEmbeddingProvider` in prod; a fake in tests).
+`EmbeddingSearch` owns the read side (embed query → hnsw KNN → SQL access
+filter). The `lodestar:embed-sync` reconciler (scheduled every five minutes,
+`withoutOverlapping`, mirroring the task reaper) is the backstop for a missed
+event: it validates the key, then embeds new/changed/missing objects and drops
+orphaned vectors. Consumers: the `search` MCP tool and the `/search` page (both
+through `SearchResultResolver`); the Settings *AI & Embeddings* panel shows
+key status + per-type counts + last-sync. Embedded models: `Project`, `Task`,
+`WorkSession`, `Review`, `ReviewSection`, `ReviewFinding`, `TaskComment`,
+`PlaybookVersion`.
 
 **Rendering the diff (`App\Support\DiffRenderer`).** Turns diffs into render-ready
 rows for the viewer's Blade partials. `renderPatch()` parses a stored unified

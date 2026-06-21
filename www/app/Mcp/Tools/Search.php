@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Mcp\Tools;
 
-use App\Services\Embeddings\SearchResultResolver;
 use App\Services\Embeddings\EmbeddingSearch;
+use App\Services\Embeddings\SearchResultResolver;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
