@@ -36,7 +36,7 @@
                         <label for="context" class="block text-[11px] font-medium text-gray-400 uppercase tracking-wide">Showing playbooks for</label>
                         <form method="GET" class="mt-1">
                             <x-select id="context" name="context" onchange="this.form.submit()"
-                                      class="block w-full sm:w-72 rounded-md border-gray-300 text-sm">
+                                      class="block w-full sm:w-72">
                                 <option value="">Just me (system &rarr; personal)</option>
                                 @foreach ($projects as $pr)
                                     <option value="{{ $pr->id }}" @selected($contextProject && $contextProject->id === $pr->id)>Project: {{ $pr->name }}</option>
@@ -75,7 +75,7 @@
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                             <x-input-label value="Scope" />
-                            <x-select name="scope" x-model="scope" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
+                            <x-select name="scope" x-model="scope" class="mt-1 block w-full">
                                 <option value="{{ $M::SCOPE_PERSONAL }}">Personal (yours)</option>
                                 <option value="{{ $M::SCOPE_TEAM }}">Team</option>
                                 <option value="{{ $M::SCOPE_PROJECT }}">Project</option>
@@ -85,7 +85,7 @@
 
                         <div x-show="scope === '{{ $M::SCOPE_TEAM }}'" x-cloak>
                             <x-input-label value="Team" />
-                            <x-select name="team_id" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
+                            <x-select name="team_id" class="mt-1 block w-full">
                                 @forelse ($teams as $t)
                                     <option value="{{ $t->id }}" @selected((string) old('team_id') === (string) $t->id)>{{ $t->name }}</option>
                                 @empty
@@ -97,7 +97,7 @@
 
                         <div x-show="scope === '{{ $M::SCOPE_PROJECT }}'" x-cloak>
                             <x-input-label value="Project" />
-                            <x-select name="project_id" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
+                            <x-select name="project_id" class="mt-1 block w-full">
                                 @forelse ($projects as $pr)
                                     <option value="{{ $pr->id }}" @selected((string) old('project_id', $contextProject?->id) === (string) $pr->id)>{{ $pr->name }}</option>
                                 @empty
@@ -145,7 +145,7 @@
 
                     <div>
                         <x-input-label value="How this layer combines" />
-                        <x-select name="mode" x-model="mode" class="mt-1 block w-full sm:w-72 rounded-md border-gray-300 text-sm">
+                        <x-select name="mode" x-model="mode" class="mt-1 block w-full sm:w-72">
                             <option value="{{ $M::MODE_APPEND }}">Append — add onto the layers above it</option>
                             <option value="{{ $M::MODE_OVERWRITE }}">Overwrite — discard everything above it</option>
                         </x-select>

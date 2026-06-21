@@ -29,7 +29,7 @@
                 <form method="GET" action="{{ route('board') }}" class="flex items-center gap-2">
                     <label for="project-filter" class="text-sm text-gray-500">Project</label>
                     <x-select id="project-filter" name="project" onchange="this.form.submit()"
-                            class="sm:w-56 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                            class="sm:w-56">
                         <option value="all" @selected($selectedId === null)>All projects</option>
                         @foreach ($projects as $p)
                             <option value="{{ $p->id }}" @selected($selectedId === $p->id)>{{ $p->name }}</option>

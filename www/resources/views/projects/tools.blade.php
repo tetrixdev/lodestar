@@ -74,7 +74,7 @@
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <div>
                                 <x-input-label for="t-kind" value="Kind" />
-                                <x-select id="t-kind" name="kind" class="mt-1 block w-full rounded-md border-gray-300 text-sm">
+                                <x-select id="t-kind" name="kind" class="mt-1 block w-full">
                                     @foreach ($kinds as $k)<option value="{{ $k }}">{{ ucfirst($k) }}</option>@endforeach
                                 </x-select>
                             </div>

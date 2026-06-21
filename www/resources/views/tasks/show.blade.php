@@ -76,7 +76,7 @@
                         <div>
                             <x-input-label for="edit-priority" value="Priority" />
                             <x-select id="edit-priority" name="priority"
-                                    class="mt-1 block w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                                    class="mt-1 block w-full">
                                 @foreach ($T::PRIORITIES as $p)
                                     <option value="{{ $p }}" @selected(old('priority', $priority) === $p)>{{ ucfirst($p) }}</option>
                                 @endforeach

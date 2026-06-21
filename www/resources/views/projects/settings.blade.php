@@ -46,7 +46,7 @@
                         <x-input-label for="team_id" :value="__('Team')" />
                         @if ($isOwner)
                             <x-select id="team_id" name="team_id"
-                                    class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                                    class="mt-1 block w-full">
                                 <option value="" @selected($project->team_id === null)>Personal (no team)</option>
                                 @foreach ($teams as $team)
                                     <option value="{{ $team->id }}" @selected($project->team_id === $team->id)>{{ $team->name }}</option>
@@ -109,7 +109,7 @@
                             <div class="flex-1">
                                 <x-input-label for="user_id" :value="__('Add a team member')" />
                                 <x-select id="user_id" name="user_id"
-                                        class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                                        class="mt-1 block w-full">
                                     @foreach ($candidates as $candidate)
                                         <option value="{{ $candidate->id }}">{{ $candidate->name }} — {{ $candidate->email }}</option>
                                     @endforeach

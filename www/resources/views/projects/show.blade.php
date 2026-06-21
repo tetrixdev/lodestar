@@ -114,7 +114,7 @@
                     </div>
                     @if ($categories->isNotEmpty())
                         <x-select x-model="category"
-                                class="sm:w-48 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                                class="sm:w-48">
                             <option value="">All categories</option>
                             @foreach ($categories as $cat)
                                 <option value="{{ $cat }}">{{ $cat }}</option>

@@ -34,7 +34,7 @@
                         <div>
                             <x-input-label for="task_id" value="Task (optional)" />
                             <x-select id="task_id" name="task_id"
-                                    class="mt-1 block w-full rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                                    class="mt-1 block w-full">
                                 <option value="">— none —</option>
                                 @foreach ($tasks as $task)
                                     <option value="{{ $task->id }}" @selected((string) old('task_id') === (string) $task->id)>{{ $task->title }}</option>

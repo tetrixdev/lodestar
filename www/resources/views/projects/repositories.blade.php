@@ -65,7 +65,7 @@
                         <div>
                             <x-input-label for="github_connection_id" :value="__('Read through connection')" />
                             <x-select id="github_connection_id" name="github_connection_id"
-                                    class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                                    class="mt-1 block w-full">
                                 @foreach ($connections as $c)
                                     <option value="{{ $c->id }}">{{ $c->label }} (@{{ $c->github_login }})</option>
                                 @endforeach
