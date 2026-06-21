@@ -27,5 +27,19 @@ return [
         // The queue the Embed/Forget jobs run on (a dedicated queue so embedding
         // backpressure never starves the lifecycle queue).
         'queue' => env('LODESTAR_EMBEDDING_QUEUE', 'embeddings'),
+
+        // The embeddable models the reconciler walks + the status panel counts.
+        // Each MUST `use App\Models\Concerns\Embeddable`. Keyed by a short label
+        // shown on the AI & Embeddings panel.
+        'types' => [
+            'projects' => App\Models\Project::class,
+            'tasks' => App\Models\Task::class,
+            'work_sessions' => App\Models\WorkSession::class,
+            'reviews' => App\Models\Review::class,
+            'review_sections' => App\Models\ReviewSection::class,
+            'review_findings' => App\Models\ReviewFinding::class,
+            'task_comments' => App\Models\TaskComment::class,
+            'playbook_versions' => App\Models\PlaybookVersion::class,
+        ],
     ],
 ];
