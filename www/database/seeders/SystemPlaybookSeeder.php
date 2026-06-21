@@ -458,9 +458,12 @@ class SystemPlaybookSeeder extends Seeder
                 2. claim_work with agent_id:"loop" (so the board shows the loop is
                    running). It atomically takes the next available unit — a DELIVERABLE
                    or a TASK — and returns its {type, id, phase}. If nothing is claimable,
-                   stop — you're done. (claim_work only ever hands you a child task once
-                   its deliverable is `building` AND its dependencies are done, so trust
-                   that whatever it returns is ready to start now.)
+                   stop — you're done. (claim_work hands you a child task when the TASK
+                   itself is in a claimable state — `ready_for_planning` to plan it,
+                   `ready_for_dev` to build it — and its dependencies are done; it does
+                   NOT gate on the deliverable's own status, so some children get planned
+                   or built while siblings are still being planned. Whatever it returns is
+                   ready to start now.)
                 3. Spawn ONE worker SUBAGENT per claimed unit, with a short prompt:
                    "You are a Lodestar worker for <type> #<id> on project <slug>. First
                     get_playbook(phase:'main') and do its workspace setup, then
