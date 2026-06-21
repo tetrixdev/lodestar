@@ -369,9 +369,17 @@ class Deliverable extends Model
         return (int) $this->tasks()->max('sub_id') + 1;
     }
 
-    /** The integration branch name: D{id:06d}-slug. */
+    /**
+     * The integration branch name: D{id:06d}-slug.
+     *
+     * The recorded `branch` is authoritative once set — it's the branch that
+     * actually exists in git. Only fall back to the computed default before one
+     * has been recorded, so a `Str::slug` quirk (e.g. it strips the dot in
+     * "v0.5" → `v05`, while the real branch is `v0-5`) or a later title edit can
+     * never drift the name off the real branch.
+     */
     public function branchName(): string
     {
-        return sprintf('D%06d-%s', $this->id, Str::slug($this->title));
+        return $this->branch ?: sprintf('D%06d-%s', $this->id, Str::slug($this->title));
     }
 }
