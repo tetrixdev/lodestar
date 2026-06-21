@@ -23,6 +23,7 @@ class UpsertProjectTool extends LodestarTool
             'slug' => ['nullable', 'string', 'max:255', 'alpha_dash'],
             'description' => ['nullable', 'string'],
             'primary_goal' => ['nullable', 'string'],
+            'stack' => ['nullable', 'string', 'max:255'],
             'repos' => ['nullable', 'array'],
         ]);
 
@@ -44,7 +45,7 @@ class UpsertProjectTool extends LodestarTool
         $slug = $data['slug'] ?? ($project->slug ?: Str::slug($project->name));
         $project->slug = $this->uniqueSlug($request, $slug, $project->id);
 
-        foreach (['description', 'primary_goal', 'repos'] as $field) {
+        foreach (['description', 'primary_goal', 'stack', 'repos'] as $field) {
             if (array_key_exists($field, $data)) {
                 $project->{$field} = $data[$field];
             }
@@ -83,6 +84,7 @@ class UpsertProjectTool extends LodestarTool
             'slug' => $schema->string()->description('URL slug, unique per user. Defaults from the name.'),
             'description' => $schema->string()->description('Optional description.'),
             'primary_goal' => $schema->string()->description('Optional primary goal.'),
+            'stack' => $schema->string()->description('Technology-stack tag, e.g. "laravel" — drives framework structure steering in the build/review playbooks.'),
             'repos' => $schema->array()->description('Optional list of {name, url} repo objects.'),
         ];
     }

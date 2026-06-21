@@ -70,6 +70,20 @@ class Playbook extends Model
         return in_array($key, self::PHASES, true);
     }
 
+    // ── Framework stack packs ─────────────────────────────────────────────────
+
+    /**
+     * Framework "stack packs": a project tagged with one of these stacks
+     * (`projects.stack`) gets that pack's system layer appended to the steered
+     * phases — framework structure steering that reaches plan/develop/ai_review
+     * automatically, without touching projects on other stacks. The pack is a
+     * system-scope playbook whose key IS the stack name (e.g. `laravel`).
+     */
+    public const STACK_PACKS = ['laravel'];
+
+    /** The phases a stack pack steers (build + review — not the bootstrap or merge). */
+    public const STACK_STEERED_PHASES = ['plan', 'develop', 'ai_review'];
+
     /**
      * Keys with this prefix are reserved for Lodestar's own (system-seeded)
      * playbooks — users can't create them, so we never collide with future
@@ -202,6 +216,15 @@ class Playbook extends Model
         }
         if ($project !== null) {
             $candidates[] = self::slotFor(self::SCOPE_PROJECT, $project, $key);
+
+            // Framework stack pack: a project tagged with a known stack gets that
+            // pack's system layer appended to the build/review phases. Sits after
+            // the project layer (so a project can still override it) and before
+            // personal (so a person always has the final say).
+            if (in_array($key, self::STACK_STEERED_PHASES, true)
+                && in_array((string) $project->stack, self::STACK_PACKS, true)) {
+                $candidates[] = self::slotFor(self::SCOPE_SYSTEM, null, (string) $project->stack);
+            }
         }
         if ($allowPersonal) {
             $candidates[] = self::slotFor(self::SCOPE_PERSONAL, $user, $key);
@@ -257,8 +280,10 @@ class Playbook extends Model
     {
         $team = $project?->team;
 
+        // Stack packs are composed automatically by stack (see compose()), not
+        // loaded on demand — so they don't belong in the on-demand catalog.
         $slots = self::query()
-            ->whereNotIn('key', self::PHASES)
+            ->whereNotIn('key', array_merge(self::PHASES, self::STACK_PACKS))
             ->with('activeVersion')
             ->whereHas('versions', fn ($q) => $q->where('status', PlaybookVersion::STATUS_ACTIVE))
             ->where(function ($q) use ($user, $project, $team) {

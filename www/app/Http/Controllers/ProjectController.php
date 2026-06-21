@@ -91,6 +91,7 @@ class ProjectController extends Controller
             'name' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:5000'],
             'primary_goal' => ['nullable', 'string', 'max:2000'],
+            'stack' => ['nullable', 'string', 'max:255'],
             'team_id' => ['nullable', 'integer'],
         ]);
 
@@ -98,6 +99,7 @@ class ProjectController extends Controller
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
             'primary_goal' => $data['primary_goal'] ?? null,
+            'stack' => $data['stack'] ?? null,
         ];
 
         // Only the owner can move a project between teams (or to personal). The

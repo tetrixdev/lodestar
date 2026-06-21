@@ -16,6 +16,12 @@ signed-in user.
 
 ## Components
 
+> **Class families** that are too big for prose live in their own guarded docs
+> under [`docs/classes/`](classes/README.md): the MCP tool surface
+> ([`TOOLS.md`](classes/TOOLS.md)) and the system playbooks + composition
+> ([`PLAYBOOKS.md`](classes/PLAYBOOKS.md)). `DATA-MODEL.md` is the model family's
+> equivalent. Each is mirror-guarded by a test, like the schema.
+
 **The app (`lodestar`, Laravel 13 + Blade + Alpine + Tailwind)**
 
 - **BoardController** — the **unified board**, the authenticated landing.

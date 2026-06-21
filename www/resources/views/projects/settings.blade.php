@@ -43,6 +43,19 @@
                     </div>
 
                     <div>
+                        <x-input-label for="stack" :value="__('Stack')" />
+                        <x-select id="stack" name="stack"
+                                class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                            <option value="" @selected(! $project->stack)>— none —</option>
+                            @foreach (\App\Models\Playbook::STACK_PACKS as $pack)
+                                <option value="{{ $pack }}" @selected($project->stack === $pack)>{{ ucfirst($pack) }}</option>
+                            @endforeach
+                        </x-select>
+                        <p class="mt-1 text-xs text-gray-500">Tags the project's framework so its structure pack steers plan / develop / review.</p>
+                        <x-input-error :messages="$errors->get('stack')" class="mt-2" />
+                    </div>
+
+                    <div>
                         <x-input-label for="team_id" :value="__('Team')" />
                         @if ($isOwner)
                             <x-select id="team_id" name="team_id"
