@@ -4,6 +4,7 @@ namespace Tests;
 
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabaseState;
 use PDO;
 use PDOException;
 
@@ -29,7 +30,24 @@ abstract class PgvectorTestCase extends TestCase
             );
         }
 
+        // RefreshDatabaseState::$migrated is a single global flag shared with the
+        // sqlite (:memory:) tests. Because we run against a DIFFERENT default
+        // connection (pgvector, a real DB) than the rest of the suite, force a
+        // re-migration boundary on each crossing so neither side reuses the
+        // other's "already migrated" state — making the suite order-independent
+        // (a sqlite test after a pgvector one would otherwise see no tables).
+        RefreshDatabaseState::$migrated = false;
+
         parent::setUp();
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        // Reset again so the NEXT (sqlite) test re-migrates its in-memory DB
+        // instead of inheriting our pgvector "migrated" flag.
+        RefreshDatabaseState::$migrated = false;
     }
 
     /**
