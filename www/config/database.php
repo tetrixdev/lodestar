@@ -99,6 +99,25 @@ return [
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
+        // An isolated pgvector connection used ONLY by the embeddings tests
+        // (the `vector` type + hnsw index need a real Postgres with pgvector;
+        // the default test connection is sqlite). Points at an ephemeral
+        // pgvector container via PGVECTOR_TEST_* env; absent those vars the
+        // pgvector-backed tests skip loudly rather than redding the suite.
+        'pgvector' => [
+            'driver' => 'pgsql',
+            'host' => env('PGVECTOR_TEST_HOST', '127.0.0.1'),
+            'port' => env('PGVECTOR_TEST_PORT', '5432'),
+            'database' => env('PGVECTOR_TEST_DB', 'testing'),
+            'username' => env('PGVECTOR_TEST_USER', 'postgres'),
+            'password' => env('PGVECTOR_TEST_PASSWORD', ''),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'prefer',
+        ],
+
         'sqlsrv' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),

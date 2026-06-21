@@ -34,6 +34,9 @@ services:
       main-network: {}
 
   postgres:
+    # pgvector superset of postgres:17 (see compose.yml) — pinned here too so the
+    # dev stack is explicit about needing the `vector` extension.
+    image: pgvector/pgvector:pg17
     container_name: lodestar-dev-postgres
     ports: !override []
 

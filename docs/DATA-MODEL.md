@@ -563,6 +563,27 @@ are informational — the test checks Field **names** only.
 
 > Append-only; rendered as a timeline on the task detail page.
 
+### `embeddings`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| embeddable_type | string | not null | Morph type of the embedded object. Unique `(embeddable_type, embeddable_id)` — one vector per object. |
+| embeddable_id | bigint | not null | Morph id of the embedded object. |
+| project_id | bigint | nullable · index | Owning project (denormalised off the object at embed time), for the KNN access filter. |
+| team_id | bigint | nullable · index | Owning team (denormalised), for the access filter. |
+| owner_user_id | bigint | nullable · index | Owning user for personal-scope objects (denormalised). |
+| is_system | boolean | default false · index | System objects (e.g. system playbooks) are readable by everyone. |
+| scope | string | nullable | `personal` / `team` / `project` / `system` — drives the access filter. |
+| model | string | not null | The embedding model that produced the vector (e.g. `text-embedding-3-small`). |
+| content_hash | string | not null | Hash of the embedded text; gates re-embedding (unchanged text is skipped). |
+| embedding | vector(1536) | nullable | The embedding vector (pgsql `vector`; a text placeholder on sqlite). hnsw cosine index. |
+
+> Written by the embedding pipeline (EmbedObject/ForgetObject jobs + the
+> `lodestar:embed-sync` reconciler), read by semantic search (the `search` MCP
+> tool and the `/search` page). Filter columns are copied off the owner so the
+> KNN query filters to the caller's accessible set in SQL.
+
 ## Diagram
 
 Every migrated app table in full (fields + types). Types are the migration types
@@ -611,6 +632,7 @@ erDiagram
     TASK ||--o{ TASK_EVENT : "activity log"
     TASK }o--o{ TASK : "task_dependencies (blocked by)"
     USER ||--o{ TASK_COMMENT : "authored (nullable)"
+    PROJECT ||--o{ EMBEDDING : "indexed objects (denormalised)"
 
     PROJECT {
         bigint id PK
@@ -895,5 +917,19 @@ erDiagram
         string type
         string actor "nullable"
         text description "nullable"
+    }
+
+    EMBEDDING {
+        bigint id PK
+        string embeddable_type "morph type; unique with embeddable_id"
+        bigint embeddable_id "morph id"
+        bigint project_id "nullable, denormalised owner project"
+        bigint team_id "nullable, denormalised owner team"
+        bigint owner_user_id "nullable, denormalised personal owner"
+        boolean is_system "system objects readable by everyone"
+        string scope "nullable, personal|team|project|system"
+        string model "embedding model id"
+        string content_hash "gates re-embedding"
+        vector embedding "nullable, vector(1536); text on sqlite; hnsw cosine index"
     }
 ```

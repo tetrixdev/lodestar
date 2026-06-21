@@ -70,7 +70,9 @@ services:
       start_period: 15s
 
   postgres:
-    image: postgres:17-alpine
+    # pgvector/pgvector:pg17 = postgres 17 + the `vector` extension (used by the
+    # embeddings/semantic-search pipeline). A drop-in superset of postgres:17.
+    image: pgvector/pgvector:pg17
     container_name: lodestar-postgres
     restart: unless-stopped
     environment:
