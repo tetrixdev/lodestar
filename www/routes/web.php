@@ -12,6 +12,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProjectToolController;
 use App\Http\Controllers\RepositoryController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SecretController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\PlaybookController;
@@ -33,7 +34,11 @@ Route::get('/dashboard', fn () => redirect()->route('board'))
 Route::middleware('auth')->group(function () {
     Route::get('/board', [BoardController::class, 'index'])->name('board');
 
+    Route::get('/search', [SearchController::class, 'index'])->name('search');
+
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::post('/settings/embeddings/test-key', [SettingsController::class, 'testKey'])->name('settings.embeddings.test-key');
+    Route::post('/settings/embeddings/resync', [SettingsController::class, 'resync'])->name('settings.embeddings.resync');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

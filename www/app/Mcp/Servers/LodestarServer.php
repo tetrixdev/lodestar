@@ -18,6 +18,7 @@ use App\Mcp\Tools\ListProjectsTool;
 use App\Mcp\Tools\ProposePlaybookChangeTool;
 use App\Mcp\Tools\RememberTool;
 use App\Mcp\Tools\ReportTool;
+use App\Mcp\Tools\Search;
 use App\Mcp\Tools\UnlinkRepositoryTool;
 use App\Mcp\Tools\UpsertDeliverableTool;
 use App\Mcp\Tools\UpsertProjectTool;
@@ -39,7 +40,8 @@ work-sessions and reviews.
 
 Data tools read and write the board: upsert_project, upsert_task, upsert_deliverable,
 get_task (read tasks by id), upsert_session, create_review (hands back a URL a
-human opens), upsert_review_section, get_review.
+human opens), upsert_review_section, get_review. search runs a semantic
+(meaning-based) lookup across everything you can reach (and the system playbooks).
 
 A deliverable is the optional Project → Deliverable → Task layer: one goal, one
 branch, one review funnel. Its child tasks skip planning (they're decomposed from
@@ -79,6 +81,7 @@ class LodestarServer extends Server
         UpsertReviewSectionTool::class,
         AddFindingTool::class,
         GetReviewTool::class,
+        Search::class,
         // Loop tools
         ClaimWorkTool::class,
         ClaimTaskTool::class,
