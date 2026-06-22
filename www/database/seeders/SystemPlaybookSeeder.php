@@ -82,13 +82,13 @@ class SystemPlaybookSeeder extends Seeder
             '- An **action** is one invokable operation; an **abstract base + children** share a contract (e.g. the MCP tools).',
             '- A **repository** is justified ONLY when logic spans multiple models AND is used from multiple places — otherwise keep it in the one controller/service.',
             '- Avoid class-sprawl (many narrow classes each doing a sliver of one job). Prefer one cohesive owner; a helper used by only one service belongs INSIDE it.',
-            '- Document each class FAMILY in one guarded doc under `docs/classes/`, the way `DATA-MODEL.md` mirrors the schema.',
+            '- Document each class FAMILY in one guarded doc under `docs/classes/` — follow the pattern in `docs/classes/README.md` (the doctrine + how to write a family doc), the way `DATA-MODEL.md` mirrors the schema. Lodestar applies this to its OWN families: models→`DATA-MODEL.md`, MCP tools→`docs/classes/TOOLS.md`, system playbooks→`docs/classes/PLAYBOOKS.md`, each backed by a drift guard.',
         ]);
 
         $tail = match ($phase) {
-            'plan' => 'PLAN with this in mind: name the service/model/family that owns the change before listing files; prefer extending a cohesive owner over adding narrow classes.',
-            'develop' => 'WHILE BUILDING: new behaviour goes into the owning service/model, not a scatter of classes. If you touch a class family (add a tool, model, playbook), update its `docs/classes/` doc in the SAME change so its drift guard stays green.',
-            'ai_review' => "WHEN REVIEWING: flag class-sprawl that should be one cohesive service; confirm each touched class family's `docs/classes/` doc is updated and its guard passes.",
+            'plan' => 'PLAN with this in mind: name the service/model/family that owns the change before listing files; prefer extending a cohesive owner over adding narrow classes. See `docs/classes/README.md` for the family-doc + drift-guard pattern.',
+            'develop' => 'WHILE BUILDING: new behaviour goes into the owning service/model, not a scatter of classes. If you touch a class family (add a tool, model, playbook), update its guarded `docs/classes/` doc in the SAME change so its drift guard stays green — follow the pattern in `docs/classes/README.md`.',
+            'ai_review' => "WHEN REVIEWING: flag class-sprawl that should be one cohesive service; confirm each touched class family's guarded `docs/classes/` doc is updated and its guard passes (see `docs/classes/README.md` for the pattern).",
             default => '',
         };
 

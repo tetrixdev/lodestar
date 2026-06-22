@@ -14,13 +14,28 @@ families:
 > family's **contract** and lists **every member**, and back it with a **drift
 > guard** (a test) that fails when a member is added without documenting it.
 
-The family docs live here, in `docs/classes/`. Today:
+## The doctrine, applied to Lodestar itself
 
-- [`TOOLS.md`](TOOLS.md) — the `LodestarTool` family (the MCP tool surface), guarded by `ToolsDocMirrorTest`.
-- [`PLAYBOOKS.md`](PLAYBOOKS.md) — the system playbooks + composition, guarded by `PlaybooksDocMirrorTest`.
+This is not just advice we hand to the projects Lodestar steers — Lodestar runs on
+it. Its own class families each have one guarded contract doc, and that trio **is**
+the doctrine made concrete:
 
-`DATA-MODEL.md` stays where it is — it is the **model family's** contract doc, just
-named for history.
+| family | the family | its guarded doc | drift guard |
+|--------|-----------|-----------------|-------------|
+| models | every Eloquent model + its table | [`DATA-MODEL.md`](../DATA-MODEL.md) | `SchemaMirrorTest` |
+| MCP tools | the `LodestarTool` abstract base + every child registered on `LodestarServer` | [`TOOLS.md`](TOOLS.md) | `ToolsDocMirrorTest` |
+| system playbooks | the prompts the `SystemPlaybookSeeder` seeds at the system scope | [`PLAYBOOKS.md`](PLAYBOOKS.md) | `PlaybooksDocMirrorTest` |
+
+Each guard discovers the real roster (the schema / the tool registry / the seeded
+keys) and fails the build if the doc drifts — so the doc can't silently fall behind
+the code. `DATA-MODEL.md` is the **model family's** contract doc; it keeps its
+historical name but is the same shape as the two `docs/classes/` docs.
+
+The seeded structure doctrine (in `SystemPlaybookSeeder`) points agents straight at
+this README from every steered phase (plan / develop / ai_review) and from the
+`docs-template` skeleton — so the same discipline reaches the projects Lodestar
+drives. When you add a model, an MCP tool, or a system playbook, update its doc in
+the SAME change; its guard is what keeps you honest.
 
 ## The pattern taxonomy
 

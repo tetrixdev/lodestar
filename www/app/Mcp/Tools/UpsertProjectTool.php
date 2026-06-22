@@ -13,7 +13,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Create or update one of your projects. Omit id to create; pass id to update an existing project you own. slug is unique per user and defaults from the name.')]
+#[Description('Create or update one of your projects. Omit id to create; pass id to update an existing project you own. slug is unique per user and defaults from the name. On create, stack is required ("laravel" for the Laravel pack, or "none" for no framework pack) — it drives framework steering in the build/review playbooks.')]
 #[Name('upsert_project')]
 class UpsertProjectTool extends LodestarTool
 {
@@ -25,7 +25,7 @@ class UpsertProjectTool extends LodestarTool
             'slug' => ['nullable', 'string', 'max:255', 'alpha_dash'],
             'description' => ['nullable', 'string'],
             'primary_goal' => ['nullable', 'string'],
-            'stack' => ['nullable', Rule::in(Playbook::STACKS)],
+            'stack' => ['required_without:id', Rule::in(Playbook::STACKS)],
             'repos' => ['nullable', 'array'],
         ]);
 
@@ -86,7 +86,7 @@ class UpsertProjectTool extends LodestarTool
             'slug' => $schema->string()->description('URL slug, unique per user. Defaults from the name.'),
             'description' => $schema->string()->description('Optional description.'),
             'primary_goal' => $schema->string()->description('Optional primary goal.'),
-            'stack' => $schema->string()->description('Technology-stack tag, e.g. "laravel" — drives framework structure steering in the build/review playbooks.'),
+            'stack' => $schema->string()->description('Technology-stack tag — REQUIRED when creating (omit only when updating with id). Drives framework structure steering composed into the plan/develop/ai_review playbooks. Values: "laravel" (gets the Laravel structure pack), or "none" for a project with no framework pack (still a deliberate choice — no steering is added).'),
             'repos' => $schema->array()->description('Optional list of {name, url} repo objects.'),
         ];
     }
