@@ -19,7 +19,14 @@ class Markdown
     /** Render raw markdown to display HTML, with mermaid fences as diagram containers. */
     public static function render(string $content): string
     {
-        return self::promoteMermaid(Str::markdown($content));
+        // Escape raw HTML in the source instead of passing it through: this content
+        // is agent- and human-authored free text (finding details, notes, sessions),
+        // so a literal `<select>` / `<script>` must render as visible text, never as a
+        // live element in the operator's browser. (XSS / DOM-injection boundary.)
+        return self::promoteMermaid(Str::markdown($content, [
+            'html_input' => 'escape',
+            'allow_unsafe_links' => false,
+        ]));
     }
 
     /**
