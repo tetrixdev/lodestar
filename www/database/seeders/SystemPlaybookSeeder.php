@@ -454,13 +454,26 @@ class SystemPlaybookSeeder extends Seeder
 
                 ── DELIVERABLE CHILD TASK → FUNCTIONAL REVIEW ──
                 If the task belongs to a deliverable, its human gate is the FUNCTIONAL
-                review — built for a non-technical-but-involved person: business logic,
-                UX/UI, permissions. Frame each section as INPUT → OUTPUT (an input screen +
-                its result; a command + its result; an invisible output like mail/sync shown
+                review — built for a NON-TECHNICAL reviewer (business logic, UX/UI,
+                permissions). Frame each section as INPUT → OUTPUT (an input screen + its
+                result; a command + its result; an invisible output like mail/sync shown
                 via its dry-run/preview). Give each section a SHORT, COMPLETE manual_steps:
                 exactly what to run and where to look, so the human only judges whether what
                 they see is right. Do NOT do a per-task code review — that is batched at the
                 deliverable level.
+
+                WRITE IT FOR A NON-CODER (this is the whole point of the functional review):
+                - Findings AND section notes are in plain BUSINESS language: WHAT the change
+                  does and HOW the human can check it — never code internals (no class /
+                  method / variable names, no "we refactored X into Y"). If you can't say it
+                  without naming code, it belongs in the deliverable-level code review, not
+                  here.
+                - Every section MUST populate its `files` list with the ACTUAL changed files
+                  it covers (call upsert_review_section with `files:[...]`). The review UI
+                  turns those into clickable file links — that is how the human reaches the
+                  code if they want to. So NAME the files in `files`; do NOT paste code,
+                  diffs, or long explanations "behind" them or into the note. The files list
+                  is the link; the prose stays business-level.
 
                 ── DELIVERABLE-LEVEL REVIEW ──
                 If you claimed a DELIVERABLE in ai_review, review the WHOLE deliverable diff
