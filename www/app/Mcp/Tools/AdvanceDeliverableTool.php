@@ -12,7 +12,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Move a deliverable along a LEGAL funnel transition (illegal jumps rejected). Gates enforced server-side: approving the plan (plan_review → building) needs every open question answered; entering building stamps the integration branch; leaving building for AI review needs all child tasks done/cancelled. The claim is cleared when the deliverable leaves a working state.')]
+#[Description('Move a deliverable along a LEGAL funnel transition (illegal jumps rejected). Gates enforced server-side: entering building stamps the integration branch; leaving building for AI review needs all child tasks done/cancelled. The claim is cleared when the deliverable leaves a working state. (Open questions are now plan-review findings on each task, not a deliverable gate.)')]
 #[Name('advance_deliverable')]
 class AdvanceDeliverableTool extends LodestarTool
 {
@@ -43,12 +43,8 @@ class AdvanceDeliverableTool extends LodestarTool
             );
         }
 
-        // Plan-approval gate.
-        if ($deliverable->status === Deliverable::STATUS_PLAN_REVIEW
-            && $to === Deliverable::STATUS_BUILDING
-            && $deliverable->hasUnansweredQuestions()) {
-            return Response::error('Answer every open question before approving the plan (plan_review → building).');
-        }
+        // (The deliverable-level open-questions gate is retired — open questions now
+        // live as findings on each task's plan review.)
 
         // All child work must be merged before the deliverable-level review.
         if ($deliverable->status === Deliverable::STATUS_BUILDING

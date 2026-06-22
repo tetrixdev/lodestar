@@ -14,8 +14,9 @@ use Illuminate\Support\Str;
  * A deliverable: the optional layer between a project and its tasks (Project →
  * Deliverable → Task). It owns a goal, an integration branch, and the review
  * funnel. The user creates it from a raw `concept`; the planning agent rewrites
- * it into `body` (our spec format), writes the `plan`, decomposes it into child
- * tasks, and raises open `questions`. Approved at `plan_review`, it cuts its
+ * it into `body` (our spec format) and decomposes it into child tasks (open
+ * questions are raised as findings on each task's plan review, not on the
+ * deliverable). Approved at `plan_review`, it cuts its
  * branch and its tasks build in parallel; when all are merged it runs a
  * deliverable-level AI review → human architecture review → human functional
  * sanity → merge.
@@ -211,11 +212,6 @@ class Deliverable extends Model
         return $this->hasMany(Task::class)->orderBy('sub_id');
     }
 
-    public function questions(): HasMany
-    {
-        return $this->hasMany(DeliverableQuestion::class)->orderBy('position');
-    }
-
     public function reviews(): HasMany
     {
         return $this->hasMany(Review::class);
@@ -277,22 +273,6 @@ class Deliverable extends Model
         return $target === $forward ? Task::KIND_FORWARD : Task::KIND_BACK;
     }
 
-    // ── Open-questions gate ──────────────────────────────────────────────────
-
-    /** Unanswered questions block approval at plan_review. */
-    public function hasUnansweredQuestions(): bool
-    {
-        return $this->questions()->whereNull('answered_at')->exists();
-    }
-
-    /**
-     * From plan_review the human may only proceed (→ building) once every question
-     * is answered; otherwise the sole non-cancel move is back to planning.
-     */
-    public function canApprovePlan(): bool
-    {
-        return $this->status === self::STATUS_PLAN_REVIEW && ! $this->hasUnansweredQuestions();
-    }
 
     // ── Child-task completion ────────────────────────────────────────────────
 

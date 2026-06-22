@@ -317,17 +317,6 @@ are informational — the test checks Field **names** only.
 | claimed_at | timestamp | nullable | When the deliverable was claimed. |
 | deleted_at | timestamp | nullable | Soft-delete marker (SoftDeletes); a deliverable is never physically removed. |
 
-### `deliverable_questions`
-
-| Field | Type | Constraints | Notes |
-|-------|------|-------------|-------|
-| id | bigint | PK | Primary key. |
-| deliverable_id | bigint | FK → deliverables | The owning deliverable. |
-| question | text | not null | The open question the planning agent raised. |
-| answer | text | nullable | The human's answer. |
-| answered_at | timestamp | nullable | Stamped when a non-empty answer lands; gates plan approval (all must be answered). |
-| position | integer | not null · default 0 | Orders the questions. |
-
 ### `work_sessions`
 
 | Field | Type | Constraints | Notes |
@@ -351,7 +340,8 @@ are informational — the test checks Field **names** only.
 | project_id | bigint | FK → projects | The owning project. |
 | scope | string | not null · default `task` | What the review targets: `task` (via review_task pivot) or `deliverable` (via `deliverable_id`). |
 | deliverable_id | bigint | FK → deliverables · nullable | The deliverable this review targets (scope = deliverable). |
-| review_type | string | not null · default `code` | `functional` (per task; behaviour/UX/UI/permissions) / `code` (technical, task-level) / `architecture` (technical, deliverable-level). |
+| review_type | string | not null · default `code` | `functional` (per task; behaviour/UX/UI/permissions) / `code` (technical, task-level) / `architecture` (technical, deliverable-level) / `plan` (a task's plan: Client-facing + Technical-architecture, no comparison). |
+| plan_incomplete | boolean | not null · default false | Plan reviews only: the AI flagged the technical-architecture incomplete (too many open questions). When true, the human's only conclude outcome is return-to-planning. |
 | base_branch | string | nullable | What a deliverable review diffs against (`base_branch...deliverable.branch`); task reviews use base_sha/head_sha instead. |
 | title | string | not null | The review's display title. |
 | base_ref | string | nullable | The base of the comparison (e.g. `main`). |
@@ -583,7 +573,6 @@ erDiagram
     PROJECT ||--o{ TASK : has
     PROJECT ||--o{ DELIVERABLE : "groups tasks"
     DELIVERABLE ||--|{ TASK : "child tasks (required)"
-    DELIVERABLE ||--o{ DELIVERABLE_QUESTION : "open questions"
     DELIVERABLE ||--o{ REVIEW : "deliverable-scoped (nullable)"
     PROJECT ||--o{ WORK_SESSION : "work log"
     PROJECT ||--o{ REVIEW : has
@@ -690,7 +679,8 @@ erDiagram
         bigint project_id FK
         string scope "task|deliverable"
         bigint deliverable_id FK "nullable, target when scope=deliverable"
-        string review_type "functional|code|architecture"
+        string review_type "functional|code|architecture|plan"
+        boolean plan_incomplete "plan reviews: technical-architecture incomplete flag"
         string base_branch "nullable, deliverable diff base"
         string title
         bigint repository_id FK "nullable, the compared repo"
@@ -763,15 +753,6 @@ erDiagram
         string claimed_by "nullable, agent holding a *-ing deliverable"
         timestamp claimed_at "nullable, when it was claimed"
         timestamp deleted_at "nullable, soft-delete marker"
-    }
-
-    DELIVERABLE_QUESTION {
-        bigint id PK
-        bigint deliverable_id FK
-        text question
-        text answer "nullable, the human's answer"
-        timestamp answered_at "nullable, gates plan approval"
-        integer position "order"
     }
 
     USER {

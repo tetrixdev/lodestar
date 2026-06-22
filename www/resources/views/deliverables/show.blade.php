@@ -2,9 +2,18 @@
     @php
         $D = \App\Models\Deliverable::class;
         $T = \App\Models\Task::class;
+        $R = \App\Models\Review::class;
         $statusLabel = $D::LABELS[$deliverable->status] ?? $deliverable->status;
-        $unanswered = $deliverable->questions->whereNull('answered_at')->count();
-        $planReviewTasks = $deliverable->tasks->where('status', $T::STATUS_PLAN_REVIEW);
+
+        // Per-task plan + functional reviews, for the two collapsible review
+        // sections below. A plan review is a normal Review of review_type=plan;
+        // the functional review is the per-task human gate.
+        $planReviews = $deliverable->tasks
+            ->map(fn ($t) => [$t, $t->reviews->where('review_type', $R::TYPE_PLAN)->sortByDesc('id')->first()])
+            ->filter(fn ($pair) => $pair[1] !== null);
+        $functionalReviews = $deliverable->tasks
+            ->map(fn ($t) => [$t, $t->reviews->where('review_type', $R::TYPE_FUNCTIONAL)->sortByDesc('id')->first()])
+            ->filter(fn ($pair) => $pair[1] !== null);
     @endphp
 
     <x-slot name="header">
@@ -94,43 +103,49 @@
                     </p>
                 </div>
 
-                {{-- plan-review walkthrough: one section per task awaiting plan approval --}}
-                @if ($planReviewTasks->isNotEmpty())
-                    <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-4 border-l-4 border-amber-300">
-                        <div>
-                            <p class="text-[11px] font-medium text-amber-700 uppercase tracking-wide">Plan review — {{ $planReviewTasks->count() }} task(s)</p>
-                            <p class="text-xs text-gray-500">Approve each task's plan to send it to the build queue, or request changes to send it back to planning. Tasks are decided individually — approved ones can start while others wait.</p>
-                        </div>
-                        @foreach ($planReviewTasks as $task)
-                            <div class="rounded-lg border border-gray-200 p-4 space-y-3" x-data="{ changes: false }">
-                                <a href="{{ route('tasks.show', $task) }}" class="text-sm font-medium text-gray-800 hover:text-indigo-700">
-                                    <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span> {{ $task->title }}
-                                </a>
-                                <div>
-                                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Client-facing</p>
-                                    <x-detail-block title="Client-facing" :summary="$task->body_summary" :full="$task->body" empty="—" />
-                                </div>
-                                <div>
-                                    <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Technical / architecture</p>
-                                    <x-detail-block title="Technical" :summary="$task->plan_summary" :full="$task->plan" empty="—" />
-                                </div>
-                                <div class="flex items-center gap-2 pt-1 border-t border-gray-100">
-                                    <form method="POST" action="{{ route('tasks.plan-decision', $task) }}">
-                                        @csrf @method('PATCH')
-                                        <input type="hidden" name="decision" value="approve">
-                                        <button class="inline-flex items-center rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700">Approve plan</button>
-                                    </form>
-                                    <button type="button" @click="changes = !changes" class="text-xs font-medium text-amber-700 hover:text-amber-900 px-2 py-1.5">Request changes</button>
-                                    <form x-show="changes" x-cloak method="POST" action="{{ route('tasks.plan-decision', $task) }}" class="flex-1 flex items-center gap-2">
-                                        @csrf @method('PATCH')
-                                        <input type="hidden" name="decision" value="changes">
-                                        <input name="note" type="text" placeholder="What to change…"
-                                               class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
-                                        <button class="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50">Send back</button>
-                                    </form>
-                                </div>
-                            </div>
-                        @endforeach
+                {{-- Plan review — collapsed by default. Each task's plan review is a
+                     normal Review (review_type=plan); the human walks/concludes it on
+                     its own page. --}}
+                @if ($planReviews->isNotEmpty())
+                    <div class="bg-white shadow-sm sm:rounded-lg p-5" x-data="{ open: false }">
+                        <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-left">
+                            <span class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Plan review — {{ $planReviews->count() }} task(s)</span>
+                            <svg class="size-4 text-gray-400 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+                        </button>
+                        <ul x-show="open" x-collapse x-cloak class="mt-3 space-y-2">
+                            @foreach ($planReviews as [$task, $review])
+                                <li class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                    <a href="{{ route('reviews.show', $review) }}" class="min-w-0 truncate text-indigo-600 hover:underline">
+                                        <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span> {{ $task->title }}
+                                    </a>
+                                    <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 {{ $review->outcome ? ($review->outcome === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') : 'bg-amber-100 text-amber-700' }}">
+                                        {{ $review->outcome ? str_replace('_', ' ', $review->outcome) : ($review->plan_incomplete ? 'incomplete' : 'open') }}
+                                    </span>
+                                </li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
+                {{-- Functional review — collapsed by default (the per-task human gate). --}}
+                @if ($functionalReviews->isNotEmpty())
+                    <div class="bg-white shadow-sm sm:rounded-lg p-5" x-data="{ open: false }">
+                        <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-left">
+                            <span class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Functional review — {{ $functionalReviews->count() }} task(s)</span>
+                            <svg class="size-4 text-gray-400 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
+                        </button>
+                        <ul x-show="open" x-collapse x-cloak class="mt-3 space-y-2">
+                            @foreach ($functionalReviews as [$task, $review])
+                                <li class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                                    <a href="{{ route('reviews.show', $review) }}" class="min-w-0 truncate text-indigo-600 hover:underline">
+                                        <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span> {{ $task->title }}
+                                    </a>
+                                    <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 {{ $review->outcome ? ($review->outcome === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') : 'bg-amber-100 text-amber-700' }}">
+                                        {{ $review->outcome ? str_replace('_', ' ', $review->outcome) : 'open' }}
+                                    </span>
+                                </li>
+                            @endforeach
+                        </ul>
                     </div>
                 @endif
 
@@ -172,40 +187,11 @@
 
             {{-- sidebar --}}
             <div class="space-y-6">
-                {{-- open questions --}}
-                <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
-                    <div class="flex items-center justify-between">
-                        <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Open questions</p>
-                        @if ($unanswered > 0)
-                            <span class="text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-amber-100 text-amber-700">{{ $unanswered }} unanswered</span>
-                        @endif
-                    </div>
-                    @forelse ($deliverable->questions as $q)
-                        <div class="border-b border-gray-100 pb-3 last:border-0 last:pb-0 space-y-1.5">
-                            <p class="text-sm text-gray-800">{{ $q->question }}</p>
-                            <form method="POST" action="{{ route('deliverables.questions.answer', [$deliverable, $q->id]) }}" class="space-y-1.5">
-                                @csrf @method('PATCH')
-                                <textarea name="answer" rows="2" placeholder="Answer…"
-                                          class="w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500">{{ $q->answer }}</textarea>
-                                <div class="flex items-center justify-between">
-                                    <span class="text-[10px] {{ $q->answered_at ? 'text-emerald-600' : 'text-amber-600' }}">{{ $q->answered_at ? 'answered' : 'unanswered' }}</span>
-                                    <button class="text-xs font-medium text-indigo-600 hover:text-indigo-800">Save</button>
-                                </div>
-                            </form>
-                        </div>
-                    @empty
-                        <p class="text-sm text-gray-400 italic">No open questions.</p>
-                    @endforelse
+                {{-- Open questions are no longer a deliverable-level mechanism — they
+                     live as findings on each task's plan review (see the Plan review
+                     section). --}}
 
-                    <form method="POST" action="{{ route('deliverables.questions.store', $deliverable) }}" class="flex items-center gap-2 pt-1">
-                        @csrf
-                        <input name="question" type="text" placeholder="Add a question…" required
-                               class="flex-1 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
-                        <button class="shrink-0 text-xs font-medium text-indigo-600 hover:text-indigo-800">Add</button>
-                    </form>
-                </div>
-
-                {{-- reviews --}}
+                {{-- deliverable-level reviews --}}
                 <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-2">
                     <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Deliverable reviews</p>
                     @forelse ($deliverable->reviews as $review)

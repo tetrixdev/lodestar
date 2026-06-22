@@ -22,9 +22,11 @@
                     @endif
                     @php
                         $reviewBranch = $review->isDeliverableScoped() ? optional($review->deliverable)->branch : $review->head_ref;
-                        $typeBadge = $review->isDeliverableScoped()
-                            ? 'Deliverable · '.ucfirst($review->review_type)
-                            : ($review->review_type === \App\Models\Review::TYPE_FUNCTIONAL ? 'Functional review' : 'Code review');
+                        $typeBadge = $review->isPlanReview()
+                            ? 'Plan review'
+                            : ($review->isDeliverableScoped()
+                                ? 'Deliverable · '.ucfirst($review->review_type)
+                                : ($review->review_type === \App\Models\Review::TYPE_FUNCTIONAL ? 'Functional review' : 'Code review'));
                         $testInstructions = $reviewBranch
                             ? "git fetch && git checkout {$reviewBranch} && git pull\n# bring the app up (see the project README), then work the steps below"
                             : null;
@@ -110,7 +112,7 @@
                     <ul class="space-y-1.5">
                         @foreach ($review->tasks as $task)
                             <li class="flex items-center justify-between gap-3 text-sm">
-                                <a href="{{ route('projects.show', $review->project) }}" class="text-indigo-600 hover:underline truncate">{{ $task->title }}</a>
+                                <a href="{{ route('tasks.show', $task) }}" class="text-indigo-600 hover:underline truncate">{{ $task->title }}</a>
                                 <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-gray-100 text-gray-600">
                                     {{ \App\Models\Task::LABELS[$task->status] ?? $task->status }}
                                 </span>
@@ -156,10 +158,23 @@
                  modal (sections eager-load files as id+path only). --}}
             @php
                 $filesByPath = $review->files->keyBy('path');
+                // For a plan review, each fixed section renders the linked task's
+                // body / plan (Client-facing → body, Technical-architecture → plan),
+                // resolved by the section's position against Review::fixedPlanSections().
+                $planTask = $review->isPlanReview() ? $review->tasks->first() : null;
+                $planSourceByPos = [];
+                foreach (\App\Models\Review::fixedPlanSections() as $pos => $spec) {
+                    $planSourceByPos[$pos] = $spec['source'];
+                }
             @endphp
 
             {{-- sections --}}
             @foreach ($review->sections as $i => $s)
+                @php
+                    $planSource = $planTask ? ($planSourceByPos[$s->position] ?? null) : null;
+                    $planContent = $planSource ? $planTask->{$planSource} : null;
+                    $planSummary = $planSource ? $planTask->{$planSource.'_summary'} : null;
+                @endphp
                 <section x-data="section({{ $s->id }}, {{ $s->status === 'signed_off' ? 'true' : 'false' }}, @js($s->note), @js($s->decision), {{ $i === 0 ? 'true' : 'false' }})"
                          class="rounded-lg border bg-white shadow-sm transition"
                          :class="signedOff ? 'border-emerald-300 opacity-70' : 'border-gray-200'">
@@ -182,6 +197,23 @@
                         @if ($s->context)
                             <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mb-1">Where this fits</p>
                             <p class="text-sm text-gray-600 mb-3">{{ $s->context }}</p>
+                        @endif
+
+                        {{-- Plan review: render the linked task's body / plan as the
+                             content under review (markdown), with its short summary first. --}}
+                        @if ($planSource)
+                            <div class="mb-3 rounded-md bg-gray-50 border border-gray-100 p-3">
+                                @if (filled($planContent) || filled($planSummary))
+                                    <x-detail-block :title="$s->title"
+                                                    :summary="$planSummary"
+                                                    :full="$planContent"
+                                                    empty="—" />
+                                @else
+                                    <p class="text-sm text-gray-400 italic">
+                                        {{ $planSource === 'plan' ? 'No technical plan written yet.' : 'No client-facing description yet.' }}
+                                    </p>
+                                @endif
+                            </div>
                         @endif
                         @if ($s->stale && $s->change_note)
                             <p class="text-[11px] font-medium text-amber-600 uppercase tracking-wide mb-1">What changed since you last reviewed</p>
@@ -317,37 +349,71 @@
                 </section>
             @endforeach
 
+            @php $planIncomplete = $review->isPlanReview() && $review->plan_incomplete; @endphp
+
+            {{-- Plan reviews flagged incomplete: the AI could not fully plan the
+                 technical side, so the ONLY outcome is return-to-planning. --}}
+            @if ($planIncomplete)
+                <div class="rounded-lg bg-amber-50 border border-amber-300 p-4 text-amber-900 text-sm">
+                    <strong>Technical-architecture flagged incomplete.</strong> The AI couldn't fully
+                    plan the technical side. You can answer everything below, but the only outcome
+                    available is <strong>return to planning</strong> — approve-to-dev is disabled.
+                </div>
+            @endif
+
             <div x-show="total > 0 && signedCount >= total" x-cloak x-transition
                  class="rounded-lg bg-emerald-500 text-white p-5 text-center font-semibold">
-                All sections signed off — ready to merge. 🎉
+                @if ($review->isPlanReview())
+                    All sections signed off — plan ready. ✓
+                @else
+                    All sections signed off — ready to merge. 🎉
+                @endif
             </div>
 
             {{-- Apply outcome — shown once every section has a decision; drives the linked task(s) --}}
             @if ($isAssignee && $review->outcome === null)
+                @php
+                    // For a plan review, the incomplete flag forces the request-changes
+                    // (return-to-planning) path regardless of the section decisions.
+                    $isPlan = $review->isPlanReview();
+                @endphp
                 <div x-show="decisions.all_decided" x-cloak x-transition
+                     x-data="{ planIncomplete: {{ $planIncomplete ? 'true' : 'false' }} }"
                      class="rounded-lg border bg-white shadow-sm p-5 space-y-3"
-                     :class="decisions.verdict === 'approved' ? 'border-emerald-300' : 'border-rose-300'">
+                     :class="(decisions.verdict === 'approved' && !planIncomplete) ? 'border-emerald-300' : 'border-rose-300'">
+                    @php
+                        $effectiveApproved = 'decisions.verdict === \'approved\' && !planIncomplete';
+                    @endphp
                     <div class="flex items-center gap-2">
                         <h3 class="font-semibold text-gray-900">Apply outcome</h3>
                         <span class="text-xs font-semibold uppercase tracking-wide rounded px-2 py-0.5"
-                              :class="decisions.verdict === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'"
-                              x-text="decisions.verdict === 'approved' ? 'Approve' : 'Request changes'"></span>
+                              :class="({{ $effectiveApproved }}) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'"
+                              x-text="({{ $effectiveApproved }}) ? 'Approve' : '{{ $isPlan ? 'Return to planning' : 'Request changes' }}'"></span>
                     </div>
                     <p class="text-sm text-gray-600">
                         <span x-text="decisions.approved"></span> approved,
                         <span x-text="decisions.changes_requested"></span> requesting changes.
-                        <template x-if="decisions.verdict === 'approved'">
-                            <span>Linked tasks will move to <strong>Approved</strong>.</span>
-                        </template>
-                        <template x-if="decisions.verdict === 'changes_requested'">
-                            <span>Linked tasks will go back to <strong>Ready for dev</strong> with the compiled rework notes.</span>
-                        </template>
+                        @if ($isPlan)
+                            <template x-if="{{ $effectiveApproved }}">
+                                <span>The task's plan is accepted — it moves to <strong>Ready for dev</strong>.</span>
+                            </template>
+                            <template x-if="!({{ $effectiveApproved }})">
+                                <span>The task goes back to <strong>Ready for planning</strong> with the compiled brief (your notes + the answered questions).</span>
+                            </template>
+                        @else
+                            <template x-if="decisions.verdict === 'approved'">
+                                <span>Linked tasks will move to <strong>Approved</strong>.</span>
+                            </template>
+                            <template x-if="decisions.verdict === 'changes_requested'">
+                                <span>Linked tasks will go back to <strong>Ready for dev</strong> with the compiled rework notes.</span>
+                            </template>
+                        @endif
                     </p>
                     <form method="POST" action="{{ route('reviews.conclude', $review) }}"
                           onsubmit="return confirm('Apply this outcome to the linked task(s)? This cannot be undone here.');">
                         @csrf
                         <button class="text-sm font-medium rounded-md px-3 py-2 text-white"
-                                :class="decisions.verdict === 'approved' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">
+                                :class="({{ $effectiveApproved }}) ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'">
                             Apply outcome
                         </button>
                     </form>

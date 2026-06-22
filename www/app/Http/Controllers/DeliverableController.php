@@ -13,9 +13,9 @@ use Illuminate\View\View;
 
 /**
  * Deliverables: the optional Project → Deliverable → Task layer. Content CRUD only
- * (store / show / update) plus the deliverable pieces: open questions and attaching
- * child tasks. The deliverable's status is DERIVED from its tasks + review outcomes
- * (Deliverable::syncStatus) — there is no manual advancement here.
+ * (store / show / update) plus attaching child tasks. The deliverable's status is
+ * DERIVED from its tasks + review outcomes (Deliverable::syncStatus) — there is no
+ * manual advancement here. (Open questions now live as plan-review findings.)
  */
 class DeliverableController extends Controller
 {
@@ -43,7 +43,7 @@ class DeliverableController extends Controller
         return redirect()->route('deliverables.show', $deliverable);
     }
 
-    /** The deliverable detail page: concept/body/plan, questions, child tasks, lifecycle. */
+    /** The deliverable detail page: concept/body/plan, child tasks (with their plan + functional reviews), lifecycle. */
     public function show(Request $request, Deliverable $deliverable): View
     {
         abort_unless($deliverable->project->isAccessibleBy($request->user()), 403);
@@ -51,8 +51,8 @@ class DeliverableController extends Controller
         $deliverable->load([
             'project',
             'tasks' => fn ($q) => $q->orderBy('sub_id'),
-            'tasks.reviews:id',
-            'questions',
+            // Full reviews so the page can list each task's plan + functional review.
+            'tasks.reviews',
             'reviews' => fn ($q) => $q->orderBy('reviews.id'),
         ]);
 
@@ -87,32 +87,6 @@ class DeliverableController extends Controller
         if ($update !== []) {
             $deliverable->update($update);
         }
-
-        return back();
-    }
-
-    /** Record (or clear) the answer to an open question; stamps answered_at via the model. */
-    public function answerQuestion(Request $request, Deliverable $deliverable, int $question): RedirectResponse
-    {
-        abort_unless($deliverable->project->isAccessibleBy($request->user()), 403);
-
-        $q = $deliverable->questions()->findOrFail($question);
-        $data = $request->validate(['answer' => ['nullable', 'string']]);
-        $q->update(['answer' => $data['answer'] ?? null]);
-
-        return back();
-    }
-
-    /** Add an open question to the deliverable (planning agents do this via MCP; UI for testing). */
-    public function addQuestion(Request $request, Deliverable $deliverable): RedirectResponse
-    {
-        abort_unless($deliverable->project->isAccessibleBy($request->user()), 403);
-
-        $data = $request->validate(['question' => ['required', 'string']]);
-        $deliverable->questions()->create([
-            'question' => $data['question'],
-            'position' => (int) $deliverable->questions()->max('position') + 1,
-        ]);
 
         return back();
     }

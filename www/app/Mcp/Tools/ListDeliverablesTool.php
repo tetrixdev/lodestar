@@ -11,7 +11,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('List the deliverables of one of your projects as COMPACT rows (id, title, status, phase, base_branch, branch, open_questions count, task counts by phase) — NOT the concept/body/plan (use get_deliverable for those). Filter by status and phase. Access-scoped to your projects.')]
+#[Description('List the deliverables of one of your projects as COMPACT rows (id, title, status, phase, base_branch, branch, task counts by phase) — NOT the concept/body/plan (use get_deliverable for those). Filter by status and phase. Access-scoped to your projects.')]
 #[Name('list_deliverables')]
 class ListDeliverablesTool extends LodestarTool
 {
@@ -29,7 +29,6 @@ class ListDeliverablesTool extends LodestarTool
         }
 
         $query = $project->deliverables()
-            ->withCount(['questions as open_questions_count' => fn ($q) => $q->whereNull('answered_at')])
             ->with('tasks:id,deliverable_id,status');
 
         if (! empty($data['status'])) {
@@ -56,7 +55,6 @@ class ListDeliverablesTool extends LodestarTool
                 'phase' => $d->phaseColumn(),
                 'base_branch' => $d->base_branch,
                 'branch' => $d->branch,
-                'open_questions' => $d->open_questions_count,
                 'task_counts' => $this->taskCountsByPhase($d),
             ])->all(),
         ]);

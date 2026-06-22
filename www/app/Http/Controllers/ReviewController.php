@@ -261,6 +261,13 @@ class ReviewController extends Controller
 
         $verdict = $summary['verdict'];
 
+        // A plan review drives its linked task forward to dev (all sections approved
+        // AND not flagged incomplete) or back to planning (any changes requested, or
+        // the AI flagged the technical-architecture incomplete).
+        if ($review->isPlanReview()) {
+            return $this->concludePlan($review, $verdict);
+        }
+
         // A deliverable-scoped review drives the DELIVERABLE through its human gates
         // (architecture → functional → approved), not individual tasks.
         if ($review->isDeliverableScoped()) {
@@ -312,6 +319,63 @@ class ReviewController extends Controller
             ->with('status', ($verdict === 'approved'
                 ? 'Review approved'
                 : 'Changes requested — rework notes written').$tasksNote.'.');
+    }
+
+    /**
+     * Apply a plan review's verdict to its linked task. All sections approved AND
+     * not flagged incomplete → the task's plan is accepted and it joins the dev
+     * queue (ready_for_dev). Any changes requested, OR the AI flagged the
+     * technical-architecture incomplete → back to ready_for_planning with the
+     * compiled brief (section notes + question-finding answers) in rework_notes.
+     */
+    private function concludePlan(Review $review, ?string $verdict): RedirectResponse
+    {
+        // The incomplete flag forces return-to-planning regardless of decisions:
+        // the AI said the technical side could not be fully planned, so the only
+        // outcome is to plan it again with the human's answers.
+        $toDev = $verdict === 'approved' && ! $review->plan_incomplete;
+        $moved = 0;
+
+        DB::transaction(function () use ($review, $toDev, &$moved) {
+            $review->update([
+                'outcome' => $toDev ? 'approved' : 'changes_requested',
+                'status' => 'done',
+            ]);
+
+            $notes = $toDev ? null : $this->compileReworkNotes($review);
+
+            foreach ($review->tasks as $task) {
+                if ($task->status !== Task::STATUS_PLAN_REVIEW) {
+                    continue;
+                }
+                $target = $toDev ? Task::STATUS_READY_FOR_DEV : Task::STATUS_READY_FOR_PLANNING;
+                if (! $task->canTransitionTo($target)) {
+                    continue;
+                }
+                $task->update([
+                    'status' => $target,
+                    'rework_notes' => $notes,
+                    'position' => (int) $task->project->tasks()->where('status', $target)->max('position') + 1,
+                ]);
+                $task->logEvent(
+                    $toDev ? 'plan_approved' : 'plan_changes_requested',
+                    $review->assignee?->name,
+                    $toDev ? 'Plan approved — sent to dev.'
+                        : ($review->plan_incomplete
+                            ? 'Plan flagged incomplete — returned to planning.'
+                            : 'Plan changes requested — returned to planning.'),
+                );
+                $moved++;
+            }
+        });
+
+        $tasksNote = $moved === 0
+            ? ' (no linked task was at plan review, so none moved)'
+            : '';
+
+        return redirect()->route('reviews.show', $review)->with('status', ($toDev
+            ? 'Plan approved — ready for dev'
+            : 'Returned to planning with the compiled brief').$tasksNote.'.');
     }
 
     /**
@@ -372,18 +436,34 @@ class ReviewController extends Controller
         return redirect()->route('reviews.show', $review)->with('status', $message);
     }
 
-    /** Markdown rework brief: each changes_requested section's note + every must_fix finding. */
+    /**
+     * Markdown rework brief: each changes_requested section's note + the relevant
+     * findings. For a plan review the findings ARE the open questions, so every
+     * non-dismissed finding is carried back (with the human's answer, kept on the
+     * finding's detail/note when triaged); for code/functional reviews only the
+     * must_fix findings feed the brief.
+     */
     private function compileReworkNotes(Review $review): string
     {
-        $lines = ["# Rework requested (review: {$review->title})", ''];
+        $isPlan = $review->isPlanReview();
+        $heading = $isPlan
+            ? "# Plan rework (review: {$review->title})"
+            : "# Rework requested (review: {$review->title})";
+        $lines = [$heading, ''];
 
         foreach ($review->sections as $section) {
-            $sectionNote = $section->decision === 'changes_requested' && trim((string) $section->note) !== ''
+            $sectionNote = trim((string) $section->note) !== ''
+                && ($isPlan || $section->decision === 'changes_requested')
                 ? trim((string) $section->note)
                 : null;
-            $mustFix = $section->findings->where('status', 'must_fix');
 
-            if ($sectionNote === null && $mustFix->isEmpty()) {
+            // Plan reviews carry every still-open question (anything not dismissed);
+            // other reviews carry only the human-flagged must_fix findings.
+            $findings = $isPlan
+                ? $section->findings->where('status', '!=', 'dismissed')
+                : $section->findings->where('status', 'must_fix');
+
+            if ($sectionNote === null && $findings->isEmpty()) {
                 continue;
             }
 
@@ -391,9 +471,10 @@ class ReviewController extends Controller
             if ($sectionNote !== null) {
                 $lines[] = $sectionNote;
             }
-            foreach ($mustFix as $finding) {
+            foreach ($findings as $finding) {
                 $sev = strtoupper($finding->severity);
-                $lines[] = "- **[{$sev}] {$finding->title}**".
+                $label = $isPlan ? 'Question' : "[{$sev}]";
+                $lines[] = "- **{$label} {$finding->title}**".
                     (trim((string) $finding->detail) !== '' ? ' — '.trim((string) $finding->detail) : '');
             }
             $lines[] = '';

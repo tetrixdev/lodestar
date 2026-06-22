@@ -33,7 +33,7 @@ class McpDeliverableToolsTest extends TestCase
             ->assertSee('99999'); // reported in missing
     }
 
-    public function test_upsert_deliverable_creates_and_raises_questions(): void
+    public function test_upsert_deliverable_creates_at_backlog(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
@@ -44,29 +44,21 @@ class McpDeliverableToolsTest extends TestCase
                 'title' => 'Ship v1',
                 'body' => 'The scope of v1',
                 'body_summary' => 'v1 scope',
-                'questions' => ['Which auth?', 'Which db?'],
             ])
             ->assertOk()
-            ->assertSee('"status":"new"') // a deliverable always enters at backlog
-            ->assertSee('"open_questions":2');
+            ->assertSee('"status":"new"'); // a deliverable always enters at backlog
 
         $this->assertDatabaseHas('deliverables', ['project_id' => $project->id, 'title' => 'Ship v1', 'status' => 'new']);
     }
 
-    public function test_advance_deliverable_enforces_question_gate_then_stamps_branch(): void
+    public function test_advance_deliverable_plan_review_to_building_stamps_branch(): void
     {
+        // (Open questions are no longer a deliverable gate — they live as plan-review
+        // findings on each task.)
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_PLAN_REVIEW]);
-        $q = $d->questions()->create(['question' => 'Which?', 'position' => 0]);
 
-        // Blocked by the unanswered question.
-        LodestarServer::actingAs($user)
-            ->tool(AdvanceDeliverableTool::class, ['deliverable_id' => $d->id, 'to' => Deliverable::STATUS_BUILDING])
-            ->assertHasErrors();
-        $this->assertSame(Deliverable::STATUS_PLAN_REVIEW, $d->fresh()->status);
-
-        $q->update(['answer' => 'this']);
         LodestarServer::actingAs($user)
             ->tool(AdvanceDeliverableTool::class, ['deliverable_id' => $d->id, 'to' => Deliverable::STATUS_BUILDING])
             ->assertOk();

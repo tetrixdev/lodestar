@@ -303,6 +303,16 @@ class Task extends Model
         static::saved(function (Task $task): void {
             $task->deliverable?->syncStatus();
 
+            // When a card enters the plan_review gate (a status change OR created
+            // directly at plan_review), ensure it has a `plan`-type Review for the
+            // human to walk (idempotent). Mirrors how code reviews are built via MCP,
+            // but a plan review needs no GitHub comparison, so it is seeded the moment
+            // the card reaches the gate.
+            if ($task->status === self::STATUS_PLAN_REVIEW
+                && ($task->wasRecentlyCreated || $task->wasChanged('status'))) {
+                $task->ensurePlanReview();
+            }
+
             // Dependency invalidation: if this task dropped BACK to (re-)planning from
             // an approved phase, its plan changed — invalidate any dependents whose
             // plan was already approved (their basis may no longer hold).
@@ -349,6 +359,87 @@ class Task extends Model
     public function reviews(): BelongsToMany
     {
         return $this->belongsToMany(Review::class)->withTimestamps();
+    }
+
+    /**
+     * Ensure this task has a `plan`-type Review with its two fixed sections
+     * (Client-facing → body, Technical-architecture → plan). Idempotent: if one
+     * already exists it is returned untouched. Called automatically when the card
+     * enters plan_review; the AI may also create it earlier via MCP (create_review
+     * review_type=plan) to attach question-findings while planning.
+     */
+    public function ensurePlanReview(): Review
+    {
+        $existing = $this->reviews()
+            ->where('review_type', Review::TYPE_PLAN)
+            ->latest('reviews.id')
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $review = $this->project->reviews()->create([
+            'title' => 'Plan review: '.$this->title,
+            'scope' => Review::SCOPE_TASK,
+            'review_type' => Review::TYPE_PLAN,
+            'status' => 'draft',
+        ]);
+        $review->tasks()->attach($this->id);
+
+        foreach (Review::fixedPlanSections() as $i => $spec) {
+            $review->sections()->create([
+                'title' => $spec['title'],
+                'mode' => 'direct_doc',
+                'context' => $spec['context'],
+                'status' => 'open',
+                'position' => $i,
+            ]);
+        }
+
+        return $review;
+    }
+
+    /**
+     * The review the row should open for a given status (defaults to the task's
+     * current status): in a review state the row jumps straight to the matching
+     * review — plan_review→plan, ai_review→code, human_review→functional — else
+     * null (the caller falls back to task-show). The most-recent matching review
+     * wins.
+     */
+    public function openReviewFor(?string $status = null): ?Review
+    {
+        $status ??= $this->status;
+
+        $type = match ($status) {
+            self::STATUS_PLAN_REVIEW => Review::TYPE_PLAN,
+            self::STATUS_AI_REVIEW => Review::TYPE_CODE,
+            self::STATUS_HUMAN_REVIEW => Review::TYPE_FUNCTIONAL,
+            default => null,
+        };
+        if ($type === null) {
+            return null;
+        }
+
+        $reviews = $this->relationLoaded('reviews') ? $this->reviews : $this->reviews()->get();
+
+        return $reviews
+            ->where('review_type', $type)
+            ->sortByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Where a clickable task row navigates: the open review when the card is in a
+     * review state (and a matching review exists), otherwise the task-show page.
+     * The id-chip, the title and the end-dot all link here (see <x-task-row>).
+     */
+    public function rowTarget(): string
+    {
+        $review = $this->openReviewFor();
+
+        return $review
+            ? route('reviews.show', $review)
+            : route('tasks.show', $this);
     }
 
     public function workSessions(): HasMany

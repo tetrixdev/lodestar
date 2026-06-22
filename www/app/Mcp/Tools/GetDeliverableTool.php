@@ -11,7 +11,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Read one deliverable in full by id: title, concept/body, status/phase, branch and base_branch, its open questions (text + answered_at), its child tasks (compact rows) and its reviews. Access-scoped to your projects. The deliverable counterpart to get_task.')]
+#[Description('Read one deliverable in full by id: title, concept/body, status/phase, branch and base_branch, its child tasks (compact rows) and its reviews. (Open questions now live as findings on each task\'s plan review.) Access-scoped to your projects. The deliverable counterpart to get_task.')]
 #[Name('get_deliverable')]
 class GetDeliverableTool extends LodestarTool
 {
@@ -27,7 +27,6 @@ class GetDeliverableTool extends LodestarTool
             ->with([
                 'project:id,name,slug',
                 'tasks',
-                'questions',
                 'reviews:id,deliverable_id,title,scope,review_type,status,outcome',
             ])
             ->first();
@@ -51,19 +50,6 @@ class GetDeliverableTool extends LodestarTool
                 'base_branch' => $deliverable->base_branch,
                 'concept' => $deliverable->concept,
                 'body' => $deliverable->body,
-                'open_questions' => $deliverable->questions
-                    ->whereNull('answered_at')
-                    ->map(fn ($q) => [
-                        'id' => $q->id,
-                        'question' => $q->question,
-                        'answered_at' => optional($q->answered_at)->toIso8601String(),
-                    ])->values()->all(),
-                'questions' => $deliverable->questions->map(fn ($q) => [
-                    'id' => $q->id,
-                    'question' => $q->question,
-                    'answer' => $q->answer,
-                    'answered_at' => optional($q->answered_at)->toIso8601String(),
-                ])->all(),
                 'tasks' => $deliverable->tasks->map(fn ($t) => [
                     'id' => $t->id,
                     'sub_id' => $t->sub_id,

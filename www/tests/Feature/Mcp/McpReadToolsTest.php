@@ -100,16 +100,14 @@ class McpReadToolsTest extends TestCase
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
         $d = $project->deliverables()->create(['title' => 'Mine deliverable', 'status' => Deliverable::STATUS_BUILDING]);
-        $d->questions()->create(['question' => 'Open one?', 'position' => 1]);
         $this->makeTask($project, ['deliverable' => $d, 'title' => 'T', 'status' => Task::STATUS_DEVELOPING]);
 
         LodestarServer::actingAs($user)
             ->tool(ListDeliverablesTool::class, ['project' => 'p'])
             ->assertOk()
             ->assertSee('Mine deliverable')
-            ->assertSee(['"status"', '"phase"', '"base_branch"', '"branch"', '"open_questions"', '"task_counts"'])
-            // one open question, one build-phase task tallied.
-            ->assertSee('"open_questions":1')
+            ->assertSee(['"status"', '"phase"', '"base_branch"', '"branch"', '"task_counts"'])
+            // one build-phase task tallied.
             ->assertSee('"build":1');
 
         // A sibling's project is not reachable.
@@ -130,14 +128,13 @@ class McpReadToolsTest extends TestCase
             'concept' => 'Raw concept text',
             'body' => 'Spec body text',
         ]);
-        $d->questions()->create(['question' => 'Still open?', 'position' => 1]);
         $this->makeTask($project, ['deliverable' => $d, 'title' => 'Child task', 'status' => Task::STATUS_DEVELOPING]);
 
         LodestarServer::actingAs($user)
             ->tool(GetDeliverableTool::class, ['deliverable_id' => $d->id])
             ->assertOk()
-            ->assertSee(['Raw concept text', 'Spec body text', 'Still open?', 'Child task'])
-            ->assertSee(['"concept"', '"body"', '"open_questions"', '"questions"', '"tasks"', '"reviews"']);
+            ->assertSee(['Raw concept text', 'Spec body text', 'Child task'])
+            ->assertSee(['"concept"', '"body"', '"tasks"', '"reviews"']);
 
         // A sibling's deliverable is invisible.
         $stranger = User::factory()->create();

@@ -8,6 +8,7 @@ use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\Repository;
 use App\Models\Review;
+use App\Models\Task;
 use App\Services\GitHubComparison;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,7 @@ use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 use Throwable;
 
-#[Description('Create a review (or refresh one) and get back the URL a human opens. TASK reviews: pass task_ids + base_ref/head_ref (+ repo if the project has several). DELIVERABLE reviews: pass scope="deliverable" + deliverable=<id>; the comparison defaults to base_branch...deliverable branch. review_type is functional (per-task behaviour/UX) or code/architecture (technical). Every changed file must be covered by a section before a human can see it. Pass review_id to REFRESH an existing review\'s comparison — newly-changed files auto-flag their sections for re-review.')]
+#[Description('Create a review (or refresh one) and get back the URL a human opens. TASK reviews: pass task_ids + base_ref/head_ref (+ repo if the project has several). DELIVERABLE reviews: pass scope="deliverable" + deliverable=<id>; the comparison defaults to base_branch...deliverable branch. PLAN reviews: pass review_type="plan" + task_ids:[<one id>] — no comparison; it seeds two fixed sections (Client-facing → body, Technical-architecture → plan) and is idempotent per task (one plan review; the card also seeds one on reaching plan_review). Raise open questions as findings on those sections (add_finding); set plan_incomplete:true when the technical side can\'t be fully planned (the human then only has return-to-planning). review_type is functional (per-task behaviour/UX), code/architecture (technical), or plan. For comparison reviews every changed file must be covered by a section before a human can see it. Pass review_id to REFRESH an existing review\'s comparison — newly-changed files auto-flag their sections for re-review.')]
 #[Name('create_review')]
 class CreateReviewTool extends LodestarTool
 {
@@ -28,7 +29,8 @@ class CreateReviewTool extends LodestarTool
             'review_id' => ['nullable', 'integer'],
             'scope' => ['nullable', 'string', 'in:'.Review::SCOPE_TASK.','.Review::SCOPE_DELIVERABLE],
             'deliverable' => ['nullable', 'integer'],
-            'review_type' => ['nullable', 'string', 'in:'.Review::TYPE_FUNCTIONAL.','.Review::TYPE_CODE.','.Review::TYPE_ARCHITECTURE],
+            'review_type' => ['nullable', 'string', 'in:'.implode(',', Review::TYPES)],
+            'plan_incomplete' => ['nullable', 'boolean'],
             'title' => ['required_without:review_id', 'string', 'max:255'],
             'repo' => ['nullable', 'string', 'max:255'],
             'base_ref' => ['nullable', 'string', 'max:255'],
@@ -68,6 +70,16 @@ class CreateReviewTool extends LodestarTool
 
         $reviewType = $data['review_type']
             ?? ($scope === Review::SCOPE_DELIVERABLE ? Review::TYPE_ARCHITECTURE : Review::TYPE_CODE);
+
+        // ── PLAN review: a typed Review with two fixed sections (Client-facing →
+        // body, Technical-architecture → plan) and no GitHub comparison. Idempotent
+        // per task: if the task already has a plan review (it is seeded when the card
+        // enters plan_review) it is reused so the AI can attach findings to it. The
+        // AI may also flag it incomplete (plan_incomplete) when it could not fully
+        // plan the technical side.
+        if ($reviewType === Review::TYPE_PLAN) {
+            return $this->upsertPlanReview($project, $data);
+        }
 
         // Resolve + fetch the comparison (if refs are present).
         $repository = null;
@@ -121,6 +133,60 @@ class CreateReviewTool extends LodestarTool
             'next' => $files !== []
                 ? 'Group coverage.uncovered into sections with upsert_review_section. Functional reviews: set each section\'s kind (input→output) and manual_steps. The review cannot reach a human until coverage is complete.'
                 : 'Add sections with upsert_review_section.',
+        ]);
+    }
+
+    /**
+     * Create (or reuse) a `plan`-type review for one task. A plan review has two
+     * fixed sections — Client-facing (the task body) and Technical-architecture
+     * (the plan) — and no GitHub comparison, so coverage is trivially complete and
+     * the AI never allocates files. It is idempotent per task (one plan review per
+     * task; the card seeds one on reaching plan_review). Open questions are raised
+     * as findings on these sections with add_finding; `plan_incomplete` flags the
+     * technical side as un-plannable (the human's only outcome becomes
+     * return-to-planning).
+     */
+    private function upsertPlanReview(Project $project, array $data): Response
+    {
+        $taskIds = $data['task_ids'] ?? [];
+        if (count($taskIds) !== 1) {
+            return Response::error('A plan review covers exactly one task — pass task_ids:[<id>].');
+        }
+
+        $task = $project->tasks()->whereKey((int) $taskIds[0])->first();
+        if (! $task) {
+            return Response::error('No task with that id belongs to this project.');
+        }
+
+        // Reuse the existing plan review if there is one; else seed it (two fixed
+        // sections). Task::ensurePlanReview owns the seeding so the auto-seed (on
+        // reaching plan_review) and this MCP path stay identical.
+        $review = $task->ensurePlanReview();
+
+        $update = [];
+        if (array_key_exists('title', $data)) {
+            $update['title'] = $data['title'];
+        }
+        if (array_key_exists('intro', $data)) {
+            $update['intro'] = $data['intro'];
+        }
+        if (array_key_exists('plan_incomplete', $data)) {
+            $update['plan_incomplete'] = (bool) $data['plan_incomplete'];
+        }
+        if ($update !== []) {
+            $review->update($update);
+        }
+
+        $review->load('sections');
+
+        return Response::json([
+            'id' => $review->id,
+            'url' => route('reviews.show', $review),
+            'scope' => $review->scope,
+            'review_type' => $review->review_type,
+            'plan_incomplete' => (bool) $review->plan_incomplete,
+            'sections' => $review->sections->map(fn ($s) => ['id' => $s->id, 'title' => $s->title])->all(),
+            'next' => 'Raise each open question/decision as a finding on the matching section with add_finding (section_id from `sections`). When the technical side can\'t be fully planned, set plan_incomplete:true — the human then only has return-to-planning. Then advance the task to plan_review.',
         ]);
     }
 
@@ -225,13 +291,14 @@ class CreateReviewTool extends LodestarTool
             'review_id' => $schema->integer()->description('Refresh this existing review\'s comparison (re-fetch files; sections covering changed files auto-flag for re-review).'),
             'scope' => $schema->string()->enum([Review::SCOPE_TASK, Review::SCOPE_DELIVERABLE])->description('task (default) or deliverable (whole-deliverable diff).'),
             'deliverable' => $schema->integer()->description('For a deliverable review: the deliverable id. Comparison defaults to its base_branch...branch.'),
-            'review_type' => $schema->string()->enum([Review::TYPE_FUNCTIONAL, Review::TYPE_CODE, Review::TYPE_ARCHITECTURE])->description('functional (per-task behaviour/UX/UI), code (task technical), or architecture (deliverable technical). Defaults: task→code, deliverable→architecture.'),
+            'review_type' => $schema->string()->enum(Review::TYPES)->description('functional (per-task behaviour/UX/UI), code (task technical), architecture (deliverable technical), or plan (the task plan: Client-facing + Technical-architecture, no comparison). Defaults: task→code, deliverable→architecture.'),
+            'plan_incomplete' => $schema->boolean()->description('Plan reviews only: flag the technical-architecture incomplete (too many open questions to plan it fully). When true the human may answer everything but the ONLY conclude outcome is return-to-planning.'),
             'title' => $schema->string()->description('Review title.'),
             'repo' => $schema->string()->description('Which linked repo ("owner/name") the comparison is in. Optional if the project has one repo.'),
             'base_ref' => $schema->string()->description('Base ref, e.g. "main". For a deliverable, defaults to its base_branch.'),
             'head_ref' => $schema->string()->description('Head ref under review. For a deliverable, defaults to its branch.'),
             'intro' => $schema->string()->description('Optional preamble shown at the top of the walkthrough.'),
-            'task_ids' => $schema->array()->description('Task ids (in this project) this review covers.'),
+            'task_ids' => $schema->array()->description('Task ids (in this project) this review covers. A plan review needs exactly one.'),
         ];
     }
 }

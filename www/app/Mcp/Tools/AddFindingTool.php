@@ -12,7 +12,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Raise one finding within a review section — a realistic scenario + impact (not a line nitpick), with a severity. The human triages it (approve / dismiss / must_fix) in the web UI. severity is one of: info, minor, major, critical.')]
+#[Description('Raise one finding within a review section — a realistic scenario + impact (not a line nitpick), with a severity. The human triages it (approve / dismiss / must_fix) in the web UI. On a PLAN review a finding is an OPEN QUESTION the human must answer (raise it on the Client-facing or Technical-architecture section); those compile into the rework brief if the plan is returned to planning. severity is one of: info, minor, major, critical.')]
 #[Name('add_finding')]
 class AddFindingTool extends LodestarTool
 {

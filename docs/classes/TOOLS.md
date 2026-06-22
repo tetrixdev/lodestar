@@ -35,12 +35,12 @@ playbook edits, and **playbook proposals are never made live by an agent**.
 | `list_projects` | List accessible projects (owned + team) with repos + the user's GitHub connections. | — | — |
 | `upsert_project` | Create/update a project (id to update; slug unique per user). | id, name, slug, description, primary_goal, repos, **stack** | Project |
 | `upsert_task` | Create/update a task under a deliverable (deliverable required on create; body vs plan; entry status decided last). | project, id, deliverable, corrective, depends_on, title, body(+summary), plan(+summary), status | Task, TaskDependency |
-| `upsert_deliverable` | Create/update a deliverable (scope = concept + body; status derives from its tasks). | project, id, title, category, base_branch, concept(+summary), body(+summary), questions | Deliverable, DeliverableQuestion |
+| `upsert_deliverable` | Create/update a deliverable (scope = concept + body; status derives from its tasks). Open questions are NOT here — they are plan-review findings. | project, id, title, category, base_branch, concept(+summary), body(+summary) | Deliverable |
 | `get_task` | Read tasks by id (batch) — full contents, status, branch, deps, reviews; unknowns reported in `missing`. | task_ids | — |
 | `upsert_session` | Create/update a work-session log; optionally link a task. | project, id, task_id, title, slug, body(+summary), occurred_on | WorkSession |
 | `link_repository` | Link a GitHub repo to a project through a connection (captures default branch). | project, repo, connection | Repository, pivot |
 | `unlink_repository` | Unlink a repo from a project (the repo row stays). | project, repo | pivot |
-| `create_review` | Create/refresh a review + pull the GitHub comparison; returns URL + uncovered files. | project, review_id, scope, deliverable, review_type, title, repo, base_ref, head_ref, intro, task_ids | Review, ReviewFile, ReviewSection |
+| `create_review` | Create/refresh a review + pull the GitHub comparison; returns URL + uncovered files. review_type=plan seeds a task's plan review (two fixed sections, no comparison; idempotent per task; plan_incomplete flag). | project, review_id, scope, deliverable, review_type, plan_incomplete, title, repo, base_ref, head_ref, intro, task_ids | Review, ReviewFile, ReviewSection |
 | `upsert_review_section` | Add/update one walkthrough section (mode + kind + covered files); frozen once handed to a human. | review_id, id, title, mode, kind, position, context, link, checks, manual_steps, status, files | ReviewSection, pivot |
 | `add_finding` | Raise one finding in a review section (severity info/minor/major/critical); draft reviews only. | section_id, title, detail, severity | ReviewFinding |
 | `get_review` | Read a full review — metadata, ordered sections, files, tasks, findings. | review_id | — |

@@ -74,33 +74,8 @@ class DeliverableLifecycleTest extends TestCase
         $this->assertNotNull($d->status_changed_at);
     }
 
-    // ── open-questions gate ───────────────────────────────────────────────────
-
-    public function test_unanswered_question_blocks_plan_approval(): void
-    {
-        $d = $this->deliverable($this->project(User::factory()->create()), Deliverable::STATUS_PLAN_REVIEW);
-        $q = $d->questions()->create(['question' => 'Which auth provider?', 'position' => 0]);
-
-        $this->assertTrue($d->hasUnansweredQuestions());
-        $this->assertFalse($d->canApprovePlan());
-
-        $q->update(['answer' => 'Sanctum']);
-
-        $this->assertTrue($q->isAnswered());
-        $this->assertNotNull($q->fresh()->answered_at);
-        $this->assertFalse($d->fresh()->hasUnansweredQuestions());
-        $this->assertTrue($d->fresh()->canApprovePlan());
-    }
-
-    public function test_clearing_an_answer_unanswers_the_question(): void
-    {
-        $d = $this->deliverable($this->project(User::factory()->create()), Deliverable::STATUS_PLAN_REVIEW);
-        $q = $d->questions()->create(['question' => 'X?', 'answer' => 'Y', 'position' => 0]);
-        $this->assertTrue($q->isAnswered());
-
-        $q->update(['answer' => null]);
-        $this->assertNull($q->fresh()->answered_at);
-    }
+    // (The deliverable-level open-questions gate was retired in task #100 —
+    // questions now live as findings on each task's plan review; see PlanReviewTest.)
 
     // ── per-deliverable sub_id + branch conventions ───────────────────────────
 

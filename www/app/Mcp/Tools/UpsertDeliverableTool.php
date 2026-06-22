@@ -11,7 +11,7 @@ use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Attributes\Name;
 
-#[Description('Create or update a deliverable — the optional Project → Deliverable → Task layer. Omit id to create; pass id to update content. A deliverable is a SCOPE (concept/body), NOT a plan — the plan is the set of child tasks the planning phase decomposes it into (each approved per-task). It always enters at backlog (new); its status then DERIVES from its tasks. May also carry scope-level open `questions`.')]
+#[Description('Create or update a deliverable — the optional Project → Deliverable → Task layer. Omit id to create; pass id to update content. A deliverable is a SCOPE (concept/body), NOT a plan — the plan is the set of child tasks the planning phase decomposes it into (each approved per-task in its own plan review). It always enters at backlog (new); its status then DERIVES from its tasks. Open questions are NOT raised here — they live as findings on each task\'s plan review (create_review review_type=plan + add_finding).')]
 #[Name('upsert_deliverable')]
 class UpsertDeliverableTool extends LodestarTool
 {
@@ -27,8 +27,6 @@ class UpsertDeliverableTool extends LodestarTool
             'concept_summary' => ['nullable', 'string', 'required_with:concept'],
             'body' => ['nullable', 'string'],
             'body_summary' => ['nullable', 'string', 'required_with:body'],
-            'questions' => ['nullable', 'array'],
-            'questions.*' => ['string'],
         ]);
 
         if (! empty($data['id'])) {
@@ -60,22 +58,10 @@ class UpsertDeliverableTool extends LodestarTool
         }
         $deliverable->save();
 
-        // Raise any new open questions (append; the human answers them in the UI).
-        if (! empty($data['questions'])) {
-            $existing = $deliverable->questions()->pluck('question')->all();
-            $pos = (int) $deliverable->questions()->max('position');
-            foreach ($data['questions'] as $question) {
-                if (! in_array($question, $existing, true)) {
-                    $deliverable->questions()->create(['question' => $question, 'position' => ++$pos]);
-                }
-            }
-        }
-
         return Response::json([
             'id' => $deliverable->id,
             'title' => $deliverable->title,
             'status' => $deliverable->status,
-            'open_questions' => $deliverable->questions()->whereNull('answered_at')->count(),
             'created' => $deliverable->wasRecentlyCreated,
         ]);
     }
@@ -92,7 +78,6 @@ class UpsertDeliverableTool extends LodestarTool
             'concept_summary' => $schema->string()->description('Required when concept is set: a 1–2 sentence TL;DR.'),
             'body' => $schema->string()->description('The refined SCOPE in our format (Why / What — in & out / Done when). A deliverable is a scope, not a plan — the plan is the set of child tasks. If set you MUST also pass body_summary.'),
             'body_summary' => $schema->string()->description('Required when body is set: a 1–2 sentence TL;DR of the scope.'),
-            'questions' => $schema->array()->items($schema->string())->description('Open questions for the human (scope-level). Appended (new ones only).'),
         ];
     }
 }

@@ -35,9 +35,57 @@ class Review extends Model
 
     public const TYPE_ARCHITECTURE = 'architecture'; // technical (deliverable-level)
 
+    public const TYPE_PLAN = 'plan';               // a task's plan (Client-facing + Technical-architecture)
+
+    /** Every review type the framework supports (drives create_review validation). */
+    public const TYPES = [
+        self::TYPE_FUNCTIONAL,
+        self::TYPE_CODE,
+        self::TYPE_ARCHITECTURE,
+        self::TYPE_PLAN,
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'plan_incomplete' => 'boolean',
+        ];
+    }
+
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    /** Is this a plan review (review_type = plan)? */
+    public function isPlanReview(): bool
+    {
+        return $this->review_type === self::TYPE_PLAN;
+    }
+
+    /**
+     * The two fixed sections a plan review always carries, in order: Client-facing
+     * (renders the task `body`) and Technical-architecture (renders the `plan`).
+     * `source` is the task field the section renders; it is read by the walkthrough
+     * view and by the seeder when a plan review is created. A plan review has no
+     * GitHub files, so coverage is trivially complete.
+     *
+     * @return list<array{title:string, source:string, context:string}>
+     */
+    public static function fixedPlanSections(): array
+    {
+        return [
+            [
+                'title' => 'Client-facing',
+                'source' => 'body',
+                'context' => 'What this task delivers in user terms (the task body). Approve when the scope is right; request changes (or raise a finding) on anything to clarify.',
+            ],
+            [
+                'title' => 'Technical-architecture',
+                'source' => 'plan',
+                'context' => 'How it is built — the structure map (the task plan), written for a reviewer who has not read the code. Approve when the approach is sound; raise open questions as findings.',
+            ],
+        ];
     }
 
     /** The deliverable this review targets (scope = deliverable; else null). */

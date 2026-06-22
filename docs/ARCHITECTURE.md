@@ -299,6 +299,25 @@ sign-off, so losing the claim (someone releases / reassigns) locks the screen
 read-only. A review is linked to the Tasks it covers via the `review_task`
 pivot; the walkthrough lists them and each board card links back to its review.
 
+**One typed framework, four review types.** Every review — functional, code,
+architecture, and **plan** — is the SAME `Review` (+ `ReviewSection` +
+`ReviewFinding`) walked through the same `reviews/show.blade.php`; only the
+`review_type` differs, and it sets the sections and the conclude outcomes. A
+**plan review** (`review_type=plan`, scope=task) is the case with no GitHub
+comparison: it carries two fixed sections — **Client-facing** (renders the task
+`body`) and **Technical-architecture** (renders the `plan`) — seeded
+automatically when a card reaches `plan_review` (`Task::ensurePlanReview()`,
+idempotent; the planning AI may also create/enrich it via `create_review
+review_type=plan`). Open questions are **findings** on those sections
+(`add_finding`); there is no separate deliverable-level open-questions table.
+The AI can set `reviews.plan_incomplete` ("technical-architecture incomplete —
+too many open questions") via `create_review`; when set, the human's only
+conclude outcome is return-to-planning. `conclude()` has a `plan` branch
+(`concludePlan`): all sections approved AND not incomplete → task
+`ready_for_dev`; any change requested or the incomplete flag → `ready_for_planning`
+with the section notes + question-finding answers compiled into `rework_notes`.
+This retired the old markdown-only plan-review block + `TaskController::planDecision`.
+
 Each section's controls model three independent things, and **all autosave** (no
 save buttons): a neutral **"I've reviewed this section"** checkbox (maps to
 `status` open↔signed_off — a "been through it" marker, not a satisfaction

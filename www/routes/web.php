@@ -64,15 +64,15 @@ Route::middleware('auth')->group(function () {
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::patch('/tasks/{task}/move', [TaskController::class, 'move'])->name('tasks.move');
     Route::patch('/tasks/{task}/release', [TaskController::class, 'release'])->name('tasks.release');
-    Route::patch('/tasks/{task}/plan-decision', [TaskController::class, 'planDecision'])->name('tasks.plan-decision');
+    // (Plan review is now a normal Review of review_type=plan — the reviews.*
+    // routes drive it; the old tasks.plan-decision endpoint is retired.)
 
     // Deliverables — the optional task-grouping layer + its funnel lifecycle.
     Route::post('/projects/{project}/deliverables', [DeliverableController::class, 'store'])->name('deliverables.store');
     Route::get('/deliverables/{deliverable}', [DeliverableController::class, 'show'])->name('deliverables.show');
     Route::patch('/deliverables/{deliverable}', [DeliverableController::class, 'update'])->name('deliverables.update');
     Route::post('/deliverables/{deliverable}/tasks', [DeliverableController::class, 'addTask'])->name('deliverables.tasks.store');
-    Route::post('/deliverables/{deliverable}/questions', [DeliverableController::class, 'addQuestion'])->name('deliverables.questions.store');
-    Route::patch('/deliverables/{deliverable}/questions/{question}', [DeliverableController::class, 'answerQuestion'])->name('deliverables.questions.answer');
+    // (Deliverable-level open questions are retired — questions now live as plan-review findings.)
 
     // Teams — shared projects + approval rights. Membership is owner-managed.
     Route::get('/teams', [TeamController::class, 'index'])->name('teams.index');
