@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\Playbook;
-use App\Support\TaskSpec;
 use Illuminate\Database\Seeder;
 
 /**
@@ -27,15 +26,6 @@ class SystemPlaybookSeeder extends Seeder
         // live in the `laravel` stack pack, composed in only for tagged projects.
         foreach (['main', 'plan', 'develop', 'ai_review'] as $phase) {
             $playbooks[$phase][1] .= "\n\n".$this->structureDoctrine($phase);
-        }
-
-        // The body/plan/summary format is single-sourced in App\Support\TaskSpec
-        // (the same constants the upsert_task tool descriptions read), so the
-        // playbook prose can never drift from the tool. Substituted into the
-        // {{TASK_SPEC}} marker the plan/develop playbooks carry.
-        $taskSpec = $this->taskSpecBlock();
-        foreach (['plan', 'develop'] as $phase) {
-            $playbooks[$phase][1] = str_replace('{{TASK_SPEC}}', $taskSpec, $playbooks[$phase][1]);
         }
 
         // The docs skeleton also teaches the class-family doc pattern.
@@ -103,25 +93,6 @@ class SystemPlaybookSeeder extends Seeder
         };
 
         return $tail === '' ? $core : $core."\n\n".$tail;
-    }
-
-    /**
-     * The single-sourced body / plan / summary format (from App\Support\TaskSpec —
-     * the same constants the upsert_task tool descriptions read). Substituted into
-     * the {{TASK_SPEC}} marker the plan/develop playbooks carry, so the playbook
-     * prose and the tool descriptions can never drift apart.
-     */
-    private function taskSpecBlock(): string
-    {
-        return implode("\n", [
-            'BODY / PLAN / SUMMARY FORMAT (single-sourced — App\\Support\\TaskSpec):',
-            '- `body` — '.TaskSpec::BODY,
-            '- `body_summary` — '.TaskSpec::BODY_SUMMARY,
-            '- `plan` — '.TaskSpec::PLAN,
-            '- `plan_summary` — '.TaskSpec::PLAN_SUMMARY,
-            '',
-            'TECHNICAL-ARCHITECTURE RULE: '.TaskSpec::ARCHITECTURE_RULE,
-        ]);
     }
 
     /** @return array<string, array{0:string,1:string}> */
@@ -282,7 +253,13 @@ class SystemPlaybookSeeder extends Seeder
                 When the plan is ready, advance the task to `plan_review` for a human.
                 Do not write code in this phase.
 
-                {{TASK_SPEC}}
+                BODY / PLAN / SUMMARY FORMAT:
+                - `body` — The CLIENT-FACING description (markdown): what this delivers in user terms — **Why** (the goal/problem), **What** (scope: in and out), **Done when** (acceptance). No file-level detail (that goes in `plan`).
+                - `body_summary` — A SHORT markdown blurb (~2–3 lines) — the scannable TL;DR of the client-facing description that the board card and review brief show. Markdown is rendered (bold / lists / links), so write it to read well, not as one flat sentence.
+                - `plan` — The TECHNICAL / ARCHITECTURE description (markdown): the structure map — files added/moved/deleted (one plain line each), the flow, the conventions, and how it is built.
+                - `plan_summary` — A SHORT markdown blurb (~2–3 lines) — the scannable TL;DR of the technical/architecture description. Markdown is rendered, so write it to read well, not as one flat sentence.
+
+                TECHNICAL-ARCHITECTURE RULE: Write the Technical-architecture for a reviewer who has NOT read the code: stay at the architecture level, NAME the new files you will add, and do NOT reference existing files assuming the reader already knows their contents.
 
                 ── DELIVERABLES (planning the whole increment) ──
                 If you claimed a DELIVERABLE (not a task), you plan the whole thing:
@@ -312,7 +289,13 @@ class SystemPlaybookSeeder extends Seeder
                 You are building one approved Lodestar task. Follow the agreed plan and
                 the project's CONVENTIONS.md.
 
-                {{TASK_SPEC}}
+                BODY / PLAN / SUMMARY FORMAT:
+                - `body` — The CLIENT-FACING description (markdown): what this delivers in user terms — **Why** (the goal/problem), **What** (scope: in and out), **Done when** (acceptance). No file-level detail (that goes in `plan`).
+                - `body_summary` — A SHORT markdown blurb (~2–3 lines) — the scannable TL;DR of the client-facing description that the board card and review brief show. Markdown is rendered (bold / lists / links), so write it to read well, not as one flat sentence.
+                - `plan` — The TECHNICAL / ARCHITECTURE description (markdown): the structure map — files added/moved/deleted (one plain line each), the flow, the conventions, and how it is built.
+                - `plan_summary` — A SHORT markdown blurb (~2–3 lines) — the scannable TL;DR of the technical/architecture description. Markdown is rendered, so write it to read well, not as one flat sentence.
+
+                TECHNICAL-ARCHITECTURE RULE: Write the Technical-architecture for a reviewer who has NOT read the code: stay at the architecture level, NAME the new files you will add, and do NOT reference existing files assuming the reader already knows their contents.
 
                 WORKSPACE: work inside the project's directory at
                 `~/lodestar-workspaces/<project-slug>/<repo-name>/` that the main playbook set

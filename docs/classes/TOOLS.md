@@ -75,13 +75,14 @@ are read-only and access-scoped to your projects.
 _Family size: 25 tools. The roster is discovered from `LodestarServer::$tools` by
 the guard — add a tool, add a row._
 
-### Single-sourced body/plan/summary format
+### body/plan/summary format
 
-The `upsert_task` (and `upsert_deliverable`) `body` / `body_summary` / `plan` /
-`plan_summary` descriptions are NOT written inline — they pull from
-`App\Support\TaskSpec` constants, the one source of truth for the format. The
-same constants are composed into the seeded `plan` / `develop` playbooks (see
-`SystemPlaybookSeeder`), so the tool descriptions and the playbook prose can
-never drift. `TaskSpec::ARCHITECTURE_RULE` carries the non-coder rule
-(Technical-architecture is written for a reviewer who has not read the code).
-`TaskSpecSingleSourceTest` guards both sides.
+The `upsert_task` `body` / `body_summary` / `plan` / `plan_summary` param
+descriptions state the format directly (what each field is, and that summaries
+are a short ~2–3-line markdown blurb). The same format — including the non-coder
+**Technical-architecture rule** (write it for a reviewer who has NOT read the
+code: name new files, don't reference existing ones) — is authored as VISIBLE
+text in the seeded `plan` / `develop` playbooks (`SystemPlaybookSeeder`). The
+playbook is the human-visible canonical copy; the tool descriptions carry a light
+duplicate so an agent reading the tool schema gets the same guidance. Visibility
+in the playbook is the priority — there is deliberately no hidden code constant.

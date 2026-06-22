@@ -6,7 +6,6 @@ namespace App\Mcp\Tools;
 
 use App\Models\Deliverable;
 use App\Models\Task;
-use App\Support\TaskSpec;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -142,10 +141,10 @@ class UpsertTaskTool extends LodestarTool
             'depends_on' => $schema->array()->items($schema->integer())->description('Task ids this task is blocked by (same project). The loop will not hand it out until they are done.'),
             'title' => $schema->string()->description('Card title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix, e.g. "mcp", "infra".'),
-            'body' => $schema->string()->description(TaskSpec::BODY.' If set you MUST also pass body_summary.'),
-            'body_summary' => $schema->string()->description('Required whenever body is set. '.TaskSpec::BODY_SUMMARY),
-            'plan' => $schema->string()->description(TaskSpec::PLAN.' If set you MUST also pass plan_summary.'),
-            'plan_summary' => $schema->string()->description('Required whenever plan is set. '.TaskSpec::PLAN_SUMMARY),
+            'body' => $schema->string()->description('The CLIENT-FACING description (markdown): what this delivers in user terms — **Why** (the goal/problem), **What** (scope: in and out), **Done when** (acceptance). No file-level detail (that goes in `plan`). If set you MUST also pass body_summary.'),
+            'body_summary' => $schema->string()->description('Required whenever body is set. A SHORT markdown blurb (~2–3 lines) — the scannable TL;DR of the client-facing description that the board card and review brief show. Markdown is rendered (bold / lists / links), so write it to read well, not as one flat sentence.'),
+            'plan' => $schema->string()->description('The TECHNICAL / ARCHITECTURE description (markdown): the structure map — files added/moved/deleted (one plain line each), the flow, the conventions, and how it is built. Write the Technical-architecture for a reviewer who has NOT read the code: stay at the architecture level, NAME the new files you will add, and do NOT reference existing files assuming the reader already knows their contents. If set you MUST also pass plan_summary.'),
+            'plan_summary' => $schema->string()->description('Required whenever plan is set. A SHORT markdown blurb (~2–3 lines) — the scannable TL;DR of the technical/architecture description. Markdown is rendered, so write it to read well, not as one flat sentence.'),
             // Listed last on purpose: decide the entry state AFTER writing the body/plan.
             'status' => $schema->string()->enum([
                 Task::STATUS_READY_FOR_PLANNING,
