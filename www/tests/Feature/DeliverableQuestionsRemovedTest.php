@@ -14,8 +14,8 @@ use Tests\TestCase;
 /**
  * The deliverable-level open-questions mechanism is gone (task #100 A): the table,
  * model, relation, routes and UI are removed; questions now live as plan-review
- * findings. The deliverable page instead shows collapsible plan + functional
- * review sections.
+ * findings. The deliverable page instead shows expanded (non-collapsible) plan +
+ * functional review sections — and ONLY when an OPEN review of that type exists.
  */
 class DeliverableQuestionsRemovedTest extends TestCase
 {
@@ -42,7 +42,7 @@ class DeliverableQuestionsRemovedTest extends TestCase
         $this->assertFalse(\Illuminate\Support\Facades\Route::has('tasks.plan-decision'));
     }
 
-    public function test_deliverable_page_has_collapsible_plan_and_functional_sections(): void
+    public function test_open_plan_review_renders_expanded_without_a_collapse_toggle(): void
     {
         $user = User::factory()->create();
         $project = $user->projects()->create(['name' => 'P', 'slug' => 'p']);
@@ -53,21 +53,42 @@ class DeliverableQuestionsRemovedTest extends TestCase
             'status' => Task::STATUS_READY_FOR_DEV,
             'position' => 0,
         ]);
-        $task->update(['status' => Task::STATUS_PLAN_REVIEW]); // seeds the plan review
+        $task->update(['status' => Task::STATUS_PLAN_REVIEW]); // seeds the (open) plan review
 
-        // Attach a functional review so its (collapsed) section renders too.
-        $functional = $project->reviews()->create([
-            'title' => 'Functional review: '.$task->title,
-            'scope' => \App\Models\Review::SCOPE_TASK,
-            'review_type' => \App\Models\Review::TYPE_FUNCTIONAL,
-            'status' => 'draft',
+        $res = $this->actingAs($user)->get(route('deliverables.show', $d))->assertOk();
+
+        $res->assertSee('Plan review')->assertDontSee('Open questions');
+        // The list is rendered inline (the task row is present) and the page carries
+        // NO collapse toggle at all — the review sections are always expanded.
+        $res->assertSeeText('Awaiting plan');
+        $this->assertStringNotContainsString('x-collapse', $res->getContent());
+    }
+
+    public function test_concluded_review_does_not_appear_in_the_sections(): void
+    {
+        $user = User::factory()->create();
+        $project = $user->projects()->create(['name' => 'P', 'slug' => 'p2']);
+        $d = $project->deliverables()->create(['title' => 'D', 'status' => Deliverable::STATUS_BUILDING]);
+        $task = $d->tasks()->create([
+            'project_id' => $project->id,
+            'title' => 'Done planning',
+            'status' => Task::STATUS_READY_FOR_DEV,
+            'position' => 0,
         ]);
-        $functional->tasks()->attach($task->id);
+
+        // A CONCLUDED plan review (outcome set, status done) must NOT show in the list.
+        $concluded = $project->reviews()->create([
+            'title' => 'Plan review: '.$task->title,
+            'scope' => \App\Models\Review::SCOPE_TASK,
+            'review_type' => \App\Models\Review::TYPE_PLAN,
+            'status' => 'done',
+            'outcome' => 'approved',
+        ]);
+        $concluded->tasks()->attach($task->id);
 
         $this->actingAs($user)->get(route('deliverables.show', $d))
             ->assertOk()
-            ->assertSee('Plan review')
-            ->assertSee('Functional review')
-            ->assertDontSee('Open questions');
+            ->assertDontSee('Plan review —')
+            ->assertDontSee('Functional review —');
     }
 }

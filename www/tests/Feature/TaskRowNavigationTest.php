@@ -15,8 +15,9 @@ use Tests\TestCase;
 /**
  * Clickable task-row navigation (task #100 B): Task::rowTarget() returns the OPEN
  * review URL when the card is in a review state (plan/ai/human), and the task-show
- * URL otherwise; openReviewFor() picks the review by phase. The id-chip, title and
- * end-dot in <x-task-row> all link to that one target.
+ * URL otherwise; openReviewFor() picks the review by phase. The WHOLE <x-task-row>
+ * is a single anchor to that one target (id-chip, title and end-dot all inside it),
+ * so the entire row — gaps included — is clickable.
  */
 class TaskRowNavigationTest extends TestCase
 {
@@ -82,7 +83,7 @@ class TaskRowNavigationTest extends TestCase
         $this->assertSame(route('tasks.show', $task), $task->rowTarget());
     }
 
-    public function test_task_row_component_links_id_title_and_dot_to_the_target(): void
+    public function test_whole_task_row_is_one_anchor_to_the_target(): void
     {
         $task = $this->task(Task::STATUS_AI_REVIEW);
         $review = $this->review($task, Review::TYPE_CODE);
@@ -91,8 +92,13 @@ class TaskRowNavigationTest extends TestCase
         $html = \Illuminate\Support\Facades\Blade::render('<x-task-row :task="$task" />', ['task' => $task]);
 
         $target = route('reviews.show', $review);
-        // Three separate anchors all pointing at the target (id-chip, title, end-dot).
-        $this->assertSame(3, substr_count($html, 'href="'.$target.'"'));
+        // The whole row is ONE anchor (the row wrapper itself), so the entire row —
+        // including the gaps — is the click target. Exactly one href to the target.
+        $this->assertSame(1, substr_count($html, 'href="'.$target.'"'));
+        // The wrapper IS the link: the rendered fragment starts with <a …>.
+        $this->assertStringStartsWith('<a ', trim($html));
+        // It carries a hover state, and still shows the id-chip + title.
+        $this->assertStringContainsString('hover:bg-', $html);
         $this->assertStringContainsString(sprintf('T%02d', $task->sub_id), $html);
     }
 }

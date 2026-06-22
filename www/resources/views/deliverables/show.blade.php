@@ -5,15 +5,19 @@
         $R = \App\Models\Review::class;
         $statusLabel = $D::LABELS[$deliverable->status] ?? $deliverable->status;
 
-        // Per-task plan + functional reviews, for the two collapsible review
-        // sections below. A plan review is a normal Review of review_type=plan;
-        // the functional review is the per-task human gate.
+        // Per-task plan + functional reviews, for the two inline review sections
+        // below. A plan review is a normal Review of review_type=plan; the
+        // functional review is the per-task human gate. We list ONLY OPEN reviews
+        // (not concluded, not `done`) — once a review is handled the task moves on,
+        // so a concluded review must NOT linger in these lists. The sections are
+        // not collapsible; with the one-line task rows they render expanded inline.
+        $isOpenReview = fn ($r) => $r !== null && $r->outcome === null && $r->status !== 'done';
         $planReviews = $deliverable->tasks
             ->map(fn ($t) => [$t, $t->reviews->where('review_type', $R::TYPE_PLAN)->sortByDesc('id')->first()])
-            ->filter(fn ($pair) => $pair[1] !== null);
+            ->filter(fn ($pair) => $isOpenReview($pair[1]));
         $functionalReviews = $deliverable->tasks
             ->map(fn ($t) => [$t, $t->reviews->where('review_type', $R::TYPE_FUNCTIONAL)->sortByDesc('id')->first()])
-            ->filter(fn ($pair) => $pair[1] !== null);
+            ->filter(fn ($pair) => $isOpenReview($pair[1]));
     @endphp
 
     <x-slot name="header">
@@ -103,23 +107,21 @@
                     </p>
                 </div>
 
-                {{-- Plan review — collapsed by default. Each task's plan review is a
-                     normal Review (review_type=plan); the human walks/concludes it on
-                     its own page. --}}
+                {{-- Open plan reviews — rendered expanded inline (NOT collapsible).
+                     Each task's plan review is a normal Review (review_type=plan); the
+                     human walks/concludes it on its own page. Only OPEN reviews appear
+                     (a concluded one drops off — its task has already moved on). --}}
                 @if ($planReviews->isNotEmpty())
-                    <div class="bg-white shadow-sm sm:rounded-lg p-5" x-data="{ open: false }">
-                        <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-left">
-                            <span class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Plan review — {{ $planReviews->count() }} task(s)</span>
-                            <svg class="size-4 text-gray-400 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
-                        </button>
-                        <ul x-show="open" x-collapse x-cloak class="mt-3 space-y-2">
+                    <div class="bg-white shadow-sm sm:rounded-lg p-5">
+                        <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Plan review — {{ $planReviews->count() }} open</p>
+                        <ul class="mt-3 space-y-2">
                             @foreach ($planReviews as [$task, $review])
                                 <li class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                                     <a href="{{ route('reviews.show', $review) }}" class="min-w-0 truncate text-indigo-600 hover:underline">
                                         <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span> {{ $task->title }}
                                     </a>
-                                    <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 {{ $review->outcome ? ($review->outcome === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') : 'bg-amber-100 text-amber-700' }}">
-                                        {{ $review->outcome ? str_replace('_', ' ', $review->outcome) : ($review->plan_incomplete ? 'incomplete' : 'open') }}
+                                    <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 {{ $review->plan_incomplete ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700' }}">
+                                        {{ $review->plan_incomplete ? 'incomplete' : 'open' }}
                                     </span>
                                 </li>
                             @endforeach
@@ -127,22 +129,17 @@
                     </div>
                 @endif
 
-                {{-- Functional review — collapsed by default (the per-task human gate). --}}
+                {{-- Open functional reviews — the per-task human gate, expanded inline. --}}
                 @if ($functionalReviews->isNotEmpty())
-                    <div class="bg-white shadow-sm sm:rounded-lg p-5" x-data="{ open: false }">
-                        <button type="button" @click="open = !open" class="flex w-full items-center justify-between gap-2 text-left">
-                            <span class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Functional review — {{ $functionalReviews->count() }} task(s)</span>
-                            <svg class="size-4 text-gray-400 transition-transform" :class="open && 'rotate-90'" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clip-rule="evenodd"/></svg>
-                        </button>
-                        <ul x-show="open" x-collapse x-cloak class="mt-3 space-y-2">
+                    <div class="bg-white shadow-sm sm:rounded-lg p-5">
+                        <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Functional review — {{ $functionalReviews->count() }} open</p>
+                        <ul class="mt-3 space-y-2">
                             @foreach ($functionalReviews as [$task, $review])
                                 <li class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
                                     <a href="{{ route('reviews.show', $review) }}" class="min-w-0 truncate text-indigo-600 hover:underline">
                                         <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span> {{ $task->title }}
                                     </a>
-                                    <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 {{ $review->outcome ? ($review->outcome === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700') : 'bg-amber-100 text-amber-700' }}">
-                                        {{ $review->outcome ? str_replace('_', ' ', $review->outcome) : 'open' }}
-                                    </span>
+                                    <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-amber-100 text-amber-700">open</span>
                                 </li>
                             @endforeach
                         </ul>
