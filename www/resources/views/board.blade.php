@@ -24,7 +24,7 @@
                 </span>
             </div>
 
-            {{-- toolbar: project filter + create-deliverable --}}
+            {{-- toolbar: project filter + create-project + create-deliverable --}}
             <div class="bg-white shadow-sm sm:rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-3">
                 <form method="GET" action="{{ route('board') }}" class="flex items-center gap-2">
                     <label for="project-filter" class="text-sm text-gray-500">Project</label>
@@ -35,6 +35,15 @@
                             <option value="{{ $p->id }}" @selected($selectedId === $p->id)>{{ $p->name }}</option>
                         @endforeach
                     </x-select>
+                </form>
+
+                {{-- create-project: the board is the only projects landing now, so the
+                     "new project" affordance the old projects list owned lives here. --}}
+                <form method="POST" action="{{ route('projects.store') }}" class="flex items-center gap-2">
+                    @csrf
+                    <input name="name" type="text" placeholder="New project…" required
+                           class="flex-1 sm:w-56 text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500" />
+                    <x-primary-button class="!py-2 !text-xs whitespace-nowrap">+ Project</x-primary-button>
                 </form>
 
                 @if ($selectedId !== null)
@@ -52,6 +61,7 @@
 
             <x-input-error :messages="$errors->get('status')" />
             <x-input-error :messages="$errors->get('title')" />
+            <x-input-error :messages="$errors->get('name')" />
 
             {{-- 5 phase columns; the board is deliverable-only — deliverable cards in each --}}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">

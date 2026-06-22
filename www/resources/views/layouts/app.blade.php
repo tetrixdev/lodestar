@@ -18,7 +18,7 @@
         {{-- App shell: exactly viewport-tall, a flex column. Nav + page header take
              their natural height; <main> fills whatever is left and owns the scroll.
              min-h-0 lets <main> shrink below its content so a full-height page (the
-             dashboard) can scroll its own regions instead of the window. --}}
+             board) can scroll its own regions instead of the window. --}}
         <div class="flex h-dvh flex-col overflow-hidden bg-gray-100">
             @include('layouts.navigation')
 

@@ -158,9 +158,9 @@ class ProjectManagementTest extends TestCase
             ->assertForbidden();
     }
 
-    // ── project list overhaul ────────────────────────────────────────────────
+    // ── the board is the cross-project landing (the projects-list screen is retired) ──
 
-    public function test_project_index_renders_with_summaries(): void
+    public function test_accessible_projects_surface_on_the_board(): void
     {
         $user = User::factory()->create();
         $project = $this->project($user);
@@ -168,9 +168,8 @@ class ProjectManagementTest extends TestCase
         $this->makeTask($project, ['title' => 'Open one', 'status' => 'ready_for_planning', 'position' => 0]);
 
         $this->actingAs($user)
-            ->get('/projects')
+            ->get(route('board'))
             ->assertOk()
-            ->assertSee('Demo')
-            ->assertSee('done');
+            ->assertSee('Demo');
     }
 }

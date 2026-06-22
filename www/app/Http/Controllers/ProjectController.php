@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Concerns\BuildsOnboarding;
 use App\Models\Playbook;
 use App\Models\Project;
 use App\Models\Task;
@@ -17,52 +16,6 @@ use Illuminate\View\View;
 
 class ProjectController extends Controller
 {
-    use BuildsOnboarding;
-
-    /** The projects the user can reach (owned + their teams'), each with progress + due-date summaries. */
-    public function index(Request $request): View
-    {
-        $projects = Project::accessibleBy($request->user())->latest()->withCount('tasks')->get();
-
-        // Per-project rollups for the list cards: live task count, done count,
-        // per-phase counts (live only), overdue count, and the next upcoming due.
-        $summaries = [];
-        foreach ($projects as $project) {
-            $tasks = $project->tasks()->get();
-
-            $live = $tasks->whereNotIn('status', [Task::STATUS_CANCELLED]);
-            $done = $live->where('status', Task::STATUS_MERGED)->count();
-            $liveCount = $live->count();
-
-            $phaseCounts = [];
-            foreach (Task::PHASES as $key => $phase) {
-                $phaseCounts[$key] = $live->whereIn('status', $phase['statuses'])->count();
-            }
-
-            $overdue = $live->filter(fn (Task $t) => $t->isOverdue())->count();
-
-            $nextDue = $live
-                ->filter(fn (Task $t) => $t->due_date !== null && ! in_array($t->status, [Task::STATUS_MERGED], true))
-                ->sortBy('due_date')
-                ->first()?->due_date;
-
-            $summaries[$project->id] = [
-                'live' => $liveCount,
-                'done' => $done,
-                'phaseCounts' => $phaseCounts,
-                'overdue' => $overdue,
-                'nextDue' => $nextDue,
-            ];
-        }
-
-        return view('projects.index', [
-            'projects' => $projects,
-            'summaries' => $summaries,
-            'phases' => Task::PHASES,
-            'onboarding' => $this->onboarding($request->user()),
-        ]);
-    }
-
     /** Project settings — name/goal, team assignment, and project approvers. */
     public function settings(Request $request, Project $project): View
     {

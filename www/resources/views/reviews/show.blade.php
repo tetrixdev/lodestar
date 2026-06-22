@@ -6,7 +6,7 @@
         <div class="flex items-center justify-between gap-3 flex-wrap">
             <div>
                 <x-breadcrumb :trail="[
-                    ['label' => 'Projects', 'url' => route('projects.index')],
+                    ['label' => 'Board', 'url' => route('board')],
                     ['label' => $review->project->name, 'url' => route('projects.show', $review->project)],
                     ['label' => 'Reviews', 'url' => route('reviews.index', $review->project)],
                     ['label' => $review->title],
