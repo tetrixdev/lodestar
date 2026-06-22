@@ -56,5 +56,11 @@ The same holds for deliverables (`Deliverable::phaseFor()`). The human gates
 (`plan_review`, `human_review`, the deliverable architecture/functional reviews)
 load no playbook — a person moves them.
 
+The `plan` and `develop` playbooks do NOT spell out the body/plan/summary format
+inline — the seeder substitutes a `{{TASK_SPEC}}` marker with the constants from
+`App\Support\TaskSpec` (the same single source the `upsert_task` tool
+descriptions read), so the playbook prose and the tool can never drift.
+`TaskSpecSingleSourceTest` guards both sides.
+
 _Source of truth: `SystemPlaybookSeeder`. The guard discovers seeded system keys
 and asserts each appears above — seed a playbook, add a row._

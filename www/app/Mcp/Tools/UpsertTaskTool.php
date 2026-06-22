@@ -6,6 +6,7 @@ namespace App\Mcp\Tools;
 
 use App\Models\Deliverable;
 use App\Models\Task;
+use App\Support\TaskSpec;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -141,10 +142,10 @@ class UpsertTaskTool extends LodestarTool
             'depends_on' => $schema->array()->items($schema->integer())->description('Task ids this task is blocked by (same project). The loop will not hand it out until they are done.'),
             'title' => $schema->string()->description('Card title (required when creating).'),
             'category' => $schema->string()->description('Optional grouping prefix, e.g. "mcp", "infra".'),
-            'body' => $schema->string()->description('The CLIENT-FACING description (markdown): what this delivers in user terms — **Why** (the goal/problem), **What** (scope: in and out), **Done when** (acceptance). No file-level detail (that goes in `plan`). If set you MUST also pass body_summary.'),
-            'body_summary' => $schema->string()->description('Required whenever body is set: a 1–2 sentence scannable TL;DR of the client-facing description.'),
-            'plan' => $schema->string()->description('The TECHNICAL / ARCHITECTURE description (markdown): the structure map — files added/moved/deleted, the flow, conventions, and how it is built. If set you MUST also pass plan_summary.'),
-            'plan_summary' => $schema->string()->description('Required whenever plan is set: a 1–2 sentence scannable TL;DR of the technical/architecture description.'),
+            'body' => $schema->string()->description(TaskSpec::BODY.' If set you MUST also pass body_summary.'),
+            'body_summary' => $schema->string()->description('Required whenever body is set. '.TaskSpec::BODY_SUMMARY),
+            'plan' => $schema->string()->description(TaskSpec::PLAN.' If set you MUST also pass plan_summary.'),
+            'plan_summary' => $schema->string()->description('Required whenever plan is set. '.TaskSpec::PLAN_SUMMARY),
             // Listed last on purpose: decide the entry state AFTER writing the body/plan.
             'status' => $schema->string()->enum([
                 Task::STATUS_READY_FOR_PLANNING,

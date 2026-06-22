@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Models\Playbook;
+use App\Support\TaskSpec;
 use Illuminate\Database\Seeder;
 
 /**
@@ -26,6 +27,15 @@ class SystemPlaybookSeeder extends Seeder
         // live in the `laravel` stack pack, composed in only for tagged projects.
         foreach (['main', 'plan', 'develop', 'ai_review'] as $phase) {
             $playbooks[$phase][1] .= "\n\n".$this->structureDoctrine($phase);
+        }
+
+        // The body/plan/summary format is single-sourced in App\Support\TaskSpec
+        // (the same constants the upsert_task tool descriptions read), so the
+        // playbook prose can never drift from the tool. Substituted into the
+        // {{TASK_SPEC}} marker the plan/develop playbooks carry.
+        $taskSpec = $this->taskSpecBlock();
+        foreach (['plan', 'develop'] as $phase) {
+            $playbooks[$phase][1] = str_replace('{{TASK_SPEC}}', $taskSpec, $playbooks[$phase][1]);
         }
 
         // The docs skeleton also teaches the class-family doc pattern.
@@ -93,6 +103,25 @@ class SystemPlaybookSeeder extends Seeder
         };
 
         return $tail === '' ? $core : $core."\n\n".$tail;
+    }
+
+    /**
+     * The single-sourced body / plan / summary format (from App\Support\TaskSpec —
+     * the same constants the upsert_task tool descriptions read). Substituted into
+     * the {{TASK_SPEC}} marker the plan/develop playbooks carry, so the playbook
+     * prose and the tool descriptions can never drift apart.
+     */
+    private function taskSpecBlock(): string
+    {
+        return implode("\n", [
+            'BODY / PLAN / SUMMARY FORMAT (single-sourced — App\\Support\\TaskSpec):',
+            '- `body` — '.TaskSpec::BODY,
+            '- `body_summary` — '.TaskSpec::BODY_SUMMARY,
+            '- `plan` — '.TaskSpec::PLAN,
+            '- `plan_summary` — '.TaskSpec::PLAN_SUMMARY,
+            '',
+            'TECHNICAL-ARCHITECTURE RULE: '.TaskSpec::ARCHITECTURE_RULE,
+        ]);
     }
 
     /** @return array<string, array{0:string,1:string}> */
@@ -253,6 +282,8 @@ class SystemPlaybookSeeder extends Seeder
                 When the plan is ready, advance the task to `plan_review` for a human.
                 Do not write code in this phase.
 
+                {{TASK_SPEC}}
+
                 ── DELIVERABLES (planning the whole increment) ──
                 If you claimed a DELIVERABLE (not a task), you plan the whole thing:
                 1. Rewrite the raw `concept` into a clear spec in `body` (Why / What — in
@@ -265,16 +296,23 @@ class SystemPlaybookSeeder extends Seeder
                    description: why/what/done-when, in user terms) AND a `plan` (technical /
                    architecture description: the file-level structure map + how it's built).
                    Use `depends_on:[ids]` where one task must finish before another. Each
-                   task is then approved individually by the human in the plan review.
-                4. Raise every decision the human must make as QUESTIONS
-                   (upsert_deliverable questions:[...]). The plan CANNOT be approved until
-                   all are answered — encode questions, never ask in your response.
-                5. advance_deliverable to `plan_review` for the human.
+                   task is then approved individually by the human in its plan review.
+                4. Raise every decision/open question the human must answer as FINDINGS on
+                   that task's plan review (a `plan`-type review with two sections —
+                   Client-facing → body, Technical-architecture → plan; raise the question
+                   with add_finding). When too much is unknown to plan the technical side,
+                   write the Client-facing section, give a MINIMAL Technical-architecture,
+                   and flag the plan review incomplete (create_review plan_incomplete:true) —
+                   the human then has only return-to-planning. Encode questions, never ask
+                   in your response.
+                5. advance the tasks to `plan_review` for the human.
                 MD],
 
             'develop' => ['Develop a task', <<<'MD'
                 You are building one approved Lodestar task. Follow the agreed plan and
                 the project's CONVENTIONS.md.
+
+                {{TASK_SPEC}}
 
                 WORKSPACE: work inside the project's directory at
                 `~/lodestar-workspaces/<project-slug>/<repo-name>/` that the main playbook set
