@@ -16,6 +16,16 @@ signed-in user.
 
 ## Components
 
+> **Class families** that are too big for prose live in their own guarded docs
+> under [`docs/classes/`](classes/README.md) — and that trio IS the structure
+> doctrine applied to Lodestar itself: the MCP tool surface
+> ([`TOOLS.md`](classes/TOOLS.md), guarded by `ToolsDocMirrorTest`) and the system
+> playbooks + composition ([`PLAYBOOKS.md`](classes/PLAYBOOKS.md), guarded by
+> `PlaybooksDocMirrorTest`). [`DATA-MODEL.md`](DATA-MODEL.md) is the model family's
+> equivalent (guarded by `SchemaMirrorTest`). Each guard mirrors its real roster
+> and fails the build on drift, like the schema. See
+> [`docs/classes/README.md`](classes/README.md) for the doctrine.
+
 **The app (`lodestar`, Laravel 13 + Blade + Alpine + Tailwind)**
 
 - **BoardController** — the **unified board**, the authenticated landing.

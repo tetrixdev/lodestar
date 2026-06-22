@@ -333,10 +333,16 @@ class Task extends Model
     /**
      * The branch convention: a task nests its branch under its deliverable as
      * D{deliverable:06d}/T{sub_id:02d}-slug. See docs/deliverable-workflow.md §3.
+     *
+     * The recorded `branch` is authoritative once set — it's the branch that
+     * actually exists in git. Only fall back to the computed default before one
+     * has been recorded, so a `Str::slug` quirk (e.g. it strips the dot in
+     * "v0.5") or a later title edit can never drift the name off the real branch.
      */
     public function branchName(): string
     {
-        return sprintf('D%06d/T%02d-%s', $this->deliverable_id, (int) $this->sub_id, Str::slug($this->title));
+        return $this->branch
+            ?: sprintf('D%06d/T%02d-%s', $this->deliverable_id, (int) $this->sub_id, Str::slug($this->title));
     }
 
     /** The reviews that cover this card (openable from the card). */
