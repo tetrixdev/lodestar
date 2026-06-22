@@ -87,6 +87,15 @@
             <a href="{{ route('tasks.show', $task) }}" class="hover:underline"><span class="text-gray-400 font-medium">#{{ $task->id }}</span> {{ $task->title }}</a>
         </div>
 
+        @if (filled($task->body_summary))
+            {{-- The scannable TL;DR, rendered as markdown (bold/lists/links read),
+                 clamped to two lines so the card stays compact; the full summary
+                 still reads on the task-show page. --}}
+            <div class="mt-1 text-xs text-gray-500 line-clamp-2 [&_*]:inline [&_p]:inline [&_strong]:font-semibold">
+                <x-markdown :content="$task->body_summary" />
+            </div>
+        @endif
+
         @if ($reviewLink)
             <a href="{{ route('reviews.show', $reviewLink) }}"
                class="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-indigo-600 hover:underline">
