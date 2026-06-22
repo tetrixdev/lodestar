@@ -47,6 +47,19 @@ return [
             'report' => false,
         ],
 
+        // Review attachments (task #100 C): a dedicated PRIVATE local disk — review
+        // files may be sensitive, so they are NOT under the public disk and have no
+        // public URL. They are streamed only through the gated download route
+        // (ReviewController::downloadAttachment), which checks project access.
+        'review-attachments' => [
+            'driver' => 'local',
+            'root' => storage_path('app/review-attachments'),
+            'serve' => false,
+            'visibility' => 'private',
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

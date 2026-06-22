@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\Deliverable;
 use App\Models\Project;
 use App\Models\Review;
+use App\Models\ReviewAttachment;
 use App\Models\ReviewFile;
 use App\Models\ReviewFinding;
 use App\Models\ReviewSection;
@@ -17,6 +18,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\View\View;
 
 class ReviewController extends Controller
@@ -37,7 +40,8 @@ class ReviewController extends Controller
         abort_unless($review->project->isAccessibleBy($request->user()), 403);
 
         $review->load([
-            'sections.files:id,path', 'sections.findings', 'project', 'assignee', 'files',
+            'sections.files:id,path', 'sections.findings', 'sections.attachments.uploader:id,name',
+            'project', 'assignee', 'files',
             'tasks' => fn ($q) => $q->orderBy('title'),
         ]);
 
@@ -229,6 +233,92 @@ class ReviewController extends Controller
         $finding->update(['status' => $data['status']]);
 
         return response()->json(['ok' => true, 'status' => $finding->status]);
+    }
+
+    // ── Section attachments (task #100 C) ────────────────────────────────────
+
+    /** The private disk review attachments live on (never public). */
+    private const ATTACHMENT_DISK = 'review-attachments';
+
+    /**
+     * Upload a file/image to a section (called immediately on paste/drop, so
+     * paste-while-open and delete-before-send work). Gated on holding the review;
+     * mime + ~10MB validated. Returns JSON for the inline list.
+     */
+    public function storeAttachment(Request $request, Review $review, ReviewSection $section): JsonResponse
+    {
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
+        abort_unless($section->review_id === $review->id, 404);
+        abort_unless($review->assigned_to_user_id === $request->user()->id, 403,
+            'Assign this review to yourself before attaching files.');
+
+        $data = $request->validate([
+            'file' => [
+                'required', 'file', 'max:10240', // ~10MB
+                'mimes:jpg,jpeg,png,gif,webp,svg,pdf,txt,md,log,csv,json,zip,heic',
+            ],
+        ]);
+
+        $file = $data['file'];
+        $path = $file->store((string) $section->id, self::ATTACHMENT_DISK);
+
+        $attachment = $section->attachments()->create([
+            'uploaded_by_user_id' => $request->user()->id,
+            'disk' => self::ATTACHMENT_DISK,
+            'path' => $path,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getClientMimeType(),
+            'size_bytes' => $file->getSize(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'attachment' => [
+                'id' => $attachment->id,
+                'name' => $attachment->original_name,
+                'is_image' => $attachment->isImage(),
+                'size_bytes' => $attachment->size_bytes,
+                'url' => $attachment->url(),
+            ],
+        ]);
+    }
+
+    /**
+     * Delete an attachment before sending (while the section is still open). Gated
+     * on holding the review; the model's deleting hook removes the file from disk.
+     */
+    public function destroyAttachment(Request $request, Review $review, ReviewSection $section, ReviewAttachment $attachment): JsonResponse
+    {
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
+        abort_unless($section->review_id === $review->id, 404);
+        abort_unless($attachment->review_section_id === $section->id, 404);
+        abort_unless($review->assigned_to_user_id === $request->user()->id, 403,
+            'Assign this review to yourself before deleting its attachments.');
+
+        $attachment->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Stream an attachment to anyone who can access the project (the private disk
+     * is never served directly / has no public URL). Inline for images, download
+     * for everything else.
+     */
+    public function downloadAttachment(Request $request, Review $review, ReviewSection $section, ReviewAttachment $attachment): StreamedResponse
+    {
+        abort_unless($review->project->isAccessibleBy($request->user()), 403);
+        abort_unless($section->review_id === $review->id, 404);
+        abort_unless($attachment->review_section_id === $section->id, 404);
+
+        $disk = Storage::disk($attachment->disk);
+        abort_unless($disk->exists($attachment->path), 404);
+
+        $disposition = $attachment->isImage() ? 'inline' : 'attachment';
+
+        return $disk->response($attachment->path, $attachment->original_name, [
+            'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
+        ], $disposition);
     }
 
     /**

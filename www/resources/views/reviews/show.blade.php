@@ -175,7 +175,16 @@
                     $planContent = $planSource ? $planTask->{$planSource} : null;
                     $planSummary = $planSource ? $planTask->{$planSource.'_summary'} : null;
                 @endphp
-                <section x-data="section({{ $s->id }}, {{ $s->status === 'signed_off' ? 'true' : 'false' }}, @js($s->note), @js($s->decision), {{ $i === 0 ? 'true' : 'false' }})"
+                @php
+                    $sectionAttachments = $s->attachments->map(fn ($a) => [
+                        'id' => $a->id,
+                        'name' => $a->original_name,
+                        'is_image' => $a->isImage(),
+                        'size_bytes' => $a->size_bytes,
+                        'url' => $a->url(),
+                    ])->values();
+                @endphp
+                <section x-data="section({{ $s->id }}, {{ $s->status === 'signed_off' ? 'true' : 'false' }}, @js($s->note), @js($s->decision), {{ $i === 0 ? 'true' : 'false' }}, @js($sectionAttachments))"
                          class="rounded-lg border bg-white shadow-sm transition"
                          :class="signedOff ? 'border-emerald-300 opacity-70' : 'border-gray-200'">
                     <header class="flex items-center gap-3 px-4 py-3 cursor-pointer" @click="open = !open">
@@ -334,7 +343,11 @@
                         <textarea x-model="note" rows="2" placeholder="Your comment / change request for this section…"
                                   :disabled="!canSignOff"
                                   @input.debounce.600ms="saveNote()" @blur="saveNote()"
+                                  @paste="onPaste($event)"
                                   class="mt-3 w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"></textarea>
+
+                        {{-- attachments (paste/drop/upload + delete-before-send) --}}
+                        @include('reviews.partials.section-attachments', ['s' => $s, 'isAssignee' => $isAssignee])
 
                         <div class="flex items-center justify-between mt-2">
                             <label class="flex items-center gap-2 text-sm select-none" :class="canSignOff ? '' : 'text-gray-400'">
@@ -541,11 +554,65 @@
                 },
             }));
 
-            Alpine.data('section', (id, signedOff, note, decision, open) => ({
+            Alpine.data('section', (id, signedOff, note, decision, open, attachments) => ({
                 // Everything autosaves immediately via patch(): the reviewed-checkbox
                 // (status open↔signed_off), the Approve/Request-changes decision, and
                 // the comment (debounced on input + flushed on blur). No manual save.
                 id, signedOff, note, decision, open, savedNote: note, canSignOff, justSaved: false,
+                // Attachments: uploaded immediately so paste-while-open + delete-
+                // before-send work.
+                attachments: attachments || [],
+                uploading: false, uploadError: '', dragging: false,
+                onPaste(e) {
+                    if (!this.canSignOff) return;
+                    const items = e.clipboardData?.items || [];
+                    for (const it of items) {
+                        if (it.kind === 'file') {
+                            const f = it.getAsFile();
+                            if (f) { e.preventDefault(); this.upload(f); }
+                        }
+                    }
+                },
+                onDrop(e) {
+                    this.dragging = false;
+                    if (!this.canSignOff) return;
+                    for (const f of (e.dataTransfer?.files || [])) this.upload(f);
+                },
+                onPick(e) {
+                    for (const f of (e.target.files || [])) this.upload(f);
+                    e.target.value = '';
+                },
+                async upload(file) {
+                    if (!this.canSignOff) return;
+                    this.uploading = true; this.uploadError = '';
+                    try {
+                        const fd = new FormData();
+                        fd.append('file', file);
+                        const res = await fetch(`${base}/${this.id}/attachments`, {
+                            method: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                            body: fd,
+                        });
+                        if (!res.ok) {
+                            this.uploadError = res.status === 422 ? 'File type or size not allowed (max 10MB).' : 'Upload failed.';
+                            return;
+                        }
+                        const d = await res.json();
+                        this.attachments.unshift(d.attachment);
+                    } catch (e) {
+                        this.uploadError = 'Upload failed.';
+                    } finally {
+                        this.uploading = false;
+                    }
+                },
+                async removeAttachment(a) {
+                    if (!this.canSignOff) return;
+                    const res = await fetch(`${base}/${this.id}/attachments/${a.id}`, {
+                        method: 'DELETE',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                    });
+                    if (res.ok) this.attachments = this.attachments.filter(x => x.id !== a.id);
+                },
                 async patch(body) {
                     const res = await fetch(`${base}/${this.id}`, {
                         method: 'PATCH',

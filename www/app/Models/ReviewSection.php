@@ -88,4 +88,10 @@ class ReviewSection extends Model
     {
         return $this->hasMany(ReviewFinding::class)->orderBy('position');
     }
+
+    /** Reviewer-uploaded files/images for this section (task #100 C). */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ReviewAttachment::class)->latest('id');
+    }
 }

@@ -418,6 +418,19 @@ are informational — the test checks Field **names** only.
 | status | string | not null · default `open` | Human triage: `open` / `must_fix` / `approved` / `dismissed`. `must_fix` findings feed the rework brief. |
 | position | integer | not null · default 0 | Orders findings within a section. |
 
+### `review_attachments`
+
+| Field | Type | Constraints | Notes |
+|-------|------|-------------|-------|
+| id | bigint | PK | Primary key. |
+| review_section_id | bigint | FK → review_sections | The section the file is attached to (cascade-delete). |
+| uploaded_by_user_id | bigint | FK → users · nullable | The reviewer who uploaded it (null on user delete). |
+| disk | string | not null | The storage disk — always the private `review-attachments` disk (never public). |
+| path | string | not null | The file's path on the disk; streamed only through the gated download route. |
+| original_name | string | not null | The uploaded file's original name. |
+| mime_type | string | nullable | The detected MIME type (drives inline image vs download). |
+| size_bytes | bigint | not null · default 0 | File size in bytes. |
+
 ### `users`
 
 | Field | Type | Constraints | Notes |
@@ -596,6 +609,7 @@ erDiagram
     PROJECT }o--o{ REPOSITORY : "project_repository (stack)"
     REPOSITORY ||--o{ REVIEW : "compared in"
     REVIEW_SECTION ||--o{ REVIEW_FINDING : raises
+    REVIEW_SECTION ||--o{ REVIEW_ATTACHMENT : "files/images"
     TASK ||--o{ WORK_SESSION : "logged on (nullable)"
     TASK ||--o{ TASK_COMMENT : has
     TASK ||--o{ TASK_EVENT : "activity log"
@@ -856,6 +870,17 @@ erDiagram
         string severity "info|minor|major|critical"
         string status "open|must_fix|approved|dismissed"
         integer position
+    }
+
+    REVIEW_ATTACHMENT {
+        bigint id PK
+        bigint review_section_id FK
+        bigint uploaded_by_user_id FK "nullable, the uploader"
+        string disk "private review-attachments disk"
+        string path "path on disk; gated download only"
+        string original_name
+        string mime_type "nullable"
+        bigint size_bytes
     }
 
     TASK_COMMENT {

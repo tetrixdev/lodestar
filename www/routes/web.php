@@ -123,6 +123,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/reviews/{review}/unassign', [ReviewController::class, 'unassign'])->name('reviews.unassign');
     Route::patch('/reviews/{review}/sections/{section}', [ReviewController::class, 'updateSection'])->name('reviews.sections.update');
     Route::patch('/reviews/{review}/sections/{section}/findings/{finding}', [ReviewController::class, 'updateFinding'])->name('reviews.findings.update');
+    // Per-section attachments — upload-immediately (paste/drop), delete-before-send,
+    // gated private download. Scoped so the section belongs to the review.
+    Route::post('/reviews/{review}/sections/{section}/attachments', [ReviewController::class, 'storeAttachment'])
+        ->scopeBindings()->name('reviews.sections.attachments.store');
+    Route::delete('/reviews/{review}/sections/{section}/attachments/{attachment}', [ReviewController::class, 'destroyAttachment'])
+        ->scopeBindings()->name('reviews.sections.attachments.destroy');
+    Route::get('/reviews/{review}/sections/{section}/attachments/{attachment}', [ReviewController::class, 'downloadAttachment'])
+        ->scopeBindings()->name('reviews.sections.attachments.download');
     Route::post('/reviews/{review}/conclude', [ReviewController::class, 'conclude'])->name('reviews.conclude');
 });
 
