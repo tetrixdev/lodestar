@@ -45,6 +45,20 @@ playbook edits, and **playbook proposals are never made live by an agent**.
 | `add_finding` | Raise one finding in a review section (severity info/minor/major/critical); draft reviews only. | section_id, title, detail, severity | ReviewFinding |
 | `get_review` | Read a full review — metadata, ordered sections, files, tasks, findings. | review_id | — |
 
+## Read tools — board-read & navigation (read-only)
+
+The compact-list / single-read pair an interactive agent reaches for: scan what
+exists with a `list_*`, then pull the full record with the matching `get_*`. All
+are read-only and access-scoped to your projects.
+
+| Tool | Purpose | Key params | Writes |
+|------|---------|-----------|--------|
+| `list_tasks` | List tasks as COMPACT board rows (id, status, phase, deliverable, blocked, human_gate) — not the body/plan (use `get_task`). | project, deliverable, status, phase | — |
+| `list_deliverables` | List a project's deliverables as COMPACT rows (status, phase, branches, open-questions + task counts) — not the concept/body (use `get_deliverable`). | project, status, phase | — |
+| `get_deliverable` | Read one deliverable in full: concept/body, branches, open questions, child tasks (compact) and reviews. The `get_task` counterpart. | deliverable_id | — |
+| `list_sessions` | List a project's work-session history, newest first (id, title, occurred_on, the task it reports on). | project, task_id, limit | — |
+| `get_project` | Read one project's overview: name/goal/repos, deliverable + in-flight task counts by phase, and recent sessions. The single-project view behind `list_projects`. | project | — |
+
 ## Loop tools — drive the lifecycle
 
 | Tool | Purpose | Key params | Writes |
@@ -58,5 +72,5 @@ playbook edits, and **playbook proposals are never made live by an agent**.
 | `advance_deliverable` | Move a deliverable along its funnel (gates: plan approval, child completion, coverage). | deliverable_id, to | Deliverable |
 | `report` | Log a work-session for what an agent did on a task/project. | task_id, project, title, body(+summary), occurred_on | WorkSession |
 
-_Family size: 20 tools. The roster is discovered from `app/Mcp/Tools/` by the
-guard — add a tool, add a row._
+_Family size: 25 tools. The roster is discovered from `LodestarServer::$tools` by
+the guard — add a tool, add a row._
