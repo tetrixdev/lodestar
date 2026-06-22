@@ -10,11 +10,16 @@ use App\Mcp\Tools\AdvanceTaskTool;
 use App\Mcp\Tools\ClaimTaskTool;
 use App\Mcp\Tools\ClaimWorkTool;
 use App\Mcp\Tools\CreateReviewTool;
+use App\Mcp\Tools\GetDeliverableTool;
 use App\Mcp\Tools\GetPlaybookTool;
+use App\Mcp\Tools\GetProjectTool;
 use App\Mcp\Tools\GetReviewTool;
 use App\Mcp\Tools\GetTaskTool;
 use App\Mcp\Tools\LinkRepositoryTool;
+use App\Mcp\Tools\ListDeliverablesTool;
 use App\Mcp\Tools\ListProjectsTool;
+use App\Mcp\Tools\ListSessionsTool;
+use App\Mcp\Tools\ListTasksTool;
 use App\Mcp\Tools\ProposePlaybookChangeTool;
 use App\Mcp\Tools\RememberTool;
 use App\Mcp\Tools\ReportTool;
@@ -38,8 +43,10 @@ to your token's user: you only ever see and write your own projects, tasks,
 work-sessions and reviews.
 
 Data tools read and write the board: upsert_project, upsert_task, upsert_deliverable,
-get_task (read tasks by id), upsert_session, create_review (hands back a URL a
-human opens), upsert_review_section, get_review.
+get_task (read tasks by id), list_tasks (compact, filterable board rows),
+list_deliverables / get_deliverable (the deliverable layer), get_project (one
+project's overview), list_sessions (the work-session history), upsert_session,
+create_review (hands back a URL a human opens), upsert_review_section, get_review.
 
 A deliverable is the optional Project → Deliverable → Task layer: one goal, one
 branch, one review funnel. Its child tasks skip planning (they're decomposed from
@@ -72,6 +79,11 @@ class LodestarServer extends Server
         UpsertTaskTool::class,
         UpsertDeliverableTool::class,
         GetTaskTool::class,
+        ListTasksTool::class,
+        ListDeliverablesTool::class,
+        GetDeliverableTool::class,
+        ListSessionsTool::class,
+        GetProjectTool::class,
         UpsertSessionTool::class,
         LinkRepositoryTool::class,
         UnlinkRepositoryTool::class,
