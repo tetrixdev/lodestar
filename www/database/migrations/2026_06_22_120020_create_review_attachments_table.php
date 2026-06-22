@@ -24,6 +24,10 @@ return new class extends Migration
             $table->string('disk');
             $table->string('path');
             $table->string('original_name');
+            // The VALIDATED lowercase extension (e.g. `png`, `pdf`). The download
+            // response derives its Content-Type from this, never from the client-
+            // supplied mime, so a mislabelled upload can't drive content sniffing.
+            $table->string('extension')->nullable();
             $table->string('mime_type')->nullable();
             $table->unsignedBigInteger('size_bytes')->default(0);
             $table->timestamps();

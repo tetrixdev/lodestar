@@ -46,4 +46,28 @@ class MarkdownTableTest extends TestCase
         $this->assertStringContainsString('<strong>bold</strong>', $html);
         $this->assertStringContainsString('<a href="https://example.com"', $html);
     }
+
+    /**
+     * MCP-authored content (finding detail / section comment) that arrives with a
+     * LITERAL backslash-n (the visible text `\n`, not a real newline) must render
+     * as real paragraphs + a bullet list, not the raw escape sequence.
+     */
+    public function test_literal_backslash_n_becomes_real_breaks_and_bullets(): void
+    {
+        $html = Markdown::render("a\\n\\n- b\\n- c");
+
+        // Paragraph break + a real list with two items — and no leftover `\n` text.
+        $this->assertStringContainsString('<ul>', $html);
+        $this->assertStringContainsString('<li>b</li>', $html);
+        $this->assertStringContainsString('<li>c</li>', $html);
+        $this->assertStringNotContainsString('\\n', $html);
+    }
+
+    /** A literal `\n` INSIDE a code span is left intact (it's a code sample). */
+    public function test_literal_backslash_n_inside_code_is_preserved(): void
+    {
+        $html = Markdown::render('use `split("\\n")` to split');
+
+        $this->assertStringContainsString('split(&quot;\\n&quot;)', $html);
+    }
 }

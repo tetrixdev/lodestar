@@ -428,8 +428,9 @@ are informational — the test checks Field **names** only.
 | disk | string | not null | The storage disk — always the private `review-attachments` disk (never public). |
 | path | string | not null | The file's path on the disk; streamed only through the gated download route. |
 | original_name | string | not null | The uploaded file's original name. |
-| mime_type | string | nullable | The detected MIME type (drives inline image vs download). |
-| size_bytes | bigint | not null · default 0 | File size in bytes. |
+| extension | string | nullable | The VALIDATED lowercase extension; the download Content-Type is derived from this, never the client-supplied mime. |
+| mime_type | string | nullable | The client-supplied MIME (informational only — never trusted when serving). |
+| size_bytes | bigint | not null · default 0 | File size in bytes (capped at ~25MB on upload). |
 
 ### `users`
 
@@ -879,7 +880,8 @@ erDiagram
         string disk "private review-attachments disk"
         string path "path on disk; gated download only"
         string original_name
-        string mime_type "nullable"
+        string extension "nullable, validated; drives served Content-Type"
+        string mime_type "nullable, client-supplied (informational)"
         bigint size_bytes
     }
 

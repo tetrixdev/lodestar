@@ -243,7 +243,8 @@ class ReviewController extends Controller
     /**
      * Upload a file/image to a section (called immediately on paste/drop, so
      * paste-while-open and delete-before-send work). Gated on holding the review;
-     * mime + ~10MB validated. Returns JSON for the inline list.
+     * a permissive blacklist (block executables) + ~25MB cap validated. Returns
+     * JSON for the inline list.
      */
     public function storeAttachment(Request $request, Review $review, ReviewSection $section): JsonResponse
     {
@@ -252,10 +253,19 @@ class ReviewController extends Controller
         abort_unless($review->assigned_to_user_id === $request->user()->id, 403,
             'Assign this review to yourself before attaching files.');
 
+        // Permissive BLACKLIST policy (task #100 #3): allow almost anything (docx,
+        // xlsx, pdf, images incl. svg, zip, logs…) up to ~25MB; only BLOCK a small
+        // set of executable / installer / script extensions. The gate is the file
+        // EXTENSION (not the client-supplied mime) plus the size cap.
         $data = $request->validate([
             'file' => [
-                'required', 'file', 'max:10240', // ~10MB
-                'mimes:jpg,jpeg,png,gif,webp,svg,pdf,txt,md,log,csv,json,zip,heic',
+                'required', 'file', 'max:'.ReviewAttachment::MAX_KILOBYTES,
+                function (string $attr, $value, \Closure $fail): void {
+                    $ext = strtolower((string) $value->getClientOriginalExtension());
+                    if ($ext === '' || in_array($ext, ReviewAttachment::BLOCKED_EXTENSIONS, true)) {
+                        $fail('That file type is not allowed.');
+                    }
+                },
             ],
         ]);
 
@@ -267,6 +277,7 @@ class ReviewController extends Controller
             'disk' => self::ATTACHMENT_DISK,
             'path' => $path,
             'original_name' => $file->getClientOriginalName(),
+            'extension' => strtolower((string) $file->getClientOriginalExtension()),
             'mime_type' => $file->getClientMimeType(),
             'size_bytes' => $file->getSize(),
         ]);
@@ -302,8 +313,12 @@ class ReviewController extends Controller
 
     /**
      * Stream an attachment to anyone who can access the project (the private disk
-     * is never served directly / has no public URL). Inline for images, download
-     * for everything else.
+     * is never served directly / has no public URL). ALWAYS a forced download —
+     * NEVER inline, even for images (task #100 #2): this closes the stored-XSS
+     * hole where an `image/svg+xml` upload with embedded <script> would otherwise
+     * execute in our origin. The Content-Type is derived from the VALIDATED
+     * extension (not the client-supplied mime) and `X-Content-Type-Options:
+     * nosniff` stops the browser second-guessing it.
      */
     public function downloadAttachment(Request $request, Review $review, ReviewSection $section, ReviewAttachment $attachment): StreamedResponse
     {
@@ -314,11 +329,10 @@ class ReviewController extends Controller
         $disk = Storage::disk($attachment->disk);
         abort_unless($disk->exists($attachment->path), 404);
 
-        $disposition = $attachment->isImage() ? 'inline' : 'attachment';
-
         return $disk->response($attachment->path, $attachment->original_name, [
-            'Content-Type' => $attachment->mime_type ?: 'application/octet-stream',
-        ], $disposition);
+            'Content-Type' => $attachment->safeContentType(),
+            'X-Content-Type-Options' => 'nosniff',
+        ], 'attachment');
     }
 
     /**

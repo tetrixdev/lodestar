@@ -23,6 +23,38 @@ class ReviewAttachment extends Model
         'size_bytes' => 'integer',
     ];
 
+    /**
+     * The file gate is a small BLACKLIST, not a whitelist (task #100 #3): a
+     * reviewer may attach almost anything (docx, xlsx, pdf, images incl. svg,
+     * zip, logs…). We BLOCK only executable / installer / script types by
+     * extension — these are the things that are dangerous to hand back to a
+     * human who might run them. SVG is safe to allow because the download is
+     * always forced-download + nosniff (never rendered inline; see
+     * ReviewController::downloadAttachment).
+     */
+    public const BLOCKED_EXTENSIONS = [
+        'exe', 'msi', 'bat', 'cmd', 'com', 'scr', 'pif', 'ps1',
+        'sh', 'jar', 'app', 'deb', 'dmg', 'apk', 'vbs', 'wsf',
+    ];
+
+    /** Max upload size, in kilobytes (~25MB) — used by the upload validator. */
+    public const MAX_KILOBYTES = 25600;
+
+    /**
+     * The safe Content-Type to serve for a given validated extension. Anything
+     * not mapped is served as a generic binary stream. Images are listed so the
+     * browser can still show a thumbnail off the gated URL — but the response is
+     * ALWAYS Content-Disposition: attachment + nosniff, so even an SVG cannot
+     * execute script in our origin.
+     */
+    private const SAFE_CONTENT_TYPES = [
+        'png' => 'image/png', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+        'gif' => 'image/gif', 'webp' => 'image/webp', 'heic' => 'image/heic',
+        'svg' => 'image/svg+xml', 'pdf' => 'application/pdf',
+        'txt' => 'text/plain', 'md' => 'text/plain', 'log' => 'text/plain',
+        'csv' => 'text/csv', 'json' => 'application/json', 'zip' => 'application/zip',
+    ];
+
     protected static function booted(): void
     {
         // The row owns its file: deleting the row (directly or via the section
@@ -42,10 +74,24 @@ class ReviewAttachment extends Model
         return $this->belongsTo(User::class, 'uploaded_by_user_id');
     }
 
-    /** Is this an inline-previewable image? */
+    /** Is this an image (drives the inline thumbnail in the UI only — never inline serving)? */
     public function isImage(): bool
     {
-        return str_starts_with((string) $this->mime_type, 'image/');
+        return in_array(
+            strtolower((string) ($this->extension ?? '')),
+            ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic', 'svg'],
+            true,
+        );
+    }
+
+    /**
+     * The Content-Type to serve, derived from the VALIDATED extension (never the
+     * client-supplied mime). Unknown extensions stream as a generic binary blob.
+     */
+    public function safeContentType(): string
+    {
+        return self::SAFE_CONTENT_TYPES[strtolower((string) ($this->extension ?? ''))]
+            ?? 'application/octet-stream';
     }
 
     /** The gated download URL (streams through ReviewController, access-checked). */

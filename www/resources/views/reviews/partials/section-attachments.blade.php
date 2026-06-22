@@ -21,8 +21,9 @@
         <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Attachments</p>
         @if ($isAssignee)
             <label class="cursor-pointer text-[11px] font-medium text-indigo-600 hover:text-indigo-800">
-                <input type="file" class="hidden" @change="onPick($event)"
-                       accept="image/*,.pdf,.txt,.md,.log,.csv,.json,.zip">
+                {{-- No `accept` filter: the policy is a server-side blacklist (most
+                     files allowed; only executables blocked), so we don't pre-narrow. --}}
+                <input type="file" class="hidden" @change="onPick($event)">
                 + Add file / paste an image
             </label>
         @endif

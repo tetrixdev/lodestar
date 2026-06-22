@@ -337,14 +337,26 @@
                             <span class="text-xs font-medium rounded-md px-2.5 py-1 {{ $s->decision === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700' }}">{{ str_replace('_', ' ', $s->decision) }}</span>
                         @endif
 
+                        {{-- The reviewer's comment. The holder edits it in the autosaving
+                             textarea below; everyone else reads it RENDERED AS MARKDOWN
+                             (bullets / paragraphs / links), not as a flat blob. --}}
+                        @if (! $isAssignee && filled($s->note))
+                            <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide mt-4 mb-1">Comment</p>
+                            <div class="rounded-md bg-gray-50 border border-gray-100 p-3">
+                                <x-markdown :content="$s->note" />
+                            </div>
+                        @endif
+
                         {{-- Comment is always available (a note reads well alongside an
                              approval too) and autosaves — debounced on input, flushed on
-                             blur. No manual save button. --}}
+                             blur. No manual save button. Only the holder sees the editor. --}}
+                        @if ($isAssignee)
                         <textarea x-model="note" rows="2" placeholder="Your comment / change request for this section…"
                                   :disabled="!canSignOff"
                                   @input.debounce.600ms="saveNote()" @blur="saveNote()"
                                   @paste="onPaste($event)"
                                   class="mt-3 w-full text-sm rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"></textarea>
+                        @endif
 
                         {{-- attachments (paste/drop/upload + delete-before-send) --}}
                         @include('reviews.partials.section-attachments', ['s' => $s, 'isAssignee' => $isAssignee])

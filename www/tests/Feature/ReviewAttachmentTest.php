@@ -117,6 +117,49 @@ class ReviewAttachmentTest extends TestCase
         )->assertForbidden();
     }
 
+    public function test_download_is_always_attachment_with_nosniff(): void
+    {
+        Storage::fake(self::DISK);
+        [$user, , $review, $section] = $this->setup_review();
+        // Even an SVG (the historical stored-XSS vector) is served as a forced
+        // download with nosniff and a safe content-type derived from the extension.
+        $this->actingAs($user)->post(
+            route('reviews.sections.attachments.store', [$review, $section]),
+            ['file' => UploadedFile::fake()->create('diagram.svg', 5, 'image/svg+xml')],
+        )->assertOk();
+        $attachment = $section->attachments()->firstOrFail();
+
+        $res = $this->actingAs($user)->get(
+            route('reviews.sections.attachments.download', [$review, $section, $attachment]),
+        )->assertOk();
+
+        $this->assertStringStartsWith('attachment', $res->headers->get('content-disposition'));
+        $this->assertSame('nosniff', $res->headers->get('x-content-type-options'));
+        $this->assertSame('image/svg+xml', $res->headers->get('content-type'));
+    }
+
+    public function test_office_documents_upload_ok_and_executables_are_rejected(): void
+    {
+        Storage::fake(self::DISK);
+        [$user, , $review, $section] = $this->setup_review();
+
+        // docx / xlsx upload fine under the permissive blacklist.
+        foreach (['report.docx', 'data.xlsx'] as $name) {
+            $this->actingAs($user)->post(
+                route('reviews.sections.attachments.store', [$review, $section]),
+                ['file' => UploadedFile::fake()->create($name, 20)],
+            )->assertOk();
+        }
+
+        // An .exe is blocked.
+        $this->actingAs($user)->post(
+            route('reviews.sections.attachments.store', [$review, $section]),
+            ['file' => UploadedFile::fake()->create('virus.exe', 10)],
+        )->assertSessionHasErrors('file');
+
+        $this->assertSame(2, $section->attachments()->count());
+    }
+
     public function test_deleting_a_section_cascades_attachments_and_files(): void
     {
         Storage::fake(self::DISK);

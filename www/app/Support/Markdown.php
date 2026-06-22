@@ -23,10 +23,40 @@ class Markdown
         // is agent- and human-authored free text (finding details, notes, sessions),
         // so a literal `<select>` / `<script>` must render as visible text, never as a
         // live element in the operator's browser. (XSS / DOM-injection boundary.)
-        return self::promoteMermaid(Str::markdown($content, [
+        return self::promoteMermaid(Str::markdown(self::normaliseNewlines($content), [
             'html_input' => 'escape',
             'allow_unsafe_links' => false,
         ]));
+    }
+
+    /**
+     * Turn literal backslash-escape sequences in stored content into real
+     * whitespace before the markdown engine sees them. Some MCP-authored content
+     * (a finding `detail`, a section note/comment) arrives carrying a literal `\n`
+     * — two characters, a backslash then an `n`, not a real newline — so it would
+     * otherwise render as the visible text `\n\n- item` instead of a paragraph
+     * break followed by a bullet. We convert ONLY OUTSIDE fenced/inline code spans
+     * so a code sample that legitimately contains `\n` (a regex, a shell snippet)
+     * is left intact.
+     */
+    public static function normaliseNewlines(string $content): string
+    {
+        // Split on fenced (```…```) and inline (`…`) code spans, keeping the
+        // delimiters; convert escapes only in the non-code segments.
+        $parts = preg_split('/(```.*?```|`[^`]*`)/s', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($parts === false) {
+            return $content;
+        }
+
+        foreach ($parts as $i => $part) {
+            // Odd indices are the captured code spans — leave them untouched.
+            if ($i % 2 === 1) {
+                continue;
+            }
+            $parts[$i] = str_replace(['\\r\\n', '\\n', '\\t'], ["\n", "\n", "\t"], $part);
+        }
+
+        return implode('', $parts);
     }
 
     /**
