@@ -25,7 +25,7 @@ class GetReviewTool extends LodestarTool
             return Response::error('No review with that id belongs to you.');
         }
 
-        $review->load('sections.files:id,path', 'tasks', 'assignee', 'files', 'repository');
+        $review->load('sections.files:id,path', 'sections.attachments', 'tasks', 'assignee', 'files', 'repository');
 
         return Response::json([
             'id' => $review->id,
@@ -58,6 +58,17 @@ class GetReviewTool extends LodestarTool
                 'status' => $s->status,
                 'note' => $s->note,
                 'files' => $s->files->pluck('path')->all(),
+                // Human-attached files on this section (task #100 #7). Fetch one
+                // with `download_url` + your Bearer token to read it — the bytes
+                // never come back through MCP.
+                'attachments' => $s->attachments->map(fn ($a) => [
+                    'id' => $a->id,
+                    'section_id' => $s->id,
+                    'original_name' => $a->original_name,
+                    'mime' => $a->mime_type,
+                    'size_bytes' => $a->size_bytes,
+                    'download_url' => $a->apiUrl(),
+                ])->all(),
             ])->all(),
         ]);
     }

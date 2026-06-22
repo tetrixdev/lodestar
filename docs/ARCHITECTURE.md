@@ -520,6 +520,23 @@ current (head) version with no diff marks on it.
    keep-out-of-context, not process-sandboxing (the playbook instructs "don't print
    the file").
 
+4. **Review attachments — always-download + the agent fetch endpoint (BUILT).**
+   A reviewer pastes/uploads files to a review **section** (`ReviewAttachment`).
+   The bytes live on a PRIVATE local disk, never the public disk. Two gated
+   download paths serve them, and BOTH force a download (`Content-Disposition:
+   attachment`, never inline) with `X-Content-Type-Options: nosniff` and a
+   `Content-Type` derived from the VALIDATED extension (never the client-supplied
+   mime) — so even an `image/svg+xml` upload cannot execute script in our origin:
+   - the web UI route (`ReviewController::downloadAttachment`, session-auth,
+     project-access gated), and
+   - the out-of-MCP API route `GET /api/review-attachments/{id}`
+     (`ReviewAttachmentController`, Sanctum token + `agent` ability), so an agent
+     can `curl` a human's attachment to a file with its Bearer token — the bytes
+     never enter the MCP/LLM context. `get_review` surfaces each section's
+     attachments (id, original_name, mime, size, `download_url`) so the agent
+     knows what to fetch. Upload is a permissive **blacklist** (most files
+     allowed; only executable/installer/script extensions blocked) + a ~25MB cap.
+
 **Still backlog (not built):** the thin npx client (`connect` + `run`) and the
 `check_version` self-update handshake — the only pieces that would live on the
 developer's machine. Until they exist, agents are wired to `/mcp` by hand. When

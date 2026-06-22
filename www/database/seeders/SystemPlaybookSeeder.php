@@ -182,6 +182,15 @@ class SystemPlaybookSeeder extends Seeder
                   so the operator sees real tool status.
                 - Do all work inside that project's `~/ld-agent` folder.
 
+                READING A HUMAN'S REVIEW ATTACHMENT (out-of-MCP, same Bearer token):
+                - A human can attach files/screenshots to a review section. get_review
+                  lists them per section under `attachments` (id, original_name, mime,
+                  size, `download_url`). The bytes do NOT come back through MCP.
+                - To read one, fetch its `download_url` with your token and save it, then
+                  view the saved file: `curl -H "Authorization: Bearer <your-token>"
+                  <download_url> -o /tmp/<original_name>`. It is served as a forced
+                  download (never inline). Then open the saved file to view it.
+
                 USING PLAYBOOKS:
                 - get_playbook(task_id) hands you the phase prompt for a claimed task,
                   already COMPOSED across scopes (system → team → project → personal) —

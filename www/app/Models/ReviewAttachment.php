@@ -103,4 +103,14 @@ class ReviewAttachment extends Model
             $this->id,
         ]);
     }
+
+    /**
+     * The out-of-MCP API download URL an agent fetches with its Bearer token
+     * (task #100 #7) — surfaced in get_review so the agent can read a human's
+     * attachment without it entering the LLM channel.
+     */
+    public function apiUrl(): string
+    {
+        return route('api.review-attachments.show', $this->id);
+    }
 }

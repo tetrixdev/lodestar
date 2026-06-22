@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProjectToolController;
+use App\Http\Controllers\ReviewAttachmentController;
 use App\Http\Controllers\SecretController;
 use Illuminate\Support\Facades\Route;
 
@@ -19,4 +20,9 @@ Route::middleware(['auth:sanctum', 'abilities:agent'])->group(function () {
     // The agent reports which tools it verified/installed.
     Route::post('/projects/{project}/tools/status', [ProjectToolController::class, 'reportStatus'])
         ->name('api.projects.tools.status');
+
+    // A human's review attachment, fetched by an agent with its Bearer token so
+    // the file bytes never enter the MCP/LLM channel (project-access gated).
+    Route::get('/review-attachments/{attachment}', [ReviewAttachmentController::class, 'show'])
+        ->name('api.review-attachments.show');
 });
