@@ -40,7 +40,9 @@ class BoardController extends Controller
         $deliverables = Deliverable::query()
             ->whereIn('project_id', $activeIds)
             ->whereIn('status', Deliverable::STATUSES) // exclude cancelled
-            ->with(['project', 'tasks' => fn ($q) => $q->orderBy('sub_id')])
+            // tasks.reviews so each <x-task-row> can resolve its state-aware target
+            // (the open review vs task-show) without an N+1.
+            ->with(['project', 'tasks' => fn ($q) => $q->orderBy('sub_id'), 'tasks.reviews:id,review_type'])
             ->orderBy('position')
             ->get();
 

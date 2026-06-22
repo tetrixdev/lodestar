@@ -318,6 +318,15 @@ conclude outcome is return-to-planning. `conclude()` has a `plan` branch
 with the section notes + question-finding answers compiled into `rework_notes`.
 This retired the old markdown-only plan-review block + `TaskController::planDecision`.
 
+**Whole-row navigation.** A task row (`<x-task-row>`, used on board deliverable
+cards, the project cards and the deliverable page) is clickable across the row:
+the `T##` id-chip, the title AND the trailing status-dot are three separate
+anchors (so each is independently tappable at ~360px) all pointing at
+`Task::rowTarget()`. That target is **state-aware**: in a review state
+(`plan_review` → plan, `ai_review` → code, `human_review` → functional) it opens
+the matching OPEN review (`Task::openReviewFor()`); otherwise — or when no matching
+review exists — it falls back to the task-show page.
+
 Each section's controls model three independent things, and **all autosave** (no
 save buttons): a neutral **"I've reviewed this section"** checkbox (maps to
 `status` open↔signed_off — a "been through it" marker, not a satisfaction

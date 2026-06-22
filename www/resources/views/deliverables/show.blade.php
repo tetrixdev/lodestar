@@ -163,11 +163,10 @@
                 <div class="bg-white shadow-sm sm:rounded-lg p-5 space-y-3">
                     <p class="text-[11px] font-medium text-gray-400 uppercase tracking-wide">Tasks</p>
                     @forelse ($deliverable->tasks as $task)
-                        <div class="flex items-center justify-between gap-3 text-sm border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-                            <a href="{{ route('tasks.show', $task) }}" class="min-w-0 truncate text-indigo-600 hover:underline">
-                                <span class="text-gray-400">{{ sprintf('T%02d', $task->sub_id) }}</span> {{ $task->title }}
-                                @if ($task->is_corrective)<span class="ml-1 text-[10px] uppercase tracking-wide text-amber-600">corrective</span>@endif
-                            </a>
+                        {{-- Whole-row clickable by state (open review vs task-show); the
+                             lifecycle label sits alongside. --}}
+                        <div class="flex items-center justify-between gap-3 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                            <x-task-row :task="$task" class="!text-sm flex-1 min-w-0" />
                             <span class="shrink-0 text-[10px] font-medium uppercase tracking-wide rounded px-1.5 py-0.5 bg-gray-100 text-gray-600">
                                 {{ $T::LABELS[$task->status] ?? $task->status }}
                             </span>

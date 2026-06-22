@@ -83,8 +83,17 @@
             @endif
         </div>
 
-        <div class="text-sm text-gray-900 mt-1.5">
-            <a href="{{ route('tasks.show', $task) }}" class="hover:underline"><span class="text-gray-400 font-medium">#{{ $task->id }}</span> {{ $task->title }}</a>
+        {{-- Whole-row clickable (task #100 B): the id-chip, the title AND the
+             trailing status-dot each navigate to $rowTarget — the open review when
+             the card is in a review state, else task-show. --}}
+        @php $rowTarget = $task->rowTarget(); @endphp
+        <div class="text-sm text-gray-900 mt-1.5 flex items-center gap-1.5">
+            <a href="{{ $rowTarget }}" class="shrink-0 hover:underline text-gray-400 font-medium py-1 -my-1">#{{ $task->id }}</a>
+            <a href="{{ $rowTarget }}" class="min-w-0 hover:underline py-1 -my-1">{{ $task->title }}</a>
+            <a href="{{ $rowTarget }}" class="ml-auto shrink-0 grid place-items-center size-6 -m-1.5"
+               title="{{ $statusLabel }}">
+                <span class="size-1.5 rounded-full {{ $actor === $T::ACTOR_AI_WORKING ? 'bg-violet-400' : ($actor === $T::ACTOR_QUEUED ? 'bg-blue-400' : ($actor === $T::ACTOR_DONE ? 'bg-emerald-400' : 'bg-amber-400')) }}"></span>
+            </a>
         </div>
 
         @if (filled($task->body_summary))
