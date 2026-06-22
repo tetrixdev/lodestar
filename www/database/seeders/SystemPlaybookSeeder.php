@@ -19,8 +19,19 @@ class SystemPlaybookSeeder extends Seeder
     public function run(): void
     {
         $summaries = $this->summaries();
+        $playbooks = $this->playbooks();
 
-        foreach ($this->playbooks() as $key => [$title, $body]) {
+        // The language-agnostic structure doctrine rides on the bootstrap + the
+        // build/review phases (every project, every stack). The Laravel specifics
+        // live in the `laravel` stack pack, composed in only for tagged projects.
+        foreach (['main', 'plan', 'develop', 'ai_review'] as $phase) {
+            $playbooks[$phase][1] .= "\n\n".$this->structureDoctrine($phase);
+        }
+
+        // The docs skeleton also teaches the class-family doc pattern.
+        $playbooks['docs-template'][1] .= "\n\n".'CLASS-FAMILY DOCS: for any abstract base / shared family (e.g. the MCP tools, agents), also keep one doc under `docs/classes/` that states the family contract + lists every member, backed by a drift-guard test (mirror the schema guard). See docs/classes/README.md for the pattern.';
+
+        foreach ($playbooks as $key => [$title, $body]) {
             $summary = $summaries[$key] ?? null;
 
             // The system-scope slot (owner null, append base layer).
@@ -52,13 +63,51 @@ class SystemPlaybookSeeder extends Seeder
             'merge' => 'Ship an approved task: merge, test, deploy, mark done.',
             'work' => 'Run the autonomous backlog loop: claim_work, spawn a worker per unit (tasks parallel in worktrees, deliverable-level sequential).',
             'docs-template' => "Starting skeleton + rules for a project's DATA-MODEL.md and ARCHITECTURE.md — load when a project lacks them.",
+            'laravel' => 'Laravel structure pack — service/action/repository conventions; composed into plan/develop/ai_review for projects tagged stack=laravel.',
         ];
+    }
+
+    /**
+     * The language-agnostic structure reminder appended to the bootstrap (`main`)
+     * and the build/review phases. Keeps the doctrine (cohesion over class-sprawl;
+     * one guarded doc per class family) in front of the agent at every phase,
+     * without a separate always-loaded playbook. See docs/classes/README.md.
+     */
+    private function structureDoctrine(string $phase): string
+    {
+        $core = implode("\n", [
+            'STRUCTURE & COHESION (how to shape code):',
+            '- A **model** owns a table and stays thin — rules as small helpers + model events.',
+            '- A **service** owns a whole use-case or boundary and HIDES its internals (private methods, not new top-level classes).',
+            '- An **action** is one invokable operation; an **abstract base + children** share a contract (e.g. the MCP tools).',
+            '- A **repository** is justified ONLY when logic spans multiple models AND is used from multiple places — otherwise keep it in the one controller/service.',
+            '- Avoid class-sprawl (many narrow classes each doing a sliver of one job). Prefer one cohesive owner; a helper used by only one service belongs INSIDE it.',
+            '- Document each class FAMILY in one guarded doc under `docs/classes/` — follow the pattern in `docs/classes/README.md` (the doctrine + how to write a family doc), the way `DATA-MODEL.md` mirrors the schema. Lodestar applies this to its OWN families: models→`DATA-MODEL.md`, MCP tools→`docs/classes/TOOLS.md`, system playbooks→`docs/classes/PLAYBOOKS.md`, each backed by a drift guard.',
+        ]);
+
+        $tail = match ($phase) {
+            'plan' => 'PLAN with this in mind: name the service/model/family that owns the change before listing files; prefer extending a cohesive owner over adding narrow classes. See `docs/classes/README.md` for the family-doc + drift-guard pattern.',
+            'develop' => 'WHILE BUILDING: new behaviour goes into the owning service/model, not a scatter of classes. If you touch a class family (add a tool, model, playbook), update its guarded `docs/classes/` doc in the SAME change so its drift guard stays green — follow the pattern in `docs/classes/README.md`.',
+            'ai_review' => "WHEN REVIEWING: flag class-sprawl that should be one cohesive service; confirm each touched class family's guarded `docs/classes/` doc is updated and its guard passes (see `docs/classes/README.md` for the pattern).",
+            default => '',
+        };
+
+        return $tail === '' ? $core : $core."\n\n".$tail;
     }
 
     /** @return array<string, array{0:string,1:string}> */
     private function playbooks(): array
     {
         return [
+            'laravel' => ['Laravel structure pack', <<<'MD'
+                LARAVEL STRUCTURE — this project is a Laravel app, so build it the Laravel way:
+                - Fat models / skinny controllers: a controller validates and delegates; business logic lives in a service or action.
+                - Use a **Service** for a cohesive use-case or a third-party boundary; it owns its internals (private methods, not new top-level classes).
+                - Use an **Action** for one invokable operation.
+                - Reach for the **Repository** pattern ONLY when logic spans multiple models AND is used from multiple places — otherwise keep it in the controller/service.
+                - Keep **models** thin: relationships + small helpers + model events. Prefer Eloquent built-ins (`updateOrCreate` / `create` / `update`) and put special logic in model events, not bespoke method names. Each model owns its table; one thin `upsert` path, no bespoke delete.
+                - See `docs/classes/README.md` for the taxonomy and the family-doc + drift-guard pattern.
+                MD],
             'main' => ['Lodestar agent — start here', <<<'MD'
                 You are a Lodestar agent. Lodestar is the control layer that holds the
                 work: a board of tasks on a 13-state lifecycle, reviews, and playbooks.

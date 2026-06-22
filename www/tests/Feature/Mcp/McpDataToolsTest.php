@@ -28,18 +28,41 @@ class McpDataToolsTest extends TestCase
         $user = User::factory()->create();
 
         LodestarServer::actingAs($user)
-            ->tool(UpsertProjectTool::class, ['name' => 'Lodestar', 'primary_goal' => 'Ship it'])
+            ->tool(UpsertProjectTool::class, ['name' => 'Lodestar', 'primary_goal' => 'Ship it', 'stack' => 'laravel'])
             ->assertOk();
 
         $project = $user->projects()->sole();
         $this->assertSame('lodestar', $project->slug);
         $this->assertSame('Ship it', $project->primary_goal);
+        $this->assertSame('laravel', $project->stack);
 
+        // Update (with id) carries no stack and still succeeds — stack is only
+        // required on create.
         LodestarServer::actingAs($user)
             ->tool(UpsertProjectTool::class, ['id' => $project->id, 'description' => 'changed'])
             ->assertOk();
 
         $this->assertSame('changed', $project->fresh()->description);
+        $this->assertSame('laravel', $project->fresh()->stack);
+    }
+
+    public function test_upsert_project_requires_a_stack_on_create(): void
+    {
+        $user = User::factory()->create();
+
+        // No stack on create → rejected (the human must choose a pack, even "none").
+        LodestarServer::actingAs($user)
+            ->tool(UpsertProjectTool::class, ['name' => 'NoStack'])
+            ->assertHasErrors();
+
+        $this->assertSame(0, $user->projects()->count());
+
+        // The "none" sentinel is a valid choice and succeeds.
+        LodestarServer::actingAs($user)
+            ->tool(UpsertProjectTool::class, ['name' => 'WithNone', 'stack' => 'none'])
+            ->assertOk();
+
+        $this->assertSame('none', $user->projects()->sole()->stack);
     }
 
     public function test_upsert_task_defaults_to_ready_for_planning_and_can_be_addressed_by_slug(): void
