@@ -44,10 +44,10 @@ class TeamAccessTest extends TestCase
         return compact('owner', 'member', 'team', 'project');
     }
 
-    public function test_dashboard_surfaces_a_shared_team_projects_work(): void
+    public function test_board_surfaces_a_shared_team_projects_work(): void
     {
         ['member' => $member, 'project' => $project] = $this->teamProject();
-        // A plan_review card surfaces in the dashboard's "Plans to review" bucket.
+        // A plan_review card surfaces in the board's "needs you" strip.
         $this->makeTask($project, ['title' => 'Needs a human', 'status' => Task::STATUS_PLAN_REVIEW]);
 
         $this->actingAs($member)->get(route('board'))->assertOk()->assertSee('Needs a human');
@@ -99,12 +99,12 @@ class TeamAccessTest extends TestCase
             ->assertSee('Team review');
     }
 
-    public function test_team_project_appears_on_the_members_project_index(): void
+    public function test_team_project_appears_on_the_members_board(): void
     {
         ['member' => $member, 'project' => $project] = $this->teamProject();
 
         $this->actingAs($member)
-            ->get('/projects')
+            ->get(route('board'))
             ->assertOk()
             ->assertSee($project->name);
     }

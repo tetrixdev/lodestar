@@ -24,12 +24,16 @@ signed-in user.
   **deliverable-only**: every task belongs to a deliverable, so there are no
   loose task cards — a deliverable renders as a card carrying its child-task
   one-liners, and where it sits is **derived from its tasks** (see the lifecycle
-  flow). A compact "needs you" strip carries the cross-project signals the old
-  dashboard did.
-- **ProjectController** — the project list and a **per-project board** (`show()`)
-  that still groups that one project's live tasks by lifecycle status (a
-  secondary, task-level view); plus the Gantt. It hands the view `Task::PHASES`
-  so the board can lay the 11 live statuses into 5 phase columns.
+  flow). A compact "needs you" strip carries the cross-project signals (overdue,
+  plans to approve, reviews waiting), and the toolbar carries **create-project** —
+  both folded in here when the separate dashboard and projects-list screens were
+  retired.
+- **ProjectController** — the **per-project board** (`show()`) that groups that
+  one project's live tasks by lifecycle status (a secondary, task-level view);
+  plus settings, the Gantt, and `store()` (create-project, surfaced on the
+  unified board — there is no longer a separate projects-list screen). It hands
+  the view `Task::PHASES` so the board can lay the 11 live statuses into 5 phase
+  columns.
 - **TaskController** — the card write paths (tasks are created/decomposed by the
   planning agent under a deliverable, not added loose from the board):
   - `update()` is the **lifecycle move** — it rejects any status change that
@@ -62,14 +66,6 @@ signed-in user.
   returns a stuck working (`*-ing`) card to its `ready_*` queue and clears the
   claim. A scheduled **reaper** (`lodestar:reap-stalled-tasks`) now does the same
   automatically for cards stalled past a lease (see the agent-loop flow).
-- **DashboardController** — the cross-project home, a dense single-screen panel:
-  **Overdue / due-soon** full-width on top, then a **2×2 inbox** of *Backlog*
-  (`ready_for_planning`), *Plans to review* (`plan_review`), *Reviews* (open reviews only — the
-  review is the unit you act on at `human_review`, shown with a task count, not
-  exploded per task), and *AI working now* (the `*-ing` states), then **recent
-  work sessions** full-width at the bottom. Each inbox pane reserves ~5 rows, grows
-  with its content, then scrolls internally — it does not stretch to fill empty
-  vertical space.
 - **Models** (`app/Models/`) — thin Eloquent models; the lifecycle rules live as
   constants + small helpers on **`Task`** (`STATUSES`, `PHASES`, `ACTORS`,
   `LABELS`, `TRANSITIONS`, `CLAIM_MAP`, `canTransitionTo()`, `phaseFor()`,
